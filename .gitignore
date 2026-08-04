@@ -14,5 +14,14 @@ __pycache__/
 *.py[cod]
 .venv/
 
+# tmdb sweep artifacts (large, rebuildable)
+catalog/*.db
+catalog/*.db-wal
+catalog/*.db-shm
+catalog/*.lock
+catalog/sweep.log
+catalog/enrich.log
+catalog/__pycache__/
+
 # os
 .DS_Store
