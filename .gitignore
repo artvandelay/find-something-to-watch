@@ -9,6 +9,9 @@ data/*
 !data/fixtures/
 !data/fixtures/**
 
+# node (fflate is vendored into docs/js/vendor for the static site)
+node_modules/
+
 # python
 __pycache__/
 *.py[cod]

@@ -1,0 +1,12 @@
+{
+  "name": "llm-search-netflix",
+  "private": true,
+  "type": "module",
+  "devDependencies": {
+    "fflate": "0.8.3"
+  },
+  "scripts": {
+    "check": "for f in scripts/check_*.mjs; do node \"$f\" || exit 1; done",
+    "test": "npm run check"
+  }
+}
