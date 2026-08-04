@@ -1,0 +1,22 @@
+{
+  "region": "IN",
+  "source": "unogs+streaming_availability",
+  "built_at": "2026-08-04T08:03:48Z",
+  "count": 9354,
+  "providers": [
+    "apple",
+    "crunchyroll",
+    "curiosity",
+    "hotstar",
+    "mubi",
+    "netflix",
+    "prime",
+    "sonyliv",
+    "zee5"
+  ],
+  "filters": {
+    "min_year": null,
+    "min_rating": null,
+    "limit": null
+  }
+}
