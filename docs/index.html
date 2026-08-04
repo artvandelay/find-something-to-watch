@@ -1,0 +1,117 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width,initial-scale=1">
+    <title>India OTT Search — bring your own key</title>
+    <meta name="description" content="Search India's streaming catalogs in plain language. Your key and your watch history never leave your browser.">
+    <link rel="stylesheet" href="./css/app.css">
+  </head>
+  <body>
+    <main id="app">
+      <header class="app-header">
+        <h1>India OTT Search</h1>
+        <div class="toolbar">
+          <button id="settings-btn" type="button">Settings</button>
+          <button id="context-btn" type="button">Your context</button>
+        </div>
+      </header>
+
+      <p class="intro">
+        This site ships the catalog and the search logic; you bring your own model key and your own
+        taste context, both of which stay in your browser. Search still works without a key — it just
+        falls back to plain keyword matching.
+      </p>
+
+      <p id="catalog-status" aria-live="polite">Loading catalog…</p>
+
+      <div id="error-banner" role="alert" aria-live="polite" hidden></div>
+
+      <form id="query-form">
+        <label for="query-input">What are you in the mood for?</label>
+        <textarea id="query-input" name="query-input" rows="3" placeholder="Something short and funny for tonight — nothing I've already seen"></textarea>
+
+        <div class="form-row">
+          <div class="field">
+            <label for="mood-select">Mood</label>
+            <select id="mood-select" name="mood-select">
+              <option value="">Any mood</option>
+              <option value="comfort">Comfort</option>
+              <option value="intense">Intense</option>
+              <option value="funny">Funny</option>
+              <option value="thoughtful">Thoughtful</option>
+              <option value="background">Background</option>
+              <option value="surprise">Surprise</option>
+            </select>
+          </div>
+          <div class="form-actions">
+            <button id="send-btn" type="submit">Find something</button>
+            <button id="stop-btn" type="button" hidden>Stop</button>
+          </div>
+        </div>
+      </form>
+
+      <section id="results"></section>
+
+      <details id="trace">
+        <summary>Agent trace</summary>
+        <div></div>
+      </details>
+
+      <section class="exports">
+        <h2>Export</h2>
+        <button id="export-md" type="button">Markdown</button>
+        <button id="export-json" type="button">JSON</button>
+        <button id="export-csv" type="button">CSV</button>
+        <button id="export-youmd" type="button">You.md</button>
+      </section>
+
+      <footer id="attribution">
+        Catalog data is a static snapshot — availability changes. Your API key and watch history stay in
+        this browser; nothing is uploaded to any server.
+        <a href="https://github.com/artvandelay/india-ott-byok">Source on GitHub</a>.
+      </footer>
+    </main>
+
+    <dialog id="settings-dialog">
+      <h2>Settings</h2>
+      <div class="field">
+        <label for="llm-base-url">Base URL</label>
+        <input id="llm-base-url" name="llm-base-url" type="url" placeholder="https://openrouter.ai/api/v1">
+      </div>
+      <div class="field">
+        <label for="llm-api-key">API key</label>
+        <input id="llm-api-key" name="llm-api-key" type="password" autocomplete="off">
+      </div>
+      <div class="field">
+        <label for="llm-model">Model</label>
+        <input id="llm-model" name="llm-model" type="text" placeholder="openai/gpt-4o-mini">
+      </div>
+      <p class="note">Your key is stored only in this browser and sent directly to the endpoint above.</p>
+      <div class="dialog-actions">
+        <button id="settings-save" type="button">Save</button>
+        <button id="settings-close" type="button">Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="context-dialog">
+      <h2>Your context</h2>
+      <div class="field">
+        <label for="youmd-input">You.md — what you like, what you avoid</label>
+        <textarea id="youmd-input" name="youmd-input" rows="16"></textarea>
+      </div>
+      <div class="field">
+        <label for="history-file">Netflix viewing history (CSV)</label>
+        <input id="history-file" name="history-file" type="file" accept=".csv,text/csv">
+      </div>
+      <p id="history-summary"></p>
+      <p class="note">Nothing here is uploaded. It is parsed in your browser and stored locally.</p>
+      <div class="dialog-actions">
+        <button id="context-save" type="button">Save</button>
+        <button id="context-close" type="button">Close</button>
+      </div>
+    </dialog>
+
+    <script type="module" src="./js/ui.js"></script>
+  </body>
+</html>
