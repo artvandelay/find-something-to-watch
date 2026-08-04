@@ -1,130 +1,91 @@
-import { normalizeTitle, buildIndex, search, filterIndices } from "./catalog.js";
-import { parseNetflixCsv, summarize } from "./history.js";
+import { normalizeTitle, buildIndex, search, filterIndices, seedQueue } from "./catalog.js";
+import { parseWatchHistoryExport, summarize } from "./history.js";
+import { createHistoryPlanInferer } from "./history-model.js";
 import { createTools } from "./tools.js";
 import { runAgent } from "./agent.js";
-import { createStore } from "./store.js";
-import { toMarkdown, toJson, toCsv, toYouMd } from "./exporters.js";
+import { createStore, DEFAULT_LLM } from "./store.js";
+import { createBrowserMemory } from "./memory.js";
+import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER } from "./providers.js";
+import {
+  addToPlaylist,
+  createPlaylist,
+  deletePlaylist,
+  playlistFilename,
+  removeFromPlaylist,
+  renamePlaylist
+} from "./playlists.js";
+import { toMarkdown, toJson, toCsv } from "./exporters.js";
+import { createOnboardingView } from "./views/onboarding.js";
+import { createSidebarView } from "./views/sidebar.js";
+import { createChatView } from "./views/chat.js";
+import { createQueueView } from "./views/queue.js";
+import { createDialogs } from "./views/dialogs.js";
+import { createPlaylistsView } from "./views/playlists.js";
+import { downloadText } from "./views/dom.js";
+import { readTestMode } from "./test-mode.js";
 
 const store = createStore(window.localStorage);
+const memory = createBrowserMemory({ onIssue: (issue) => console.warn("ui: browser-memory issue", issue) });
 
 const DOM_IDS = [
-  "app",
-  "catalog-status",
-  "query-form",
-  "query-input",
-  "send-btn",
-  "stop-btn",
-  "mood-select",
-  "results",
-  "trace",
-  "settings-btn",
-  "settings-dialog",
-  "llm-base-url",
-  "llm-api-key",
-  "llm-model",
-  "settings-save",
-  "settings-close",
-  "context-btn",
-  "context-dialog",
-  "youmd-input",
-  "history-file",
-  "history-summary",
-  "context-save",
-  "context-close",
-  "export-md",
-  "export-json",
-  "export-csv",
-  "export-youmd",
-  "error-banner",
+  "app", "error-banner",
+  "onboarding-screen", "onboarding-form", "onboarding-provider-list",
+  "onboarding-title", "onboarding-progress", "onboarding-llm-api-key",
+  "onboarding-history-file", "onboarding-history-summary", "onboarding-history-status",
+  "onboarding-history-remove", "onboarding-back", "onboarding-next",
+  "shell", "sidebar-toggle", "sidebar", "backdrop", "new-chat-btn",
+  "conversation-indicator", "subscriptions-summary", "playlists-btn", "context-btn",
+  "settings-btn", "export-backup-btn", "import-backup-btn", "import-backup-file",
+  "clear-data-btn", "catalog-status",
+  "workspace", "chat-region", "chat-transcript", "chat-note",
+  "query-form", "query-input", "send-btn", "stop-btn",
+  "queue-region", "queue-status", "queue-viewport", "queue-track", "queue-prev",
+  "queue-next", "queue-empty",
   "attribution",
-  "catalog-detail",
-  "language-select",
-  "genre-select",
-  "provider-select"
+  "settings-dialog", "settings-provider-list", "llm-base-url", "llm-api-key", "llm-model",
+  "settings-feedback", "settings-save", "settings-close",
+  "context-dialog", "youmd-input", "history-file", "history-summary", "history-remove",
+  "context-feedback", "context-save", "context-close",
+  "disclosure-dialog", "catalog-detail", "trace",
+  "export-md", "export-json", "export-csv", "export-youmd", "disclosure-feedback",
+  "disclosure-close",
+  "playlists-dialog", "playlists-dialog-title", "playlists-close", "playlist-picker",
+  "playlist-picker-title", "playlist-picker-list", "playlist-manager", "playlist-select",
+  "playlist-items", "playlist-create-name", "playlist-create", "playlist-rename-name",
+  "playlist-rename", "playlist-delete", "playlist-export-md", "playlist-export-json",
+  "playlist-export-csv", "playlist-feedback"
 ];
 
 const KEYWORD_NOTE = "Keyword search — add an API key in Settings for ranked recommendations.";
-const NO_PICKS_NOTE = "Run a search first — there is nothing to export yet.";
-
-const PROVIDER_LABELS = {
-  netflix: "Netflix",
-  prime: "Prime Video",
-  hotstar: "JioHotstar",
-  zee5: "ZEE5",
-  sonyliv: "SonyLIV",
-  mubi: "MUBI",
-  crunchyroll: "Crunchyroll",
-  sunnxt: "Sun NXT",
-  mxplayer: "MX Player",
-  discovery: "Discovery+",
-  shemaroo: "ShemarooMe",
-  lionsgate: "Lionsgate Play",
-  manoramamax: "ManoramaMAX",
-  hungama: "Hungama Play",
-  hoichoi: "Hoichoi",
-  aha: "aha",
-  curiosity: "CuriosityStream",
-  appletv: "Apple TV+",
-  epicon: "EPIC ON",
-  tataplay: "Tata Play",
-  plex: "Plex",
-  tubi: "Tubi",
-  docubay: "DocuBay",
-  bbcplayer: "BBC Player",
-  chaupal: "Chaupal",
-  erosnow: "Eros Now"
-};
-
-const LANGUAGE_NAMES = {
-  en: "English",
-  hi: "Hindi",
-  ta: "Tamil",
-  te: "Telugu",
-  ml: "Malayalam",
-  kn: "Kannada",
-  bn: "Bengali",
-  mr: "Marathi",
-  pa: "Punjabi",
-  gu: "Gujarati",
-  ur: "Urdu",
-  as: "Assamese",
-  or: "Odia",
-  sa: "Sanskrit",
-  ne: "Nepali",
-  si: "Sinhala",
-  bh: "Bhojpuri",
-  ja: "Japanese",
-  ko: "Korean",
-  zh: "Chinese",
-  fr: "French",
-  de: "German",
-  es: "Spanish",
-  it: "Italian",
-  pt: "Portuguese",
-  ru: "Russian",
-  ar: "Arabic",
-  th: "Thai",
-  id: "Indonesian",
-  tr: "Turkish"
-};
+const NO_KEY_REPLY_PREFIX = "Keyword matches (add an API key in Settings for a conversational, ranked search): ";
 
 let el = null;
-let traceBody = null;
-let noteEl = null;
+let dialogs = null;
+let sidebar = null;
+let chat = null;
+let queueView = null;
+let onboarding = null;
+let playlistsView = null;
 
 let prompts = null;
 let records = [];
 let recordsById = new Map();
 let catalogMeta = null;
 let index = null;
+let richIndexReady = false;
 
-let parsedHistory = null;
+let profile = null;
+let subscriptions = new Set();
+let conversation = { schema: 1, updatedAt: null, messages: [] };
+let queueIds = [];
+let playlists = null;
+
 let controller = null;
-let lastPicks = [];
-let lastQuery = "";
+let historyController = null;
+let stateGeneration = 0;
 
 function camelize(id) {
-  return id.replace(/-([a-z])/g, (match, letter) => letter.toUpperCase());
+  return id.replace(/-([a-z])/g, (m, letter) => letter.toUpperCase());
 }
 
 function collectDom() {
@@ -152,184 +113,96 @@ function clearError() {
   el.errorBanner.hidden = true;
 }
 
-function setNote(text) {
-  const value = typeof text === "string" ? text.trim() : "";
-  noteEl.textContent = value;
-  noteEl.hidden = value === "";
-}
-
-function clearTrace() {
-  traceBody.textContent = "";
-}
-
-function appendTrace(text) {
-  const line = document.createElement("div");
-  line.className = "trace-line";
-  line.textContent = text;
-  traceBody.appendChild(line);
-  if (traceBody.childElementCount === 1) el.trace.open = true;
-}
-
-function compactArgs(args) {
-  try {
-    return JSON.stringify(args ?? {});
-  } catch (err) {
-    return "{}";
-  }
-}
-
-function providerLabel(slug) {
-  const s = String(slug || "");
-  if (!s) return "Watch";
-  return PROVIDER_LABELS[s] || s;
-}
-
-function languageLabel(code) {
-  const c = String(code || "");
-  return LANGUAGE_NAMES[c] || c;
-}
-
-function titleInitials(title) {
-  const words = String(title || "").trim().split(/\s+/).filter(Boolean);
-  if (words.length === 0) return "?";
-  const first = words[0].charAt(0);
-  const second = words.length > 1 ? words[1].charAt(0) : "";
-  return (first + second).toUpperCase();
-}
-
-function buildPoster(pick) {
-  if (pick.img) {
-    const img = document.createElement("img");
-    img.className = "card-poster";
-    img.src = pick.img;
-    img.loading = "lazy";
-    img.alt = "";
-    return img;
-  }
-  const fallback = document.createElement("div");
-  fallback.className = "poster-fallback";
-  fallback.textContent = titleInitials(pick.t || pick.id);
-  return fallback;
-}
-
-function metaLine(pick) {
-  const parts = [];
-  if (pick.y !== null && pick.y !== undefined) parts.push(String(pick.y));
-  if (pick.k) parts.push(pick.k);
-  if (pick.rt !== null && pick.rt !== undefined) parts.push(pick.rt + " min");
-  if (pick.r !== null && pick.r !== undefined) parts.push("TMDB " + pick.r);
-  if (parts.length === 0) return null;
-  const p = document.createElement("p");
-  p.className = "card-meta";
-  p.textContent = parts.join(" · ");
-  return p;
-}
-
-function linkRow(pick) {
-  const u = pick.u;
-  if (!u || typeof u !== "object") return null;
-  const slugs = Object.keys(u).filter((slug) => u[slug]);
-  if (slugs.length === 0) return null;
-  const row = document.createElement("div");
-  row.className = "card-links";
-  for (const slug of slugs) {
-    const a = document.createElement("a");
-    a.href = u[slug];
-    a.target = "_blank";
-    a.rel = "noopener noreferrer";
-    a.textContent = "Watch on " + providerLabel(slug);
-    row.appendChild(a);
-  }
-  return row;
-}
-
-function buildCard(pick) {
-  const card = document.createElement("article");
-  card.className = "card";
-  card.appendChild(buildPoster(pick));
-
-  const body = document.createElement("div");
-  body.className = "card-body";
-
-  const title = document.createElement("h3");
-  title.className = "card-title";
-  title.textContent = pick.t || pick.id || "Untitled";
-  body.appendChild(title);
-
-  const meta = metaLine(pick);
-  if (meta) body.appendChild(meta);
-
-  if (typeof pick.reason === "string" && pick.reason.trim() !== "") {
-    const reason = document.createElement("p");
-    reason.className = "card-reason";
-    reason.textContent = pick.reason;
-    body.appendChild(reason);
-  }
-
-  const links = linkRow(pick);
-  if (links) body.appendChild(links);
-
-  card.appendChild(body);
-  return card;
-}
-
-function renderPicks(picks) {
-  const list = Array.isArray(picks) ? picks : [];
-  lastPicks = list;
-  el.results.textContent = "";
-  if (list.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "note";
-    empty.textContent = (prompts && prompts.no_results) || "No matches in this catalog snapshot.";
-    el.results.appendChild(empty);
-    return;
-  }
-  for (const pick of list) el.results.appendChild(buildCard(pick));
-}
-
-function download(filename, mime, text) {
-  const blob = new Blob([text], { type: mime });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = filename;
-  a.rel = "noopener";
-  document.body.appendChild(a);
-  a.click();
-  a.remove();
-  URL.revokeObjectURL(url);
-}
-
-function exportMeta() {
-  return { query: lastQuery, generatedAt: new Date().toISOString() };
-}
-
-function hasPicks() {
-  if (lastPicks.length > 0) return true;
-  setNote(NO_PICKS_NOTE);
-  return false;
-}
-
 async function fetchJson(url) {
   const res = await fetch(url, { cache: "no-cache" });
   if (!res.ok) throw new Error("Request for " + url + " failed with status " + res.status + ".");
   return await res.json();
 }
 
+function providerOrder() {
+  const order = catalogMeta && Array.isArray(catalogMeta.provider_order) ? catalogMeta.provider_order : null;
+  return order && order.length > 0 ? order : DEFAULT_PROVIDER_ORDER;
+}
+
+function cancelActiveHistoryImport() {
+  if (historyController) historyController.abort();
+  historyController = null;
+}
+
+async function importHistoryFile(file, { signal = null, onStatus = null } = {}) {
+  if (!file || typeof file.arrayBuffer !== "function") {
+    throw new Error("Could not read that watch-history file.");
+  }
+
+  cancelActiveTurn();
+  cancelActiveHistoryImport();
+  const activeController = new AbortController();
+  historyController = activeController;
+  const abortFromCaller = () => activeController.abort();
+  if (signal) signal.addEventListener("abort", abortFromCaller, { once: true });
+  const status = typeof onStatus === "function" ? onStatus : () => {};
+
+  try {
+    status("Reading watch history locally…");
+    const bytes = await file.arrayBuffer();
+    if (activeController.signal.aborted) {
+      const error = new Error("The history import was cancelled.");
+      error.name = "AbortError";
+      throw error;
+    }
+    if (!prompts || typeof prompts.history_plan !== "string") {
+      throw new Error("The history import prompt is unavailable.");
+    }
+    status("Inferring the file layout from a bounded sample…");
+    const inferPlan = createHistoryPlanInferer({
+      config: store.getLlm(),
+      prompt: prompts.history_plan
+    });
+    const history = await parseWatchHistoryExport(
+      { name: file.name, bytes },
+      { inferPlan, signal: activeController.signal }
+    );
+    status("Watch history imported.");
+    return history;
+  } finally {
+    if (signal) signal.removeEventListener("abort", abortFromCaller);
+    if (historyController === activeController) historyController = null;
+  }
+}
+
+// ---- Catalog + search index readiness -------------------------------------
+
+function updateCatalogStatusLine() {
+  const count = typeof (catalogMeta && catalogMeta.count) === "number" ? catalogMeta.count : records.length;
+  const builtAt = String((catalogMeta && catalogMeta.built_at) || "").slice(0, 10);
+  let line = count.toLocaleString("en-IN") + " titles · snapshot " + builtAt;
+  if (!index) line += " · preparing search index…";
+  else if (!richIndexReady) line += " · refining with synopses…";
+  sidebar.setCatalogStatus(line);
+  if (chat) {
+    chat.setNote(!richIndexReady ? "Search is still refining with full synopses — results may be less precise for a moment." : "");
+    chat.setSendReady(Boolean(index));
+  }
+}
+
+function refreshSendReadiness() {
+  chat.setSendReady(Boolean(index));
+}
+
+function runWhenIdle(run) {
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run);
+  else setTimeout(run, 0);
+}
+
 function scheduleIndex() {
-  const run = () => {
+  runWhenIdle(() => {
     try {
       index = buildIndex(records);
-      el.sendBtn.disabled = false;
     } catch (err) {
       showError("Could not prepare the search index. " + (err && err.message ? err.message : ""));
     }
-  };
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(run);
-  } else {
-    setTimeout(run, 0);
-  }
+    updateCatalogStatusLine();
+  });
 }
 
 function scheduleSidecar() {
@@ -338,364 +211,513 @@ function scheduleSidecar() {
     try {
       const doc = await fetchJson("./assets/" + file);
       const map = doc && typeof doc === "object" ? doc.s : null;
-      if (!map || typeof map !== "object") return;
-      let merged = 0;
-      for (const rec of records) {
-        const s = map[rec.id];
-        if (typeof s === "string" && s !== "") {
-          rec.s = s;
-          merged += 1;
+      if (map && typeof map === "object") {
+        let merged = 0;
+        for (const rec of records) {
+          const s = map[rec.id];
+          if (typeof s === "string" && s !== "") {
+            rec.s = s;
+            merged += 1;
+          }
+        }
+        if (merged > 0) {
+          await new Promise((resolve) => {
+            runWhenIdle(() => {
+              index = buildIndex(records);
+              resolve();
+            });
+          });
+          renderQueue();
         }
       }
-      if (merged > 0) scheduleIndex();
     } catch (err) {
       console.warn("ui: synopsis sidecar unavailable, continuing without synopses.", err && err.message ? err.message : err);
+    } finally {
+      richIndexReady = true;
+      updateCatalogStatusLine();
     }
   };
-  if (typeof window.requestIdleCallback === "function") {
-    window.requestIdleCallback(() => { run(); });
-  } else {
-    setTimeout(() => { run(); }, 0);
-  }
+  runWhenIdle(() => run());
 }
 
-function facetFilters() {
-  const f = {};
-  if (el.providerSelect.value) f.provider = el.providerSelect.value;
-  if (el.languageSelect.value) f.lang = el.languageSelect.value;
-  if (el.genreSelect.value) f.genre = el.genreSelect.value;
-  return f;
-}
+// ---- Hydration / rendering --------------------------------------------------
 
-function makeTools(seenKeys) {
-  const facets = facetFilters();
-  return createTools({
-    records,
-    index,
-    search,
-    filterIndices: (recs, filters) => filterIndices(recs, { ...(filters || {}), ...facets }),
-    normalizeTitle,
-    seenKeys
-  });
-}
-
-function hydrate(row) {
-  const full = recordsById.get(row.id);
-  if (!full) return { ...row, u: null, img: null, reason: "" };
+function hydrate(id) {
+  const full = recordsById.get(id);
+  if (!full) return null;
+  const scoped = intersectProviders(full, subscriptions);
+  if (scoped.p.length === 0) return null; // no longer available on current subscriptions
   return {
-    id: full.id,
-    t: full.t,
-    y: full.y,
-    k: full.k,
-    rt: full.rt,
-    r: full.r,
-    p: full.p,
-    l: full.l,
-    g: full.g,
-    u: full.u,
-    img: full.img,
+    id: scoped.id, t: scoped.t, y: scoped.y, k: scoped.k, rt: scoped.rt, r: scoped.r,
+    p: scoped.p, l: scoped.l, g: scoped.g, u: scoped.u, img: scoped.img, s: scoped.s || "",
     reason: ""
   };
 }
 
-async function runKeywordFallback(query, tools, seenKeys) {
-  const result = await tools.handlers.search_titles({
-    query,
-    exclude_seen: seenKeys.length > 0,
-    limit: 20
+function hydratedQueue() {
+  return queueIds.map(hydrate).filter(Boolean);
+}
+
+function renderQueue() {
+  const list = hydratedQueue();
+  queueView.render(list, richIndexReady || index
+    ? "Nothing queued for your current subscriptions yet."
+    : "Still preparing the catalog…");
+}
+
+function renderPlaylists() {
+  if (!playlistsView || !playlists) return;
+  playlistsView.render({
+    ...playlists,
+    resolveTitle: (titleId) => hydrate(titleId)
   });
-  renderPicks((result.results || []).map(hydrate));
-  setNote(KEYWORD_NOTE);
+}
+
+async function savePlaylistMutation(mutate) {
+  const saved = await memory.setPlaylists(mutate(playlists));
+  playlists = saved;
+  renderPlaylists();
+  return saved;
+}
+
+async function onPlaylistToggle(playlistId, titleId, checked) {
+  return savePlaylistMutation((state) => checked
+    ? addToPlaylist(state, playlistId, titleId)
+    : removeFromPlaylist(state, playlistId, titleId));
+}
+
+async function onPlaylistExport(format, playlistId) {
+  const playlist = playlists?.playlists?.find((item) => item.id === playlistId);
+  if (!playlist) throw new Error("That playlist is unavailable.");
+
+  const resolved = playlist.titleIds.map((titleId) => hydrate(titleId));
+  const picks = resolved.filter(Boolean);
+  const unavailableIds = playlist.titleIds.filter((titleId, index) => !resolved[index]);
+  const meta = {
+    title: playlist.name,
+    generatedAt: new Date().toISOString(),
+    playlist: { id: playlist.id, name: playlist.name, titleIds: playlist.titleIds.slice() },
+    unavailableIds
+  };
+  const extension = format === "md" ? "md" : format === "json" ? "json" : "csv";
+  const mime = format === "md"
+    ? "text/markdown;charset=utf-8"
+    : format === "json" ? "application/json;charset=utf-8" : "text/csv;charset=utf-8";
+  const content = format === "md"
+    ? toMarkdown(picks, meta)
+    : format === "json" ? toJson(picks, meta) : toCsv(picks, meta);
+  downloadText(playlistFilename(playlist, extension), mime, content);
+}
+
+async function seedQueueIfEmpty() {
+  if (conversation.messages.length > 0 || queueIds.length > 0 || records.length === 0) return;
+  let seenKeys = [];
+  try {
+    seenKeys = (await memory.getHistory())?.seen ?? [];
+  } catch (err) {
+    showError("Watch history is unavailable, so the initial picks may include watched titles.");
+  }
+  queueIds = seedQueue(records, { providers: subscriptions, excludeKeys: seenKeys, limit: 20 });
+  try {
+    const saved = await memory.saveConversationAndQueue(conversation, { ids: queueIds });
+    conversation = saved.conversation;
+    queueIds = saved.queue.ids;
+  } catch (err) {
+    console.warn("ui: could not persist the seeded queue.", err && err.message ? err.message : err);
+  }
+  renderQueue();
+}
+
+function renderConversation() {
+  chat.renderConversation(conversation.messages);
+  sidebar.renderConversationIndicator(conversation.messages.length);
+}
+
+// ---- Agent tools + submission -----------------------------------------------
+
+function makeTools(seenKeys) {
+  return createTools({
+    records,
+    index,
+    search,
+    filterIndices,
+    normalizeTitle,
+    seenKeys: Array.isArray(seenKeys) ? seenKeys : [],
+    subscriptions,
+    recordsById
+  });
 }
 
 function makeEventHandler() {
   return function onEvent(event) {
     if (!event || typeof event !== "object") return;
     if (event.type === "status") {
-      appendTrace(event.text || "");
+      dialogs.appendTrace(event.text || "");
+      chat.setNote(event.text || "");
       return;
     }
     if (event.type === "tool_call") {
-      appendTrace(event.name + " " + compactArgs(event.args));
+      dialogs.appendTrace(event.name + " " + JSON.stringify(event.args || {}));
       return;
     }
     if (event.type === "tool_result") {
-      appendTrace(event.name + " → " + (event.count ?? 0) + " results");
-      return;
-    }
-    if (event.type === "delta") {
-      setNote(event.text || "");
-      return;
-    }
-    if (event.type === "done") {
-      renderPicks(event.picks);
+      dialogs.appendTrace(event.name + " → " + (event.count ?? 0) + " results");
       return;
     }
     if (event.type === "error") {
+      chat.setNote("");
       showError(event.message || "Something went wrong.");
     }
   };
 }
 
-async function onSubmit(event) {
-  event.preventDefault();
+async function runKeywordFallback(query, seenKeys) {
+  const tools = makeTools(seenKeys);
+  const result = await tools.handlers.search_titles({ query, exclude_seen: seenKeys.length > 0, limit: 20 });
+  const ids = (result.results || []).map((r) => r.id);
+  queueIds = ids.slice(0, 20);
+  const replyText = NO_KEY_REPLY_PREFIX + (ids.length
+    ? ids.map((id) => recordsById.get(id)?.t).filter(Boolean).slice(0, 5).join(", ")
+    : "no matches in this catalog snapshot.");
+  conversation.messages.push({ role: "assistant", content: replyText, createdAt: new Date().toISOString() });
+  const saved = await memory.saveConversationAndQueue(conversation, { ids: queueIds });
+  conversation = saved.conversation;
+  queueIds = saved.queue.ids;
+  renderConversation();
+  renderQueue();
+  chat.setNote(KEYWORD_NOTE);
+}
+
+async function onSubmit() {
   if (controller) return;
-  const query = String(el.queryInput.value || "").trim();
+  const query = chat.getQuery();
   if (!query) return;
   if (!index) {
-    setNote("Still preparing the catalog — try again in a moment.");
+    chat.setNote("Still preparing the catalog — try again in a moment.");
     return;
   }
 
   clearError();
-  lastQuery = query;
+  chat.clearQuery();
+  const turnGeneration = stateGeneration;
+  const previousConversation = {
+    ...conversation,
+    messages: conversation.messages.slice()
+  };
+  chat.appendMessage("user", query);
+  conversation.messages.push({ role: "user", content: query, createdAt: new Date().toISOString() });
+  const priorMessages = conversation.messages.slice(0, -1);
 
-  const seenKeys = store.getHistory()?.seen ?? [];
-  const tools = makeTools(seenKeys);
+  let seenKeys = [];
+  try {
+    seenKeys = (await memory.getHistory())?.seen ?? [];
+  } catch (err) {
+    showError("Personalization data is unavailable; this search may include watched titles.");
+  }
 
   if (!store.hasKey()) {
-    el.sendBtn.disabled = true;
-    el.queryInput.disabled = true;
+    chat.setBusy(true);
+    sidebar.setBusy(true);
     try {
-      await runKeywordFallback(query, tools, seenKeys);
+      await runKeywordFallback(query, seenKeys);
     } catch (err) {
+      if (turnGeneration === stateGeneration) {
+        conversation = previousConversation;
+        renderConversation();
+        chat.setQuery(query);
+      }
       showError(err && err.message ? err.message : "Keyword search failed.");
     } finally {
-      el.sendBtn.disabled = false;
-      el.queryInput.disabled = false;
+      chat.setBusy(false);
+      sidebar.setBusy(false);
+      refreshSendReadiness();
     }
     return;
   }
 
-  controller = new AbortController();
-  el.stopBtn.hidden = false;
-  el.sendBtn.hidden = true;
-  el.sendBtn.disabled = true;
-  el.queryInput.disabled = true;
-  el.results.textContent = "";
-  clearTrace();
-  setNote("");
+  const thisController = new AbortController();
+  controller = thisController;
+  chat.setBusy(true);
+  sidebar.setBusy(true);
+  dialogs.clearTrace();
+
+  let youmd = "";
+  let history = null;
+  try {
+    [youmd, history] = await Promise.all([memory.getYouMd(), memory.getHistory()]);
+  } catch (err) {
+    showError("Personalization data is unavailable; continuing without saved context.");
+  }
 
   try {
-    await runAgent({
+    const result = await runAgent({
       config: store.getLlm(),
       prompts,
-      tools,
-      context: {
-        youmd: store.getYouMd(),
-        history: store.getHistory(),
-        mood: el.moodSelect.value
-      },
+      tools: makeTools(seenKeys),
+      context: { youmd, history, mood: "" },
       query,
+      conversation: priorMessages,
       onEvent: makeEventHandler(),
-      signal: controller.signal
+      signal: thisController.signal
     });
+
+    if (turnGeneration !== stateGeneration) return;
+    if (!result.ok) {
+      conversation = previousConversation;
+      renderConversation();
+      chat.setQuery(query);
+      return;
+    }
+
+    const replyText = result.reply || prompts.no_results || "I couldn't come up with anything this time.";
+    conversation.messages.push({ role: "assistant", content: replyText, createdAt: new Date().toISOString() });
+
+    if (Array.isArray(result.queue)) {
+      queueIds = result.queue.slice(0, 20);
+    }
+    const saved = await memory.saveConversationAndQueue(conversation, { ids: queueIds });
+    conversation = saved.conversation;
+    queueIds = saved.queue.ids;
+    renderConversation();
+    renderQueue();
+    chat.setNote("");
   } catch (err) {
+    if (turnGeneration === stateGeneration) {
+      conversation = previousConversation;
+      renderConversation();
+      chat.setQuery(query);
+    }
     showError(err && err.message ? err.message : "The search failed.");
   } finally {
-    el.stopBtn.hidden = true;
-    el.sendBtn.hidden = false;
-    el.sendBtn.disabled = false;
-    el.queryInput.disabled = false;
-    controller = null;
+    if (controller === thisController) {
+      controller = null;
+      chat.setBusy(false);
+      sidebar.setBusy(false);
+      refreshSendReadiness();
+    }
   }
 }
 
-function readHistoryFile(file) {
+function onStop() {
+  if (controller) controller.abort();
+}
+
+// ---- New chat / subscriptions / context / backup ---------------------------
+
+function cancelActiveTurn() {
+  stateGeneration += 1;
+  if (controller) controller.abort();
+  controller = null;
+  if (chat) {
+    chat.setBusy(false);
+    refreshSendReadiness();
+  }
+  if (sidebar) sidebar.setBusy(false);
+}
+
+function cancelActiveOperations() {
+  cancelActiveTurn();
+  cancelActiveHistoryImport();
+}
+
+async function onNewChat() {
+  cancelActiveTurn();
+  conversation = { schema: 1, updatedAt: null, messages: [] };
+  queueIds = [];
+  renderConversation();
+  await seedQueueIfEmpty();
+  updateCatalogStatusLine();
+  clearError();
+}
+
+async function onSubscriptionsChange(newProviders) {
+  cancelActiveTurn();
+  profile = await memory.setProfile({ ...profile, providers: newProviders, onboardingComplete: true });
+  subscriptions = new Set(profile.providers);
+  sidebar.renderSubscriptions(profile.providers);
+  renderQueue();
+  renderPlaylists();
+  await seedQueueIfEmpty();
+}
+
+function exportMeta() {
+  return { query: conversation.messages.filter((m) => m.role === "user").at(-1)?.content || "", generatedAt: new Date().toISOString() };
+}
+
+function getExportPicks() {
+  return hydratedQueue();
+}
+
+async function onExportBackup() {
+  try {
+    const backup = await memory.exportBackup();
+    downloadText("memory.json", "application/json;charset=utf-8", JSON.stringify(backup, null, 2));
+  } catch (err) {
+    showError("Could not export a backup. " + (err && err.message ? err.message : ""));
+  }
+}
+
+async function onImportBackup(file) {
+  cancelActiveOperations();
   const reader = new FileReader();
-  reader.onload = () => {
+  reader.onload = async () => {
     try {
-      const parsed = parseNetflixCsv(String(reader.result || ""));
-      parsedHistory = parsed;
-      el.historySummary.textContent = summarize(parsed);
+      const parsed = JSON.parse(String(reader.result || ""));
+      await memory.importBackup(parsed);
+      await reloadFromMemory();
+      clearError();
     } catch (err) {
-      parsedHistory = null;
-      el.historySummary.textContent = err && err.message ? err.message : "Could not read that CSV.";
+      showError("Could not import that backup. " + (err && err.message ? err.message : ""));
     }
   };
-  reader.onerror = () => {
-    parsedHistory = null;
-    el.historySummary.textContent = "Could not read that file.";
-  };
+  reader.onerror = () => showError("Could not read that backup file.");
   reader.readAsText(file);
 }
 
-function wireSettings() {
-  el.settingsBtn.addEventListener("click", () => {
-    const llm = store.getLlm();
-    el.llmBaseUrl.value = llm.baseUrl || "";
-    el.llmApiKey.value = llm.apiKey || "";
-    el.llmModel.value = llm.model || "";
-    el.settingsDialog.showModal();
-  });
-
-  el.settingsSave.addEventListener("click", () => {
-    store.setLlm({
-      baseUrl: el.llmBaseUrl.value.trim(),
-      apiKey: el.llmApiKey.value.trim(),
-      model: el.llmModel.value.trim()
-    });
-    el.settingsDialog.close();
-  });
-
-  el.settingsClose.addEventListener("click", () => {
-    el.settingsDialog.close();
-  });
-}
-
-function wireContext() {
-  el.contextBtn.addEventListener("click", () => {
-    el.youmdInput.value = store.getYouMd();
-    el.contextDialog.showModal();
-  });
-
-  el.historyFile.addEventListener("change", () => {
-    const file = el.historyFile.files && el.historyFile.files[0];
-    if (!file) return;
-    try {
-      readHistoryFile(file);
-    } catch (err) {
-      parsedHistory = null;
-      el.historySummary.textContent = err && err.message ? err.message : "Could not read that file.";
-    }
-  });
-
-  el.contextSave.addEventListener("click", () => {
-    store.setYouMd(el.youmdInput.value);
-    store.setHistory(parsedHistory ?? store.getHistory());
-    el.contextDialog.close();
-  });
-
-  el.contextClose.addEventListener("click", () => {
-    el.contextDialog.close();
-  });
-}
-
-function fillSelect(select, values, labelFor, placeholderText) {
-  if (select.options.length === 0) {
-    const placeholder = document.createElement("option");
-    placeholder.value = "";
-    placeholder.textContent = placeholderText;
-    select.appendChild(placeholder);
+async function onClearData() {
+  if (!window.confirm("Clear all local data? This removes your conversation, queue, subscriptions, You.md, watch history, and LLM key from this browser and cannot be undone.")) {
+    return;
   }
-  while (select.options.length > 1) select.remove(1);
-  for (const value of values) {
-    const option = document.createElement("option");
-    option.value = String(value);
-    option.textContent = labelFor(value);
-    select.appendChild(option);
+  try {
+    cancelActiveOperations();
+    await memory.clear();
+    if (!store.clearAll()) throw new Error("The saved API key could not be removed.");
+    location.reload();
+  } catch (err) {
+    showError("Could not clear local data. " + (err && err.message ? err.message : ""));
   }
 }
 
-function populateFacets(meta) {
-  const m = meta || {};
-  const providerOrder = Array.isArray(m.provider_order) ? m.provider_order : [];
-  fillSelect(el.providerSelect, providerOrder, providerLabel, "All providers");
-  const languages = Array.isArray(m.languages) ? m.languages : [];
-  fillSelect(el.languageSelect, languages, languageLabel, "All languages");
-  const genres = Array.isArray(m.genres) ? m.genres : [];
-  fillSelect(el.genreSelect, genres, (name) => String(name), "All genres");
+async function reloadFromMemory() {
+  profile = await memory.getProfile();
+  subscriptions = new Set(profile.providers);
+  conversation = await memory.getConversation();
+  const queue = await memory.getQueue();
+  queueIds = queue.ids;
+  playlists = await memory.getPlaylists();
+  sidebar.renderSubscriptions(profile.providers);
+  renderConversation();
+  renderQueue();
+  renderPlaylists();
+  await seedQueueIfEmpty();
 }
 
-function fillCatalogDetail(meta) {
-  const m = meta || {};
-  const parts = [];
-  if (m.source) parts.push("Source: " + m.source);
-  if (m.region) parts.push("Region: " + String(m.region).toUpperCase());
-  const builtAt = String(m.built_at || "").slice(0, 10);
-  if (builtAt) parts.push("Built " + builtAt);
-  el.catalogDetail.textContent = parts.join(" · ");
-  el.catalogDetail.hidden = parts.length === 0;
+// ---- Onboarding --------------------------------------------------------------
+
+async function onOnboardingComplete(payload) {
+  if (payload.history) await memory.setHistory(payload.history);
+  profile = await memory.setProfile({
+    providers: payload.providers,
+    onboardingComplete: true
+  });
+  subscriptions = new Set(profile.providers);
+  await showShell();
 }
 
-function wireFacets() {
-  const rerun = () => {
-    if (!index || !lastQuery || controller) return;
-    el.queryInput.value = lastQuery;
-    el.queryForm.requestSubmit();
-  };
-  el.providerSelect.addEventListener("change", rerun);
-  el.languageSelect.addEventListener("change", rerun);
-  el.genreSelect.addEventListener("change", rerun);
+async function showShell() {
+  onboarding.hide();
+  el.shell.hidden = false;
+  await reloadFromMemory();
+  updateCatalogStatusLine();
 }
 
-function wireExports() {
-  el.exportMd.addEventListener("click", () => {
-    if (!hasPicks()) return;
-    download("watch-picks.md", "text/markdown;charset=utf-8", toMarkdown(lastPicks, exportMeta()));
-  });
+// ---- Boot ---------------------------------------------------------------------
 
-  el.exportJson.addEventListener("click", () => {
-    if (!hasPicks()) return;
-    download("watch-picks.json", "application/json;charset=utf-8", toJson(lastPicks, exportMeta()));
-  });
-
-  el.exportCsv.addEventListener("click", () => {
-    if (!hasPicks()) return;
-    download("watch-picks.csv", "text/csv;charset=utf-8", toCsv(lastPicks, exportMeta()));
-  });
-
-  el.exportYoumd.addEventListener("click", () => {
-    download("You.md", "text/markdown;charset=utf-8", toYouMd(store.getYouMd(), store.getHistory()));
-  });
-}
-
-async function loadData() {
-  el.catalogStatus.textContent = "Loading catalog…";
+async function loadCatalog() {
+  sidebar && sidebar.setCatalogStatus("Loading catalog…");
   const [promptsDoc, catalogDoc] = await Promise.all([
     fetchJson("./assets/prompts.json"),
     fetchJson("./assets/catalog.json")
   ]);
-
   prompts = promptsDoc;
   records = Array.isArray(catalogDoc.records) ? catalogDoc.records : [];
   recordsById = new Map();
   for (const rec of records) recordsById.set(rec.id, rec);
-
-  const meta = catalogDoc.meta || {};
-  catalogMeta = meta;
-  const count = typeof meta.count === "number" ? meta.count : records.length;
-  const builtAt = String(meta.built_at || "").slice(0, 10);
-  el.catalogStatus.textContent = count.toLocaleString("en-IN") + " titles · snapshot " + builtAt;
-  populateFacets(meta);
-  fillCatalogDetail(meta);
+  catalogMeta = catalogDoc.meta || {};
 }
 
 async function init() {
   el = collectDom();
   if (!el) return;
 
-  traceBody = el.trace.querySelector("div");
-  if (!traceBody) {
-    console.error("ui: #trace is missing its inner container");
-    return;
-  }
+  dialogs = createDialogs(el, {
+    providerOrder,
+    store,
+    getProfile: () => memory.getProfile(),
+    getYouMd: () => memory.getYouMd(),
+    setYouMd: (v) => memory.setYouMd(v),
+    getHistory: () => memory.getHistory(),
+    setHistory: (v) => memory.setHistory(v),
+    summarizeHistory: summarize,
+    importHistoryFile,
+    onSubscriptionsChange,
+    catalogMeta: () => catalogMeta,
+    getExportPicks,
+    exportMeta,
+    onError: showError
+  });
 
-  noteEl = document.createElement("p");
-  noteEl.className = "note";
-  noteEl.hidden = true;
-  el.results.parentNode.insertBefore(noteEl, el.results);
+  sidebar = createSidebarView(el, {
+    providerLabel,
+    onNewChat,
+    onOpenPlaylists: () => playlistsView.openManager(),
+    onExportBackup,
+    onImportBackup,
+    onClearData
+  });
+
+  chat = createChatView(el, { onSubmit, onStop });
+
+  queueView = createQueueView(el, {
+    watchCta,
+    onOpenPlaylistPicker: (titleId, title) => playlistsView.openPicker(titleId, title)
+  });
+
+  playlistsView = createPlaylistsView(el, {
+    onToggle: onPlaylistToggle,
+    onRemove: (playlistId, titleId) => savePlaylistMutation((state) =>
+      removeFromPlaylist(state, playlistId, titleId)),
+    onCreate: (name) => savePlaylistMutation((state) => createPlaylist(state, name)),
+    onRename: (playlistId, name) => savePlaylistMutation((state) =>
+      renamePlaylist(state, playlistId, name)),
+    onDelete: (playlistId) => savePlaylistMutation((state) => deletePlaylist(state, playlistId)),
+    onExport: onPlaylistExport
+  });
+
+  onboarding = createOnboardingView(el, {
+    providerOrder,
+    store,
+    DEFAULT_LLM,
+    importHistoryFile,
+    onComplete: onOnboardingComplete,
+    onError: (message) => showError(message)
+  });
 
   try {
     clearError();
-    el.sendBtn.disabled = true;
-    el.stopBtn.hidden = true;
+    await loadCatalog();
+    updateCatalogStatusLine();
 
-    wireSettings();
-    wireContext();
-    wireExports();
-    wireFacets();
-    el.queryForm.addEventListener("submit", onSubmit);
-    el.stopBtn.addEventListener("click", () => {
-      if (controller) controller.abort();
-    });
+    const initResult = await memory.initialize();
+    if (initResult.issues && initResult.issues.length > 0) {
+      console.warn("ui: browser-memory reported issues during initialize()", initResult.issues);
+    }
 
-    try {
-      await loadData();
-    } catch (err) {
-      el.catalogStatus.textContent = "Catalog unavailable.";
-      showError("Could not load the catalog.");
-      return;
+    profile = await memory.getProfile();
+    const testMode = readTestMode(window.location);
+    if (testMode) {
+      profile = await memory.setProfile({
+        ...profile,
+        providers: testMode.providers,
+        onboardingComplete: true
+      });
+    }
+    subscriptions = new Set(profile.providers);
+
+    if (!profile.onboardingComplete) {
+      onboarding.show();
+    } else {
+      await showShell();
     }
 
     scheduleIndex();

@@ -1,7 +1,4 @@
-const PROVIDER_SLUGS = ["netflix", "prime", "hotstar", "zee5", "sonyliv", "mubi", "crunchyroll",
-  "sunnxt", "mxplayer", "discovery", "shemaroo", "lionsgate", "manoramamax", "hungama", "hoichoi",
-  "aha", "curiosity", "appletv", "epicon", "tataplay", "plex", "tubi", "docubay", "bbcplayer",
-  "chaupal", "erosnow"];
+import { PROVIDER_SLUGS, intersectProviders } from "./providers.js";
 
 const GENRE_NAMES = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama",
   "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction",
@@ -13,18 +10,36 @@ const GENRE_PARAM = { type: "string", enum: GENRE_NAMES, description: "Genre nam
 const PROVIDER_PARAM = { type: "string", enum: PROVIDER_SLUGS, description: "Streaming provider slug." };
 
 export function createTools(deps) {
+  // deps.subscriptions is the visitor's selected provider slugs (a Set,
+  // array, or omitted for "no gate" — used by scripts/tests that predate
+  // subscription gating). It is AND-ed into every filter below and used to
+  // trim every returned record's p/u down to only subscribed slugs, so the
+  // agent (and any UI hydrating from these results) never sees or links to
+  // a provider outside the visitor's subscriptions.
+  const subscriptions = deps.subscriptions instanceof Set
+    ? deps.subscriptions
+    : Array.isArray(deps.subscriptions) ? new Set(deps.subscriptions) : null;
+  const recordsById = deps.recordsById instanceof Map
+    ? deps.recordsById
+    : new Map(deps.records.map((record) => [record.id, record]));
+
+  function scoped(rec) {
+    return subscriptions ? intersectProviders(rec, subscriptions) : rec;
+  }
+
   function shape(rec) {
+    const r = scoped(rec);
     return {
-      id: rec.id,
-      t: rec.t,
-      y: rec.y,
-      k: rec.k,
-      rt: rec.rt,
-      r: rec.r,
-      p: rec.p,
-      l: rec.l,
-      g: rec.g,
-      s: (rec.s || "").slice(0, 220)
+      id: r.id,
+      t: r.t,
+      y: r.y,
+      k: r.k,
+      rt: r.rt,
+      r: r.r,
+      p: r.p,
+      l: r.l,
+      g: r.g,
+      s: (r.s || "").slice(0, 220)
     };
   }
 
@@ -43,6 +58,7 @@ export function createTools(deps) {
     set("lang", a.language);
     set("genre", a.genre);
     set("provider", a.provider);
+    if (subscriptions) f.providers = subscriptions;
     if (a.exclude_seen === true && deps.seenKeys.length > 0) f.excludeKeys = deps.seenKeys;
     return f;
   }
@@ -78,12 +94,12 @@ export function createTools(deps) {
 
     async get_titles(args) {
       const a = args || {};
-      const want = new Set(Array.isArray(a.ids) ? a.ids : []);
-      const allowed = new Set(
-        deps.filterIndices(deps.records, toFilters(a)).map((i) => deps.records[i].id)
-      );
-      const found = deps.records.filter((r) => want.has(r.id) && allowed.has(r.id));
-      return { count: found.length, results: found };
+      const ids = Array.isArray(a.ids) ? a.ids : [];
+      const requested = ids.map((id) => recordsById.get(id)).filter(Boolean);
+      const found = deps
+        .filterIndices(requested, toFilters(a))
+        .map((index) => requested[index]);
+      return { count: found.length, results: found.map(scoped) };
     },
 
     async sample_titles(args) {

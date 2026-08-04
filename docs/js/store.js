@@ -4,6 +4,13 @@ export const KEYS = {
   history: "ottbyok.history"
 };
 
+// The browser-memory adapter migrates these two values into IndexedDB after a
+// verified write. Keep the names stable so existing visitors retain their data.
+export const LEGACY_CONTEXT_KEYS = Object.freeze({
+  youmd: KEYS.youmd,
+  history: KEYS.history
+});
+
 export const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "",
@@ -84,41 +91,6 @@ export function createStore(storage) {
     }
   }
 
-  function getYouMd() {
-    try {
-      const raw = read(KEYS.youmd);
-      if (raw === null || raw === undefined) return YOUMD_TEMPLATE;
-      return raw;
-    } catch (err) {
-      return YOUMD_TEMPLATE;
-    }
-  }
-
-  function setYouMd(str) {
-    return write(KEYS.youmd, String(str));
-  }
-
-  function getHistory() {
-    try {
-      const raw = read(KEYS.history);
-      if (!raw) return null;
-      const parsed = JSON.parse(raw);
-      if (!parsed || typeof parsed !== "object") return null;
-      return parsed;
-    } catch (err) {
-      return null;
-    }
-  }
-
-  function setHistory(obj) {
-    if (obj === null || obj === undefined) return remove(KEYS.history);
-    try {
-      return write(KEYS.history, JSON.stringify(obj));
-    } catch (err) {
-      return false;
-    }
-  }
-
   function clearAll() {
     let ok = true;
     for (const key of Object.values(KEYS)) {
@@ -135,10 +107,6 @@ export function createStore(storage) {
   return {
     getLlm,
     setLlm,
-    getYouMd,
-    setYouMd,
-    getHistory,
-    setHistory,
     clearAll,
     hasKey
   };

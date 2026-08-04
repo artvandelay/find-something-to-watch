@@ -91,7 +91,7 @@ function happyFetch() {
       choices: [{
         message: {
           role: "assistant",
-          content: "{\"picks\":[{\"id\":\"netflix:1\",\"reason\":\"fits\"}],\"note\":\"here\"}"
+          content: "{\"reply\":\"Try this.\",\"queue\":[\"netflix:1\"]}"
         }
       }]
     })
@@ -129,7 +129,8 @@ const cases = [
       fetchImpl: counted(async () => ({ ok: false, status: 401, text: async () => "boom" }))
     });
     assert.equal(errorOf(events).code, "auth");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["HTTP 402 maps to credit error", async () => {
@@ -137,7 +138,8 @@ const cases = [
       fetchImpl: counted(async () => ({ ok: false, status: 402, text: async () => "boom" }))
     });
     assert.equal(errorOf(events).code, "credit");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["HTTP 429 maps to rate error", async () => {
@@ -145,7 +147,8 @@ const cases = [
       fetchImpl: counted(async () => ({ ok: false, status: 429, text: async () => "boom" }))
     });
     assert.equal(errorOf(events).code, "rate");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["HTTP 500 maps to network (upstream) error", async () => {
@@ -153,7 +156,8 @@ const cases = [
       fetchImpl: counted(async () => ({ ok: false, status: 500, text: async () => "boom" }))
     });
     assert.equal(errorOf(events).code, "network");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["hanging fetch aborted via AbortController -> aborted, no unhandled rejection", async () => {
@@ -169,7 +173,8 @@ const cases = [
     setTimeout(() => controller.abort(), 50);
     const { events, result } = await pending;
     assert.equal(errorOf(events).code, "aborted");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["truncated JSON body -> clean surfaced error, no crash", async () => {
@@ -186,7 +191,8 @@ const cases = [
     assert.ok(err, "expected an error event");
     assert.equal(err.code, "network");
     assert.ok(err.message.includes("Unexpected end of JSON input"));
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["model returns tool calls forever -> stops at iteration cap, no infinite loop", async () => {
@@ -216,7 +222,8 @@ const cases = [
     assert.ok(err, "expected a budget error event");
     assert.equal(err.code, "budget");
     assert.equal(calls, 8, "expected exactly maxSteps (8) LLM calls");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["40,000-character user query -> handled without crash", async () => {
@@ -224,8 +231,8 @@ const cases = [
     assert.ok(query.length >= 40000);
     const { events, result } = await drive({ query, fetchImpl: happyFetch() });
     assert.equal(errorOf(events), null);
-    assert.equal(result.picks.length, 1);
-    assert.equal(result.picks[0].id, "netflix:1");
+    assert.equal(result.reply, "Try this.");
+    assert.deepStrictEqual(result.queue, ["netflix:1"]);
   }],
 
   ["prompt injection inside a tool result is treated as data", async () => {
@@ -241,19 +248,15 @@ const cases = [
     });
     const { events, result } = await drive({ tools, fetchImpl: happyFetch() });
     assert.equal(errorOf(events), null);
-    assert.equal(result.picks.length, 1);
-    assert.deepStrictEqual(
-      Object.keys(result.picks[0]).sort(),
-      ["g", "id", "img", "k", "l", "p", "r", "reason", "rt", "t", "u", "y"]
-    );
-    assert.equal(result.picks[0].reason, "fits");
+    assert.equal(result.reply, "Try this.");
+    assert.deepStrictEqual(result.queue, ["netflix:1"]);
   }],
 
   ["emoji-only and Devanagari queries -> no encoding crash", async () => {
     for (const query of ["🎬🍿😂🇮🇳", "मुझे एक अच्छी कॉमेडी फिल्म चाहिए"]) {
       const { events, result } = await drive({ query, fetchImpl: happyFetch() });
       assert.equal(errorOf(events), null, "unexpected error for query: " + query);
-      assert.equal(result.picks.length, 1);
+      assert.deepStrictEqual(result.queue, ["netflix:1"]);
     }
   }],
 
@@ -275,7 +278,8 @@ const cases = [
     const err = errorOf(events);
     assert.ok(err, "expected an error event");
     assert.equal(err.code, "network");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }],
 
   ["empty choices array in API response -> clean error, no crash", async () => {
@@ -285,7 +289,8 @@ const cases = [
     const err = errorOf(events);
     assert.ok(err, "expected an error event");
     assert.equal(err.code, "network");
-    assert.equal(result.picks.length, 0);
+    assert.equal(result.reply, "");
+    assert.equal(result.queue, null);
   }]
 ];
 

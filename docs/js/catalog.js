@@ -73,6 +73,14 @@ export function filterIndices(records, filters) {
   const excluded = Array.isArray(f.excludeKeys) && f.excludeKeys.length
     ? new Set(f.excludeKeys)
     : null;
+  // f.providers is the visitor's subscription gate: a Set (or array) of
+  // allowed provider slugs. Unlike f.provider (a single facet the caller
+  // asked to narrow to), this is an AND-ed availability boundary applied on
+  // top of everything else — every surviving record must carry at least one
+  // subscribed slug. An empty set means "no subscriptions" and excludes all.
+  const providers = f.providers instanceof Set
+    ? f.providers
+    : Array.isArray(f.providers) ? new Set(f.providers) : null;
   const out = [];
   for (let i = 0; i < records.length; i++) {
     const rec = records[i];
@@ -83,10 +91,38 @@ export function filterIndices(records, filters) {
     if (isSet(f.runtimeMax) && (rec.rt === null || rec.rt > f.runtimeMax)) continue;
     if (isSet(f.minRating) && (rec.r === null || rec.r < f.minRating)) continue;
     if (isSet(f.provider) && !rec.p.includes(f.provider)) continue;
+    if (providers && !rec.p.some((slug) => providers.has(slug))) continue;
     if (isSet(f.lang) && rec.l !== f.lang) continue;
     if (isSet(f.genre) && !(rec.g || []).includes(f.genre)) continue;
     if (excluded && excluded.has(normalizeTitle(rec.t))) continue;
     out.push(i);
   }
   return out;
+}
+
+/**
+ * Ranks catalog ids for the pre-chat recommendation queue without any LLM
+ * call: subscribed-provider, unseen titles ordered by a vote-weighted rating
+ * that reuses the frozen popularity-prior shape from search() (rating as the
+ * base score, boosted by log10(1 + votes) instead of bm25). Capped at
+ * options.limit (default 20).
+ */
+export function seedQueue(records, options = {}) {
+  const { providers = null, excludeKeys = null, limit = 20 } = options;
+  const cap = Math.max(0, Math.floor(Number(limit) || 0));
+  if (cap === 0) return [];
+  const idxs = filterIndices(records, { providers, excludeKeys });
+  const top = [];
+  const isBetter = (a, b) => a.score > b.score || (a.score === b.score && a.i < b.i);
+  for (const i of idxs) {
+    const rec = records[i];
+    const votes = rec.v || 0;
+    const rating = rec.r || 0;
+    const candidate = { i, score: rating * (1 + 0.12 * Math.log10(1 + votes)) };
+    const position = top.findIndex((existing) => isBetter(candidate, existing));
+    if (position >= 0) top.splice(position, 0, candidate);
+    else if (top.length < cap) top.push(candidate);
+    if (top.length > cap) top.pop();
+  }
+  return top.map((entry) => records[entry.i].id);
 }

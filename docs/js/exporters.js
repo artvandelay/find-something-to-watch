@@ -1,46 +1,13 @@
-// Pure export formatters: data in, string out. No DOM, no imports.
+// Pure export formatters: data in, string out. providers.js is the one
+// import allowed here since it is itself import-free and DOM-free.
+import { providerLabel, watchCta } from "./providers.js";
 
 const MAX_RECENT = 25;
-
-const PROVIDER_LABELS = {
-  netflix: "Netflix",
-  prime: "Prime Video",
-  hotstar: "JioHotstar",
-  zee5: "ZEE5",
-  sonyliv: "SonyLIV",
-  mubi: "MUBI",
-  crunchyroll: "Crunchyroll",
-  sunnxt: "Sun NXT",
-  mxplayer: "MX Player",
-  discovery: "Discovery+",
-  shemaroo: "ShemarooMe",
-  lionsgate: "Lionsgate Play",
-  manoramamax: "ManoramaMAX",
-  hungama: "Hungama Play",
-  hoichoi: "Hoichoi",
-  aha: "aha",
-  curiosity: "CuriosityStream",
-  appletv: "Apple TV+",
-  epicon: "EPIC ON",
-  tataplay: "Tata Play",
-  plex: "Plex",
-  tubi: "Tubi",
-  docubay: "DocuBay",
-  bbcplayer: "BBC Player",
-  chaupal: "Chaupal",
-  erosnow: "Eros Now"
-};
-
-function providerLabel(slug) {
-  const s = String(slug || "");
-  if (!s) return "";
-  return PROVIDER_LABELS[s] || s;
-}
 
 function providerLinks(u) {
   if (!u || typeof u !== "object") return "";
   return Object.keys(u)
-    .map((slug) => `[${providerLabel(slug)}](${u[slug]})`)
+    .map((slug) => `[${watchCta(slug, u[slug])}](${u[slug]})`)
     .join(" · ");
 }
 
@@ -53,18 +20,24 @@ function firstUrl(u) {
 }
 
 export function toMarkdown(picks, meta) {
-  if (!Array.isArray(picks) || picks.length === 0) {
-    return "# Watch picks\n\nNo results.\n";
-  }
   const m = meta || {};
-  const head = `# Watch picks\n\n> Query: ${m.query}\n> Generated: ${m.generatedAt}\n`;
+  const title = typeof m.title === "string" && m.title.trim() ? m.title.trim() : "Watch picks";
+  if (!Array.isArray(picks) || picks.length === 0) {
+    return `# ${title}\n\nNo results.\n`;
+  }
+  const details = [];
+  if (typeof m.query === "string" && m.query.trim()) details.push(`> Query: ${m.query}`);
+  if (typeof m.generatedAt === "string" && m.generatedAt.trim()) details.push(`> Generated: ${m.generatedAt}`);
+  const head = `# ${title}${details.length ? `\n\n${details.join("\n")}` : ""}\n`;
   const blocks = picks.map((pick, i) => {
     const p = pick || {};
     const title = p.y == null ? `${p.t}` : `${p.t} (${p.y})`;
     const facts = [p.k];
     if (p.rt != null) facts.push(`${p.rt} min`);
     if (p.r != null) facts.push(`TMDB ${p.r}`);
-    const lines = [`## ${i + 1}. ${title}`, `- Kind: ${facts.join(" · ")}`, `- Why: ${p.reason}`];
+    const lines = [`## ${i + 1}. ${title}`, `- Kind: ${facts.join(" · ")}`];
+    if (typeof p.s === "string" && p.s.trim()) lines.push(`- Description: ${p.s}`);
+    if (typeof p.reason === "string" && p.reason.trim()) lines.push(`- Why: ${p.reason}`);
     const links = providerLinks(p.u);
     if (links) lines.push(`- Watch: ${links}`);
     return lines.join("\n");
@@ -74,7 +47,11 @@ export function toMarkdown(picks, meta) {
 
 export function toJson(picks, meta) {
   const m = meta || {};
-  return JSON.stringify({ generatedAt: m.generatedAt, query: m.query, picks }, null, 2);
+  const exported = { generatedAt: m.generatedAt, query: m.query, picks };
+  if (typeof m.title === "string" && m.title.trim()) exported.title = m.title.trim();
+  if (m.playlist && typeof m.playlist === "object") exported.playlist = m.playlist;
+  if (Array.isArray(m.unavailableIds)) exported.unavailableIds = m.unavailableIds;
+  return JSON.stringify(exported, null, 2);
 }
 
 function csvField(value) {
@@ -87,14 +64,14 @@ function csvField(value) {
 }
 
 export function toCsv(picks, meta) {
-  const header = "id,title,year,kind,runtime_min,rating,language,genre,providers,url,reason";
+  const header = "id,title,year,kind,runtime_min,rating,language,genre,providers,url,description,reason";
   const list = Array.isArray(picks) ? picks : [];
   const rows = list.map((pick) => {
     const p = pick || {};
     const providers = Array.isArray(p.p) ? p.p.map(providerLabel).join("|") : "";
     const language = p.l || "";
     const genre = (p.g || []).join("; ");
-    return [p.id, p.t, p.y, p.k, p.rt, p.r, language, genre, providers, firstUrl(p.u), p.reason]
+    return [p.id, p.t, p.y, p.k, p.rt, p.r, language, genre, providers, firstUrl(p.u), p.s, p.reason]
       .map(csvField)
       .join(",");
   });

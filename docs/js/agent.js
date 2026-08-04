@@ -1,58 +1,56 @@
-// Agent loop. No DOM, no localStorage, no imports: fetch is injected so this
-// module can run under Node for tests. Requests are never streamed.
+// Agent loop. No DOM or localStorage: fetch is injected so this module can run
+// under Node for tests. Requests are never streamed.
+
+import { callChatCompletion } from "./llm-client.js";
 
 const DEFAULT_BUDGET = { maxSteps: 8, maxMs: 120000 };
+const MAX_QUEUE_IDS = 20;
+const MAX_QUERY_CHARACTERS = 6000;
+const MAX_YOUMD_CONTEXT_CHARACTERS = 8000;
+const MAX_CONVERSATION_CONTEXT_CHARACTERS = 18000;
+const MAX_HISTORY_CONTEXT_CHARACTERS = 9600;
 
-function mapError(status) {
-  if (status === 401 || status === 403) return "auth";
-  if (status === 402) return "credit";
-  if (status === 429) return "rate";
-  if (status === 400 || status === 413) return "context";
-  return "network";
-}
-
-function errorMessage(code, status) {
-  if (code === "auth") return "Your API key was rejected. Check it in Settings.";
-  if (code === "credit") return "Your account is out of credit.";
-  if (code === "rate") return "Rate limited by the provider. Wait a moment and retry.";
-  if (code === "context") return "The request was too large or malformed.";
-  return "Request failed with status " + status + ".";
-}
-
-async function callLlm(config, body, fetchImpl, signal) {
-  const res = await fetchImpl(config.baseUrl.replace(/\/+$/, "") + "/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      "Authorization": "Bearer " + config.apiKey
-    },
-    body: JSON.stringify({ ...body, model: config.model, stream: false }),
-    signal
-  });
-  if (!res.ok) {
-    await res.text();
-    const code = mapError(res.status);
-    const err = new Error(errorMessage(code, res.status));
-    err.code = code;
-    throw err;
-  }
-  return await res.json();
-}
-
+// Sent as its own system message. This directly reaches the configured LLM
+// endpoint — see CONTRACT.md and the app's privacy copy for what "local-only"
+// does and does not cover here.
 function buildContextBlock(context) {
   const ctx = context || {};
   let out = "## Mood\n" + (ctx.mood || "no preference");
   if (typeof ctx.youmd === "string" && ctx.youmd.trim() !== "") {
-    out += "\n\n## About the viewer (You.md)\n" + ctx.youmd;
+    out += "\n\n## About the viewer (You.md)\n" + ctx.youmd.slice(0, MAX_YOUMD_CONTEXT_CHARACTERS);
   }
   if (ctx.history !== null && ctx.history !== undefined) {
-    out += "\n\n## Recently watched\n";
+    const lines = [];
+    let used = 0;
+    const addLine = (line) => {
+      const limited = String(line).slice(0, 240);
+      if (used + limited.length + 1 > MAX_HISTORY_CONTEXT_CHARACTERS) return false;
+      lines.push(limited);
+      used += limited.length + 1;
+      return true;
+    };
+    const sources = Array.isArray(ctx.history.sources) ? ctx.history.sources.slice(0, 4) : [];
     const series = Array.isArray(ctx.history.series) ? ctx.history.series.slice(0, 20) : [];
     const movies = Array.isArray(ctx.history.movies) ? ctx.history.movies.slice(0, 20) : [];
-    const lines = [];
-    for (const s of series) lines.push("- " + s.name + " (" + s.episodes + " episodes)");
-    for (const m of movies) lines.push("- " + (typeof m === "string" ? m : m.title));
-    out += lines.join("\n");
+    const other = Array.isArray(ctx.history.other) ? ctx.history.other.slice(0, 20) : [];
+    for (const source of sources) {
+      const name = typeof source?.name === "string" ? source.name : "Unnamed source";
+      const format = typeof source?.format === "string" ? source.format : "unknown";
+      const records = Number.isInteger(source?.records) && source.records >= 0
+        ? "; " + source.records + " records"
+        : "";
+      addLine("- Source: " + name + " (" + format + records + ")");
+    }
+    for (const s of series) {
+      addLine("- Series: " + (s?.name || "") + " (" + (s?.episodes || 0) + " episodes)");
+    }
+    for (const m of movies) {
+      addLine("- Movie: " + (typeof m === "string" ? m : m?.title || ""));
+    }
+    for (const item of other) {
+      addLine("- Other: " + (typeof item === "string" ? item : item?.title || ""));
+    }
+    out += "\n\n## Recently watched\n" + lines.join("\n");
     out += "\n\nDo not recommend anything in the Recently watched list unless the viewer explicitly asks for a rewatch.";
   }
   return out;
@@ -76,30 +74,59 @@ function stripFence(text) {
     .trim();
 }
 
+// Prior turns from the bounded conversation, converted into real chat
+// messages so the model can follow a multi-turn thread instead of treating
+// every call as a fresh one-shot query.
+function priorTurnMessages(conversation) {
+  if (!Array.isArray(conversation)) return [];
+  const candidates = [];
+  for (const m of conversation) {
+    if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
+    if (typeof m.content !== "string" || m.content === "") continue;
+    candidates.push({ role: m.role, content: m.content.slice(0, MAX_QUERY_CHARACTERS) });
+  }
+  const out = [];
+  let used = 0;
+  for (let i = candidates.length - 1; i >= 0; i--) {
+    const message = candidates[i];
+    if (used + message.content.length > MAX_CONVERSATION_CONTEXT_CHARACTERS) break;
+    out.unshift(message);
+    used += message.content.length;
+  }
+  if (out[0]?.role === "assistant") out.shift();
+  return out;
+}
+
 export async function runAgent(opts) {
   const config = opts.config;
   const prompts = opts.prompts;
   const tools = opts.tools;
   const context = opts.context;
   const query = opts.query;
+  const conversation = opts.conversation;
   const emit = typeof opts.onEvent === "function" ? opts.onEvent : function () {};
   const signal = opts.signal || null;
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
   const budget = opts.budget || DEFAULT_BUDGET;
 
   let usage = null;
+  const fail = () => ({ ok: false, reply: "", queue: null, usage });
 
   try {
     if (typeof config.apiKey !== "string" || config.apiKey.trim() === "") {
       emit({ type: "error", code: "auth", message: "Add an API key in Settings to use the agent." });
-      return { picks: [], usage: null };
+      return fail();
     }
 
     const deadline = Date.now() + budget.maxMs;
     const messages = [
       { role: "system", content: prompts.system },
       { role: "system", content: buildContextBlock(context) },
-      { role: "user", content: prompts.planner.replace("{{QUERY}}", query) }
+      ...priorTurnMessages(conversation),
+      {
+        role: "user",
+        content: prompts.planner.replace("{{QUERY}}", String(query || "").slice(0, MAX_QUERY_CHARACTERS))
+      }
     ];
 
     emit({ type: "status", text: "Planning search" });
@@ -108,18 +135,17 @@ export async function runAgent(opts) {
     for (let step = 0; step < budget.maxSteps; step++) {
       if (signal && signal.aborted) {
         emit({ type: "error", code: "aborted", message: "Stopped." });
-        return { picks: [], usage };
+        return fail();
       }
       if (Date.now() > deadline) {
         emit({ type: "error", code: "budget", message: "Search took too long and was stopped." });
-        return { picks: [], usage };
+        return fail();
       }
 
-      const data = await callLlm(
+      const data = await callChatCompletion(
         config,
         { messages, tools: tools.schemas, tool_choice: "auto" },
-        fetchImpl,
-        signal
+        { fetchImpl, signal }
       );
       usage = addUsage(usage, data.usage);
 
@@ -160,17 +186,16 @@ export async function runAgent(opts) {
 
     if (finalText === null) {
       emit({ type: "error", code: "budget", message: "The model kept searching without answering." });
-      return { picks: [], usage };
+      return fail();
     }
 
-    emit({ type: "status", text: "Writing recommendations" });
+    emit({ type: "status", text: "Writing a reply" });
 
     messages.push({ role: "user", content: prompts.rerank });
-    const finalData = await callLlm(
+    const finalData = await callChatCompletion(
       config,
       { messages },
-      fetchImpl,
-      signal
+      { fetchImpl, signal }
     );
     usage = addUsage(usage, finalData.usage);
 
@@ -179,44 +204,40 @@ export async function runAgent(opts) {
       parsed = JSON.parse(stripFence(finalData.choices[0].message.content));
     } catch (err) {
       emit({ type: "error", code: "parse", message: "The model did not return valid JSON." });
-      return { picks: [], usage };
+      return fail();
     }
 
-    const rawPicks = Array.isArray(parsed.picks) ? parsed.picks : [];
-    const ids = rawPicks.map((p) => p.id);
-    const resolved = ids.length > 0 ? await tools.handlers.get_titles({ ids }) : { results: [] };
-    const byId = new Map();
-    for (const row of resolved.results || []) byId.set(row.id, row);
+    const reply = typeof parsed.reply === "string" ? parsed.reply : "";
 
-    const picks = [];
-    for (const pick of rawPicks) {
-      const row = byId.get(pick.id);
-      if (!row) continue;
-      picks.push({
-        id: row.id,
-        t: row.t,
-        y: row.y,
-        k: row.k,
-        rt: row.rt,
-        r: row.r,
-        p: row.p,
-        l: row.l,
-        g: row.g,
-        u: row.u,
-        img: row.img,
-        reason: pick.reason
-      });
+    // queue stays null ("leave the display unchanged") unless the model
+    // explicitly included a queue key, even an empty array ("clear it").
+    let queue = null;
+    if (Array.isArray(parsed.queue)) {
+      const seen = new Set();
+      const rawIds = [];
+      for (const id of parsed.queue) {
+        if (typeof id !== "string" || id.trim() === "" || seen.has(id)) continue;
+        seen.add(id);
+        rawIds.push(id);
+        if (rawIds.length === MAX_QUEUE_IDS) break;
+      }
+      if (rawIds.length > 0) {
+        const resolved = await tools.handlers.get_titles({ ids: rawIds });
+        const foundIds = new Set(((resolved && resolved.results) || []).map((r) => r.id));
+        queue = rawIds.filter((id) => foundIds.has(id));
+      } else {
+        queue = [];
+      }
     }
 
-    emit({ type: "delta", text: parsed.note || "" });
-    emit({ type: "done", picks, usage });
-    return { picks, usage };
+    emit({ type: "done", reply, queue, usage });
+    return { ok: true, reply, queue, usage };
   } catch (err) {
     if (err && err.name === "AbortError") {
       emit({ type: "error", code: "aborted", message: "Stopped." });
     } else {
       emit({ type: "error", code: (err && err.code) || "network", message: err && err.message });
     }
-    return { picks: [], usage };
+    return fail();
   }
 }

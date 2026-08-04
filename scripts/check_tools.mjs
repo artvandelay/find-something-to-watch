@@ -5,7 +5,7 @@ import { buildIndex, search, filterIndices, normalizeTitle } from "../docs/js/ca
 const recs = [
   { id: "netflix:1", t: "Space Heist", y: 2020, k: "movie", rt: 100,
     s: "A crew of thieves plan a daring heist aboard a space station.",
-    im: null, r: 7.2, p: ["netflix"], u: { netflix: "https://x/1" }, img: null,
+    im: null, r: 7.2, p: ["netflix", "prime"], u: { netflix: "https://x/1", prime: "https://y/1" }, img: null,
     l: "en", g: ["Crime"], v: 10 },
   { id: "netflix:2", t: "Slow Burn", y: 2015, k: "series", rt: 45,
     s: "A quiet detective story about a small town and a long grudge.",
@@ -17,7 +17,7 @@ const recs = [
     l: "hi", g: ["Comedy"], v: 0 },
   { id: "netflix:4", t: "Quiet Town", y: 1999, k: "movie", rt: 200,
     s: "Nothing happens here.",
-    im: null, r: 6.0, p: ["netflix"], u: { netflix: "https://x/4" }, img: null,
+    im: null, r: 6.0, p: ["prime"], u: { prime: "https://y/4" }, img: null,
     l: "hi", g: ["Drama"], v: 5 }
 ];
 
@@ -68,5 +68,45 @@ deepStrictEqual(e.results.map((x) => x.id), f.results.map((x) => x.id));
 
 const g = await t.handlers.search_titles({ query: "heist", limit: 999 });
 ok(g.count <= 50);
+
+// Subscription gating: createTools({ subscriptions }) restricts every handler's
+// candidates to records with at least one subscribed provider slug, and trims
+// every returned record's p/u down to only the subscribed slugs.
+const gated = createTools({
+  records: recs,
+  index: buildIndex(recs),
+  search,
+  filterIndices,
+  normalizeTitle,
+  seenKeys: [],
+  subscriptions: ["netflix"]
+});
+
+const h = await gated.handlers.search_titles({ query: "heist" });
+strictEqual(h.count, 2);
+ok(h.results.every((r) => r.p.every((slug) => slug === "netflix")));
+
+const i = await gated.handlers.filter_titles({});
+ok(!i.results.some((r) => r.id === "netflix:4"), "netflix-only subscription must exclude a prime-only title");
+
+const j = await gated.handlers.get_titles({ ids: ["netflix:1"] });
+strictEqual(j.count, 1);
+deepStrictEqual(j.results[0].p, ["netflix"]);
+deepStrictEqual(Object.keys(j.results[0].u), ["netflix"]);
+
+const k = await gated.handlers.get_titles({ ids: ["netflix:4"] });
+strictEqual(k.count, 0, "a prime-only title must not resolve under a netflix-only subscription");
+
+const emptyGate = createTools({
+  records: recs,
+  index: buildIndex(recs),
+  search,
+  filterIndices,
+  normalizeTitle,
+  seenKeys: [],
+  subscriptions: []
+});
+const m = await emptyGate.handlers.filter_titles({});
+strictEqual(m.count, 0, "an empty subscription set must exclude every title");
 
 console.log("check_tools OK");

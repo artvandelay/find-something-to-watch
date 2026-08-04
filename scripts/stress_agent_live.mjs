@@ -129,21 +129,23 @@ for (const query of queries) {
       tools,
       context: { youmd: "", history: null, mood: "" },
       query,
+      conversation: [],
       onEvent: (e) => events.push(e),
       signal: null,
       fetchImpl: globalThis.fetch
     });
   } catch (err) {
     thrown = err;
-    result = { picks: [], usage: null };
+    result = { reply: "", queue: null, usage: null };
   }
   const ms = Date.now() - start;
 
   const errorEvent = events.find((e) => e.type === "error");
   const soft = !thrown && errorEvent && SOFT_CODES.has(errorEvent.code);
-  const picks = result.picks || [];
-  const badIds = picks.filter((p) => !catalogIds.has(p.id)).map((p) => p.id);
-  const ok = !thrown && !errorEvent && picks.length >= 1 && badIds.length === 0;
+  const queue = result.queue || [];
+  const badIds = queue.filter((id) => !catalogIds.has(id));
+  const ok = !thrown && result.ok === true && !errorEvent &&
+    typeof result.reply === "string" && result.reply.trim() !== "" && badIds.length === 0;
 
   if (ok) passed++;
   if (soft) softFails++;
@@ -158,7 +160,7 @@ for (const query of queries) {
   rows.push({
     query,
     status: ok ? "PASS" : (soft ? "SOFT(" + errorEvent.code + ")" : "FAIL"),
-    picks: picks.length,
+    queue: queue.length,
     ms,
     tokens: result.usage ? String(result.usage.total_tokens) : "-",
     detail: thrown ? String(thrown && thrown.message)
@@ -171,13 +173,13 @@ for (const query of queries) {
 const wallMs = Date.now() - wallStart;
 
 console.log("");
-console.log("query                                   | result      | picks |     ms | tokens");
+console.log("query                                   | result      | queue |     ms | tokens");
 console.log("----------------------------------------+-------------+-------+--------+-------");
 for (const row of rows) {
   console.log(
     row.query.slice(0, 39).padEnd(39)
     + " | " + row.status.padEnd(11)
-    + " | " + String(row.picks).padStart(5)
+    + " | " + String(row.queue).padStart(5)
     + " | " + String(row.ms).padStart(6)
     + " | " + row.tokens.padStart(6)
     + (row.detail ? "\n    " + row.detail : "")
