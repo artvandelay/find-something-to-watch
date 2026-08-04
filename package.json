@@ -3,7 +3,9 @@
   "private": true,
   "type": "module",
   "devDependencies": {
-    "fflate": "0.8.3"
+    "fake-indexeddb": "6.2.5",
+    "fflate": "0.8.3",
+    "jsdom": "29.1.1"
   },
   "scripts": {
     "check": "for f in scripts/check_*.mjs; do node \"$f\" || exit 1; done",

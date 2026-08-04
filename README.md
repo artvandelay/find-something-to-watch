@@ -136,6 +136,26 @@ Module checks (development-only):
 npm run check
 ```
 
+### Whole-app boot test
+
+`scripts/check_app_boot.mjs` boots the real `docs/index.html` and the real `docs/js/ui.js` in jsdom,
+against a small catalog fixture and a fresh IndexedDB, and drives the app the way a user would:
+onboarding step by step, saving to a playlist, reloading, the mobile drawer, the developer shortcut,
+and a query with no key configured.
+
+It exists because these are integration failures — a control that is never rendered, or a hidden
+`required` input that silently blocks a form — which unit tests on individual modules cannot see and
+which are slow and flaky to chase in a live browser. The whole run takes about a second, so prefer it
+over manual browser testing:
+
+```bash
+node scripts/check_app_boot.mjs
+```
+
+`scripts/harness/app.mjs` provides the boot helper. Pass `storage` from `createStorage()` to share
+state between two boots and simulate a reload, `mobile: true` to start at the drawer breakpoint, and
+`records` to substitute catalog fixtures.
+
 Stress suites:
 
 ```bash
@@ -147,7 +167,8 @@ exits non-zero when the key is absent, so it is safe to include in CI where the 
 
 ### Local testing bypass
 
-For browser testing only, `?testMode=1` bypasses onboarding when the hostname is exactly `localhost` or
+Mostly superseded by the boot test above; useful when you want to poke at the live UI by hand.
+`?testMode=1` bypasses onboarding when the hostname is exactly `localhost` or
 `127.0.0.1`. Add `testProviders=netflix,prime` to select known providers; without it, the default is
 Netflix. Production hosts and localhost-like subdomains ignore this flag, and it never creates or stores
 an API key.
