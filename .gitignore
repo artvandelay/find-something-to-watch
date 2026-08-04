@@ -1,0 +1,18 @@
+# secrets and personal data — never commit
+.env
+.env.*
+NetflixViewingHistory.csv
+*ViewingHistory*.csv
+
+# raw source dumps (large, rebuildable) — fixtures are the exception
+data/*
+!data/fixtures/
+!data/fixtures/**
+
+# python
+__pycache__/
+*.py[cod]
+.venv/
+
+# os
+.DS_Store
