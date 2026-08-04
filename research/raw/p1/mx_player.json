@@ -1,0 +1,40 @@
+{
+  "platform": "Amazon MX Player (Free AVOD)",
+  "probe_timestamp_utc": "2026-08-03 20:38:45",
+  "latency_ms": 256.92,
+  "web_scrape_status": {
+    "status_code": 200,
+    "page_size_bytes": 201239,
+    "has_initial_state": true
+  },
+  "internal_api_status": {
+    "status_code": 200,
+    "json_keys": [
+      "id",
+      "style",
+      "items",
+      "next",
+      "previous",
+      "name",
+      "webUrl",
+      "channelDetails",
+      "title",
+      "interactiveCardDetails",
+      "features",
+      "tournament",
+      "ascend"
+    ],
+    "sample": "{'id': 'DEFAULT', 'style': 'pic_left', 'items': None, 'next': None, 'previous': None, 'name': 'DEFAULT', 'webUrl': None, 'channelDetails': None, 'title': None, 'interactiveCardDetails': None, 'features': None, 'tournament': None, 'ascend': False}"
+  },
+  "native_api_specs": {
+    "name": "MX Player Internal Web BFF API",
+    "endpoint": "https://api.mxplayer.in/v1/web/detail/browse/movie",
+    "auth": "Guest headers / platform headers",
+    "cost": "Free",
+    "completeness": "Massive AVOD catalog (100,000+ hours in Hindi, Tamil, Telugu, Marathi, etc.)"
+  },
+  "firecrawl_comparison": {
+    "firecrawl_status": "Fails/slow due to heavy React hydration & infinite scroll",
+    "recommendation": "Reverse engineer MX Player BFF endpoints or use python requests with guest headers"
+  }
+}

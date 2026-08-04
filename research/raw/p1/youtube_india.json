@@ -1,0 +1,70 @@
+{
+  "platform": "YouTube India",
+  "probe_timestamp_utc": "2026-08-03 20:38:34",
+  "latency_ms": 3215.87,
+  "rss_feeds": {
+    "Goldmines": {
+      "status_code": 404,
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCne8AInI_3f2GjC_1IuIn_A",
+      "content_length": 1613,
+      "has_entry": false
+    },
+    "Shemaroo Movies": {
+      "status_code": 404,
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC6-F5tO8uklgE9Zy8g5G10A",
+      "content_length": 1613,
+      "has_entry": false
+    },
+    "Pen Movies": {
+      "status_code": 404,
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCf-I-L3TeeE8-3X0yM1C5vA",
+      "content_length": 1613,
+      "has_entry": false
+    },
+    "YRF": {
+      "status_code": 404,
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UC1vGae2Q3oT5MkhhfW8lwjg",
+      "content_length": 1613,
+      "has_entry": false
+    },
+    "T-Series": {
+      "status_code": 200,
+      "url": "https://www.youtube.com/feeds/videos.xml?channel_id=UCq-Fj5jknLsUf-MWSy4_brA",
+      "content_length": 35852,
+      "has_entry": true
+    }
+  },
+  "free_movies_storefront": {
+    "status_code": 200,
+    "has_ytInitialData": false,
+    "page_bytes": 690996
+  },
+  "oembed_test": {
+    "title": "Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)",
+    "author_name": "Rick Astley",
+    "author_url": "https://www.youtube.com/@RickAstleyYT",
+    "type": "video",
+    "height": 113,
+    "width": 200,
+    "version": "1.0",
+    "provider_name": "YouTube",
+    "provider_url": "https://www.youtube.com/",
+    "thumbnail_height": 360,
+    "thumbnail_width": 480,
+    "thumbnail_url": "https://i.ytimg.com/vi/dQw4w9WgXcQ/hqdefault.jpg",
+    "html": "<iframe width=\"200\" height=\"113\" src=\"https://www.youtube.com/embed/dQw4w9WgXcQ?feature=oembed\" frameborder=\"0\" allow=\"accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share\" referrerpolicy=\"strict-origin-when-cross-origin\" allowfullscreen title=\"Rick Astley - Never Gonna Give You Up (Official Video) (4K Remaster)\"></iframe>"
+  },
+  "native_api_specs": {
+    "name": "YouTube Data API v3",
+    "endpoint": "https://www.googleapis.com/youtube/v3/playlistItems",
+    "auth": "API Key (free quota 10,000 units/day)",
+    "rate_limit": "10,000 units/day (approx 1,000,000 video records via playlistItems/search)",
+    "cost": "Free",
+    "completeness": "100% of channel uploads and official movies"
+  },
+  "firecrawl_comparison": {
+    "firecrawl_status": "402 Insufficient Credits / Prohibitive for video streaming sites",
+    "firecrawl_cost": "$16-$99+/mo for limited credits",
+    "recommendation": "Use YouTube Data API v3 / RSS / innerTube endpoints"
+  }
+}

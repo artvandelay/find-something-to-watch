@@ -1,0 +1,12 @@
+{
+  "countries": {
+    "status": 403,
+    "data": {
+      "message": "You are not subscribed to this API."
+    }
+  },
+  "search_IN": {
+    "status": "skipped",
+    "reason": "India country id not found in /countries list"
+  }
+}

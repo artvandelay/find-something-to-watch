@@ -1,0 +1,120 @@
+{
+  "Kaalidhar Laapata": [
+    {
+      "title": "Kaalidhar Laapata",
+      "release_year": 2025,
+      "object_type": "MOVIE",
+      "providers": [
+        "Zee5"
+      ]
+    },
+    {
+      "title": "Laapataa Ladies",
+      "release_year": 2024,
+      "object_type": "MOVIE",
+      "providers": [
+        "Netflix"
+      ]
+    }
+  ],
+  "Tharangam": [
+    {
+      "title": "Tharangam",
+      "release_year": 2017,
+      "object_type": "MOVIE",
+      "providers": [
+        "Sun Nxt",
+        "VI movies and tv"
+      ]
+    },
+    {
+      "title": "Tharangam",
+      "release_year": 1979,
+      "object_type": "MOVIE",
+      "providers": []
+    }
+  ],
+  "Panchayat": [
+    {
+      "title": "Panchayat",
+      "release_year": 2020,
+      "object_type": "SHOW",
+      "providers": [
+        "Amazon Prime Video",
+        "Amazon Prime Video with Ads"
+      ]
+    },
+    {
+      "title": "Panchayat",
+      "release_year": 2017,
+      "object_type": "MOVIE",
+      "providers": []
+    }
+  ],
+  "Sacred Games": [
+    {
+      "title": "Sacred Games",
+      "release_year": 2018,
+      "object_type": "SHOW",
+      "providers": [
+        "Netflix"
+      ]
+    },
+    {
+      "title": "Sacred Games",
+      "release_year": 2018,
+      "object_type": "MOVIE",
+      "providers": []
+    }
+  ],
+  "Kumkum Bhagya": [
+    {
+      "title": "Kumkum Bhagya",
+      "release_year": 2014,
+      "object_type": "SHOW",
+      "providers": [
+        "VI movies and tv",
+        "Zee5"
+      ]
+    },
+    {
+      "title": "Kumkum Bhagya",
+      "release_year": 2014,
+      "object_type": "SHOW",
+      "providers": []
+    }
+  ],
+  "Bigg Boss": [
+    {
+      "title": "Bigg Boss Marathi",
+      "release_year": 2018,
+      "object_type": "SHOW",
+      "providers": []
+    },
+    {
+      "title": "Bigg Boss",
+      "release_year": 2006,
+      "object_type": "SHOW",
+      "providers": [
+        "JioHotstar"
+      ]
+    }
+  ],
+  "Modern Family": [
+    {
+      "title": "Modern Family",
+      "release_year": 2009,
+      "object_type": "SHOW",
+      "providers": [
+        "JioHotstar",
+        "VI movies and tv"
+      ]
+    },
+    {
+      "title": "Modern Family",
+      "release_year": 2012,
+      "object_type": "MOVIE",
+      "providers": []
+    }
+  ]
+}

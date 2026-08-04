@@ -1,0 +1,37 @@
+{
+  "platform": "Amazon Prime Video (India)",
+  "market_share_2026": "22% SVOD market share (~18-32M paid/bundled subscribers)",
+  "feasibility_rating": "🔴 blocked",
+  "primary_method": "Third-Party Aggregator APIs (Streaming Availability API / Watchmode) + Public Sitemaps",
+  "endpoints": {
+    "sitemap_index": "https://www.primevideo.com/sitemap.xml",
+    "streaming_availability_api": "https://streaming-availability.p.rapidapi.com/shows/search/filters?country=in&service=prime",
+    "watchmode_api": "https://api.watchmode.com/v1/list-titles/?apiKey={key}&source_ids=26&regions=IN"
+  },
+  "headers_and_auth": {
+    "x_rapidapi_key": "Project .env RAPIDAPI Key",
+    "x_rapidapi_host": "streaming-availability.p.rapidapi.com"
+  },
+  "anti_bot_and_cdn": "Aggressive Akamai Bot Manager, TLS fingerprinting, and proprietary browser challenges. Datacenter IP requests receive immediate 403 or CAPTCHA.",
+  "dump_vs_sync": "1-Time Dump: Query Streaming Availability API filtered by `country=in` and `service=prime`. Continuous Sync: Daily/weekly delta queries on aggregator API.",
+  "tos_and_legal_risk": "Direct web scraping carries high risk of IP blacklisting and ToS violation. Third-party aggregator route is 100% compliant.",
+  "sanitized_response_signature": {
+    "shows": [
+      {
+        "id": "prime-in-12345",
+        "title": "Mirzapur",
+        "showType": "series",
+        "overview": "A shocking incident at a wedding procession ignites a series of events...",
+        "streamingOptions": {
+          "in": [
+            {
+              "service": "prime",
+              "type": "subscription",
+              "link": "https://www.primevideo.com/detail/0S3251S189"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}

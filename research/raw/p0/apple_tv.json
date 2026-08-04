@@ -1,0 +1,29 @@
+{
+  "platform": "Apple TV+ (India)",
+  "market_share_2026": "18% SVOD market share (fastest-growing platform in India Q2 2026)",
+  "feasibility_rating": "🔴 blocked",
+  "primary_method": "Third-Party Aggregators & Public Apple TV Web Sitemaps / Feeds",
+  "endpoints": {
+    "streaming_availability_api": "https://streaming-availability.p.rapidapi.com/shows/search/filters?country=in&service=apple",
+    "apple_sitemap": "https://tv.apple.com/sitemap.xml",
+    "apple_shelf_api": "https://tv.apple.com/api/uts/v3/shelves"
+  },
+  "headers_and_auth": {
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15",
+    "x_apple_music_user_token": "Anonymous shelf token (ephemeral)"
+  },
+  "anti_bot_and_cdn": "Strict Apple edge security, FairPlay DRM, and ephemeral token requirements on UTS APIs.",
+  "dump_vs_sync": "1-Time Dump: Parse `tv.apple.com/sitemap.xml` or use Streaming Availability API for India region. Continuous Sync: Weekly delta sync on new Apple Originals.",
+  "tos_and_legal_risk": "High ToS risk for direct mobile/BFF scraping; low risk via public RSS/sitemaps or aggregator APIs.",
+  "sanitized_response_signature": {
+    "shows": [
+      {
+        "id": "apple-in-7890",
+        "title": "Severance",
+        "showType": "series",
+        "overview": "Mark leads a team of office workers whose memories have been surgically divided...",
+        "releaseYear": 2022
+      }
+    ]
+  }
+}

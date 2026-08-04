@@ -1,0 +1,25 @@
+{
+  "platform": "Sun NXT (South Indian)",
+  "market_share_2026": "Major South Indian SVOD/TV network (~2-3M paid subscribers, 4,000+ movie catalog)",
+  "feasibility_rating": "🟡 partial",
+  "primary_method": "Web Page HTML Parsing / Mobile App Interception",
+  "endpoints": {
+    "web_home": "https://www.sunnxt.com/",
+    "search_contents": "https://www.sunnxt.com/searchcontents",
+    "mobile_api_base": "https://www.sunnxt.com/api/v1/"
+  },
+  "headers_and_auth": {
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "referer": "https://www.sunnxt.com/"
+  },
+  "anti_bot_and_cdn": "Moderate protection. Video streams heavily DRM-protected, but catalog HTML/JSON lists accessible via standard web scrapers.",
+  "dump_vs_sync": "1-Time Dump: Crawl `/searchcontents` by language filter (Tamil, Telugu, Malayalam, Kannada). Continuous Sync: Poll weekly for new additions.",
+  "tos_and_legal_risk": "Low risk for catalog indexing.",
+  "sanitized_response_signature": {
+    "title": "Jailer",
+    "language": "Tamil",
+    "type": "Movie",
+    "duration": "168 mins",
+    "rating": "U/A"
+  }
+}

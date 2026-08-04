@@ -1,0 +1,30 @@
+{
+  "platform": "Niche Platforms (Amazon MX Player, Lionsgate Play, MUBI, Crunchyroll)",
+  "market_share_2026": "Specialized & AVOD-to-SVOD niche segment (~6% aggregate SVOD share)",
+  "feasibility_rating": "🟢 workable (MX Player) / 🟡 partial (Crunchyroll/MUBI/Lionsgate)",
+  "primary_methods": {
+    "amazon_mx_player": "Internal Mobile REST API (`androidapi.mxplay.com/v1/detail/`) or Web Detail API (`api.mxplay.com/v1/web/detail/video`)",
+    "crunchyroll": "yt-dlp built-in extractor & Unofficial Crunchyroll API with client_credentials grant",
+    "mubi": "Direct web scraping of `mubi.com/films` + public RSS feeds",
+    "lionsgate_play": "Third-party aggregators (Watchmode / JustWatch)"
+  },
+  "headers_and_auth": {
+    "mx_player_headers": {
+      "X-Av-Code": "23",
+      "X-Country": "IN",
+      "X-Platform": "android",
+      "X-App-Version": "1370001318"
+    }
+  },
+  "anti_bot_and_cdn": "MX Player: Low protection for catalog JSON. Crunchyroll: Cloudflare protection + OAuth2. MUBI: Moderate web security. Lionsgate Play: High DRM & web shielding.",
+  "dump_vs_sync": "1-Time Dump: Use MX Player API to dump series/movie lists. Use aggregators for Lionsgate Play. Continuous Sync: Weekly delta checks.",
+  "tos_and_legal_risk": "Low risk for MX Player and public web listings.",
+  "sanitized_response_signature": {
+    "mx_player_sample": {
+      "id": "9d2013d31d5835bb8400e3b3c5e7bb72",
+      "title": "My Girlfriend Is An Alien (Hindi Dubbed)",
+      "type": "tvshow_episode",
+      "duration": 2451
+    }
+  }
+}

@@ -1,0 +1,25 @@
+{
+  "platform": "FAST Channels in India",
+  "probe_timestamp_utc": "2026-08-03 20:38:49",
+  "latency_ms": 1176.47,
+  "providers": {
+    "Samsung TV Plus IN": {
+      "status_code": 404,
+      "has_content": true,
+      "notes": "Samsung TV Plus IN is pre-installed on Samsung Smart TVs in India (~100+ free live channels)."
+    },
+    "Xiaomi PatchWall": {
+      "status_code": 200,
+      "notes": "Xiaomi PatchWall aggregates 30+ free & paid OTT apps on Mi Smart TVs in India."
+    },
+    "LG Channels IN": {
+      "status_code": 404,
+      "notes": "LG Channels IN powered by Xumo/Pluto technology embedded in webOS."
+    }
+  },
+  "fast_landscape_india": {
+    "nature": "Hardware OEM bundled linear streaming channels (Samsung, Xiaomi, LG, TCL).",
+    "epg_ingestion": "EPG streams use HLS / m3u8 or internal OEM feeds.",
+    "feasibility_for_search": "\ud83d\udfe1 Moderate - channel metadata can be scraped from OEM web portals, but full VOD depth is limited compared to dedicated AVOD apps."
+  }
+}

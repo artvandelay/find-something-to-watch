@@ -1,0 +1,61 @@
+{
+  "platform": "Internet Archive (Archive.org Indian Public Domain Films)",
+  "probe_timestamp_utc": "2026-08-03 20:38:51",
+  "latency_ms": 2190.67,
+  "search_response": {
+    "status_code": 200,
+    "total_items_found": 2360,
+    "items_returned": 25,
+    "sample_records": [
+      {
+        "downloads": 2355894,
+        "identifier": "SitaSingsTheBluesTrailer2008-640x360",
+        "publicdate": "2009-01-19T22:52:44Z",
+        "title": "Sita Sings the Blues Trailer 2008 - 640x360"
+      },
+      {
+        "downloads": 361525,
+        "identifier": "rockstar-2011",
+        "publicdate": "2022-01-30T05:52:45Z",
+        "title": "Rockstar ( 2011)",
+        "year": 2011
+      },
+      {
+        "downloads": 147762,
+        "identifier": "Aashiqui_2_2013_720p_Bollywood_HD_MP4_Music_Videos",
+        "publicdate": "2013-06-04T18:18:47Z",
+        "title": "Aashiqui 2 (2013) (720p) Bollywood HD MP4 Music Videos"
+      },
+      {
+        "downloads": 143354,
+        "identifier": "bolleyBall_bollywood",
+        "publicdate": "2021-10-15T19:40:18Z",
+        "title": "Bollywood"
+      },
+      {
+        "downloads": 124556,
+        "identifier": "chennai-express_202402",
+        "publicdate": "2024-02-09T17:28:49Z",
+        "title": "Chennai Express",
+        "year": 2024
+      }
+    ]
+  },
+  "sample_metadata_record": {
+    "identifier": "SitaSingsTheBluesTrailer2008-640x360",
+    "files_count": 29,
+    "media_type": "movies"
+  },
+  "native_api_specs": {
+    "name": "Archive.org Advanced Search & Metadata API",
+    "endpoint": "https://archive.org/advancedsearch.php",
+    "auth": "None required (Open Public Domain)",
+    "rate_limit": "Generous (up to 15 req/sec)",
+    "cost": "100% Free",
+    "completeness": "Massive archive of Indian pre-1970 classic films, newsreels, and public domain cultural media."
+  },
+  "firecrawl_comparison": {
+    "firecrawl_status": "Overkill for Archive.org; API is clean, fast, and structured.",
+    "recommendation": "Use Archive.org Advanced Search JSON API directly."
+  }
+}

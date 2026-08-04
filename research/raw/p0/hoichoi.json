@@ -1,0 +1,26 @@
+{
+  "platform": "Hoichoi (Bengali)",
+  "market_share_2026": "Leading Bengali regional SVOD (~8-9M India MAU, 200+ originals, 600+ movies)",
+  "feasibility_rating": "🟢 workable",
+  "primary_method": "ViewLift Platform REST API (`prod-api.viewlift.com`)",
+  "endpoints": {
+    "anonymous_token": "https://prod-api.viewlift.com/identity/anonymous-token?site=hoichoitv",
+    "pages_api": "https://prod-api.viewlift.com/content/pages?site=hoichoitv&path=/shows",
+    "modules_api": "https://prod-api.viewlift.com/content/modules?site=hoichoitv&id={module_id}"
+  },
+  "headers_and_auth": {
+    "authorization": "Bearer authorizationToken from /identity/anonymous-token",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)"
+  },
+  "anti_bot_and_cdn": "Standard ViewLift API security. Public metadata endpoints return clean JSON without CAPTCHAs.",
+  "dump_vs_sync": "1-Time Dump: Request `/content/pages?path=/shows` and `/path=/movies` to retrieve all module IDs, then expand modules. Continuous Sync: Weekly polling of home page module.",
+  "tos_and_legal_risk": "Low risk; API is designed for ViewLift frontend consumption.",
+  "sanitized_response_signature": {
+    "id": "1a2b3c-hoichoi",
+    "title": "Byomkesh",
+    "genre": ["Detective", "Thriller"],
+    "language": "Bengali",
+    "episodes_count": 14,
+    "thumbnail": "https://prod-api.viewlift.com/images/..."
+  }
+}

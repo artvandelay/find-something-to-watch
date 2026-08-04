@@ -1,0 +1,43 @@
+{
+  "platform": "JioHotstar",
+  "market_share_2026": "18% - 23.3% SVOD market share (~100M+ paid subscribers, Reliance-Disney JV)",
+  "feasibility_rating": "🟢 workable",
+  "primary_method": "Internal BFF / Mobile API Reverse-Engineering",
+  "endpoints": {
+    "bff_pages": "https://www.hotstar.com/api/internal/bff/v2/pages/home",
+    "bff_tray": "https://www.hotstar.com/api/internal/bff/v2/trays/{tray_id}",
+    "v1_catalog": "https://api.hotstar.com/o/v1/page/get?contentId={content_id}",
+    "search": "https://www.hotstar.com/api/internal/bff/v2/search"
+  },
+  "headers_and_auth": {
+    "user_agent": "Hotstar;in.startv.hotstar/25.06.30.0.11580 (Android/12) OR Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7)",
+    "x_hs_client": "platform:android;app_id:in.startv.hotstar;app_version:25.06.30.0;os:Android;os_version:12;schema_version:0.0.1523",
+    "x_hs_platform": "android",
+    "hotstarauth": "st={timestamp}~exp={timestamp_plus_6000}~acl=/*~hmac={sha256_hash_with_akamai_key}",
+    "x_hs_usertoken": "userUP JWT cookie value (optional for guest browsing)",
+    "x_hs_device_id": "UUID v4 string"
+  },
+  "akamai_key_hex": "05fc1a01cac94bc412fc53120775f9ee",
+  "anti_bot_and_cdn": "Akamai Bot Manager edge protection for MPD video manifests (HTTP 475). Public catalog/BFF JSON metadata endpoints are heavily CDN-cached and accessible with correct platform headers.",
+  "dump_vs_sync": "1-Time Dump: Script pagination over all genre/language tray IDs. Continuous Sync: Daily polling of `/pages/home` and `/pages/movies` page trays for newly added items.",
+  "tos_and_legal_risk": "Medium risk for direct scraping; low risk when fetching public tray JSON for search index indexing.",
+  "sanitized_response_signature": {
+    "body": {
+      "results": {
+        "trays": {
+          "items": [
+            {
+              "id": "1260141610",
+              "title": "Kerala Crime Files",
+              "type": "SHOW",
+              "content_type": "SHOW",
+              "genre": ["Crime", "Thriller"],
+              "lang": ["Malayalam", "Hindi", "Tamil", "Telugu"],
+              "image_url": "https://img10.hotstar.com/image/upload/f_auto/sources/r1/cms/prod/..."
+            }
+          ]
+        }
+      }
+    }
+  }
+}

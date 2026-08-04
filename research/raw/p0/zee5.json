@@ -1,0 +1,28 @@
+{
+  "platform": "ZEE5",
+  "market_share_2026": "9% SVOD market share (~12-15M paid subscribers)",
+  "feasibility_rating": "🟢 workable",
+  "primary_method": "Internal REST API (`gwapi.zee5.com` & `launchapi.zee5.com`)",
+  "endpoints": {
+    "platform_token": "https://launchapi.zee5.com/launch?platform_name=web_app",
+    "legacy_token": "https://useraction.zee5.com/token/platform_tokens.php?platform_name=web_app",
+    "content_details": "https://gwapi.zee5.com/content/details/{content_id}?translation=en&country=IN&version=2",
+    "content_grid": "https://gwapi.zee5.com/content/grid/{type}?translation=en&country=IN&page={page}&limit=50"
+  },
+  "headers_and_auth": {
+    "x_access_token": "Obtained dynamically from launchapi/platform_tokens response (`platform_token.token`)",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "referer": "https://www.zee5.com/"
+  },
+  "anti_bot_and_cdn": "Low anti-bot friction for catalog metadata. Tokens refresh every 24h. Playback URLs use Akamai DRM tokenization.",
+  "dump_vs_sync": "1-Time Dump: Paginate over grid endpoints (`type=movie`, `type=tvshow`, `type=webseries`). Continuous Sync: Daily crawl of `page=1` across grid channels.",
+  "tos_and_legal_risk": "Low risk; API tokens are issued freely to anonymous web clients without login.",
+  "sanitized_response_signature": {
+    "id": "0-0-260877",
+    "title": "Khaali Peeli",
+    "description": "A taxi driver and a young woman run away from a criminal gang...",
+    "genre": ["Action", "Comedy"],
+    "release_year": "2020",
+    "asset_type": 0
+  }
+}

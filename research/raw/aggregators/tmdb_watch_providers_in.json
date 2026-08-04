@@ -1,0 +1,16 @@
+{
+  "watch_providers_movie_IN": {
+    "status": 500,
+    "data": {
+      "error": "<urlopen error [Errno 54] Connection reset by peer>"
+    }
+  },
+  "watch_providers_tv_IN": {
+    "status": 401,
+    "data": {
+      "status_code": 7,
+      "status_message": "Invalid API key: You must be granted a valid key.",
+      "success": false
+    }
+  }
+}

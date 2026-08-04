@@ -1,0 +1,28 @@
+{
+  "platform": "Regional Free Tier (ShemarooMe / Hungama Play / JioCinema)",
+  "probe_timestamp_utc": "2026-08-03 20:38:52",
+  "latency_ms": 990.17,
+  "probes": {
+    "ShemarooMe": {
+      "status_code": 200,
+      "page_bytes": 413739,
+      "has_app_config": true
+    },
+    "Hungama Play": {
+      "status_code": 200,
+      "page_bytes": 19805,
+      "has_movie_grid": true
+    },
+    "JioCinema / JioHotstar Free": {
+      "status_code": 200,
+      "final_url": "https://www.jiocinema.com/",
+      "is_merged_into_hotstar": false,
+      "page_bytes": 2597
+    }
+  },
+  "insights": {
+    "ShemarooMe": "Has extensive vintage Hindi, Gujarati, and Marathi free catalog. Accessible via web/mobile BFF REST endpoints.",
+    "Hungama Play": "Ad-supported movie catalog accessible via client JSON endpoints (`www.hungama.com/api/`).",
+    "JioCinema": "JioCinema and Disney+ Hotstar have officially consolidated into JioHotstar. Free tier content (like IPL, daily soaps, select movies) is accessible via JioHotstar BFF `api.hotstar.com`."
+  }
+}

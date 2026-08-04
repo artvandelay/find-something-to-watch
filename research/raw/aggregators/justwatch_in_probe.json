@@ -1,0 +1,425 @@
+{
+  "rest_providers_en_IN": {
+    "status": 200,
+    "provider_count": 120,
+    "sample_providers": [
+      {
+        "id": 8,
+        "name": "Netflix",
+        "technical_name": "netflix"
+      },
+      {
+        "id": 119,
+        "name": "Amazon Prime Video",
+        "technical_name": "amazonprimevideo"
+      },
+      {
+        "id": 350,
+        "name": "Apple TV",
+        "technical_name": "appletvplus"
+      },
+      {
+        "id": 2336,
+        "name": "JioHotstar",
+        "technical_name": "jiohotstar"
+      },
+      {
+        "id": 2285,
+        "name": "JustWatch TV",
+        "technical_name": "justwatchtv"
+      },
+      {
+        "id": 2,
+        "name": "Apple TV Store",
+        "technical_name": "itunes"
+      },
+      {
+        "id": 283,
+        "name": "Crunchyroll",
+        "technical_name": "crunchyroll"
+      },
+      {
+        "id": 232,
+        "name": "Zee5",
+        "technical_name": "zee5"
+      },
+      {
+        "id": 1851,
+        "name": "MLS on Apple TV",
+        "technical_name": "mlsseasonpass"
+      },
+      {
+        "id": 3,
+        "name": "Google Play Movies",
+        "technical_name": "play"
+      },
+      {
+        "id": 11,
+        "name": "MUBI",
+        "technical_name": "mubi"
+      },
+      {
+        "id": 237,
+        "name": "Sony Liv",
+        "technical_name": "sonyliv"
+      },
+      {
+        "id": 192,
+        "name": "YouTube",
+        "technical_name": "youtube"
+      },
+      {
+        "id": 100,
+        "name": "GuideDoc",
+        "technical_name": "guidedoc"
+      },
+      {
+        "id": 175,
+        "name": "Netflix Kids",
+        "technical_name": "netflixkids"
+      },
+      {
+        "id": 309,
+        "name": "Sun Nxt",
+        "technical_name": "sunnxt"
+      },
+      {
+        "id": 315,
+        "name": "Hoichoi",
+        "technical_name": "hoichoi"
+      },
+      {
+        "id": 437,
+        "name": "Hungama Play",
+        "technical_name": "hungamaplay"
+      },
+      {
+        "id": 190,
+        "name": "Curiosity Stream",
+        "technical_name": "curiositystream"
+      },
+      {
+        "id": 476,
+        "name": "EPIC ON",
+        "technical_name": "epicon"
+      },
+      {
+        "id": 474,
+        "name": "ShemarooMe",
+        "technical_name": "shemaroome"
+      },
+      {
+        "id": 475,
+        "name": "DOCSVILLE",
+        "technical_name": "docsville"
+      },
+      {
+        "id": 502,
+        "name": "Tata Play",
+        "technical_name": "tatasky"
+      },
+      {
+        "id": 510,
+        "name": "Discovery+",
+        "technical_name": "discoveryplus"
+      },
+      {
+        "id": 482,
+        "name": "ManoramaMax",
+        "technical_name": "manoramamax"
+      }
+    ]
+  },
+  "graphql_popular_IN": {
+    "status": 200,
+    "data": {
+      "data": {
+        "popularTitles": {
+          "edges": [
+            {
+              "node": {
+                "id": "ts392706",
+                "objectId": 392706,
+                "objectType": "SHOW",
+                "content": {
+                  "title": "Pritam and Pedro",
+                  "originalReleaseYear": 2026
+                },
+                "offers": [
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://www.hotstar.com/in/1271656729",
+                    "package": {
+                      "clearName": "JioHotstar",
+                      "technicalName": "jiohotstar"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://www.hotstar.com/in/1271656729",
+                    "package": {
+                      "clearName": "JioHotstar",
+                      "technicalName": "jiohotstar"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://www.hotstar.com/in/1271656729",
+                    "package": {
+                      "clearName": "JioHotstar",
+                      "technicalName": "jiohotstar"
+                    }
+                  },
+                  {
+                    "monetizationType": "ADS",
+                    "standardWebURL": "https://www.hotstar.com/in/1271656728",
+                    "package": {
+                      "clearName": "JioHotstar",
+                      "technicalName": "jiohotstar"
+                    }
+                  },
+                  {
+                    "monetizationType": "ADS",
+                    "standardWebURL": "https://www.hotstar.com/in/1271656728",
+                    "package": {
+                      "clearName": "JioHotstar",
+                      "technicalName": "jiohotstar"
+                    }
+                  },
+                  {
+                    "monetizationType": "ADS",
+                    "standardWebURL": "https://www.hotstar.com/in/1271656728",
+                    "package": {
+                      "clearName": "JioHotstar",
+                      "technicalName": "jiohotstar"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "id": "ts175387",
+                "objectId": 175387,
+                "objectType": "SHOW",
+                "content": {
+                  "title": "Off Campus",
+                  "originalReleaseYear": 2026
+                },
+                "offers": [
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.b95803f3-7c04-4580-9246-09e960bae736",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.b95803f3-7c04-4580-9246-09e960bae736",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.b95803f3-7c04-4580-9246-09e960bae736",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.b95803f3-7c04-4580-9246-09e960bae736",
+                    "package": {
+                      "clearName": "Amazon Prime Video with Ads",
+                      "technicalName": "amazonprimevideowithads"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.b95803f3-7c04-4580-9246-09e960bae736",
+                    "package": {
+                      "clearName": "Amazon Prime Video with Ads",
+                      "technicalName": "amazonprimevideowithads"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "id": "ts529738",
+                "objectId": 529738,
+                "objectType": "SHOW",
+                "content": {
+                  "title": "Agent Kim Reactivated",
+                  "originalReleaseYear": 2026
+                },
+                "offers": [
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://www.netflix.com/title/82682338",
+                    "package": {
+                      "clearName": "Netflix",
+                      "technicalName": "netflix"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://www.netflix.com/title/82682338",
+                    "package": {
+                      "clearName": "Netflix",
+                      "technicalName": "netflix"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "id": "ts387258",
+                "objectId": 387258,
+                "objectType": "SHOW",
+                "content": {
+                  "title": "Erotic Stories",
+                  "originalReleaseYear": 2023
+                },
+                "offers": [
+                  {
+                    "monetizationType": "FREE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.8d0d4052-8fcd-4d35-a6a6-7bf55c9b2528",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://lionsgateplay.com/en/series/erotic-stories/701243944266",
+                    "package": {
+                      "clearName": "Lionsgate Play",
+                      "technicalName": "lionsgateplay"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://lionsgateplay.com/en/series/erotic-stories/701243944266",
+                    "package": {
+                      "clearName": "Lionsgate Play",
+                      "technicalName": "lionsgateplay"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://tv.apple.com/in",
+                    "package": {
+                      "clearName": "Lionsgate Play Apple TV Channel",
+                      "technicalName": "appletvlionsgateplay"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.8d0d4052-8fcd-4d35-a6a6-7bf55c9b2528",
+                    "package": {
+                      "clearName": "Lionsgate Play Amazon Channel",
+                      "technicalName": "amazonlionsgateplay"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.8d0d4052-8fcd-4d35-a6a6-7bf55c9b2528",
+                    "package": {
+                      "clearName": "Lionsgate Play Amazon Channel",
+                      "technicalName": "amazonlionsgateplay"
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "node": {
+                "id": "ts525228",
+                "objectId": 525228,
+                "objectType": "SHOW",
+                "content": {
+                  "title": "Adarsh Baal Vidyalaya",
+                  "originalReleaseYear": 2026
+                },
+                "offers": [
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FREE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FREE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FREE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video",
+                      "technicalName": "amazonprimevideo"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video with Ads",
+                      "technicalName": "amazonprimevideowithads"
+                    }
+                  },
+                  {
+                    "monetizationType": "FLATRATE",
+                    "standardWebURL": "https://app.primevideo.com/detail?gti=amzn1.dv.gti.5b245730-7579-4735-8a73-8df036b7a71f",
+                    "package": {
+                      "clearName": "Amazon Prime Video with Ads",
+                      "technicalName": "amazonprimevideowithads"
+                    }
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "aggregators_analysis": {
+    "streaming_availability_api": {
+      "provider": "RapidAPI",
+      "coverage": "Includes India (IN) region for Netflix, Amazon Prime, JioHotstar, Zee5, Apple TV+, SonyLIV.",
+      "feasibility": "🟢 High (Recommended 80% coverage solution)",
+      "endpoint": "https://streaming-availability.p.rapidapi.com/shows/search/filters",
+      "features": "Direct deep links, localized pricing, episode/season metadata, poster/backdrop URLs."
+    },
+    "streamwatchhub": {
+      "provider": "RapidAPI",
+      "coverage": "590+ providers across 17 countries including India (JioHotstar, JioCinema, Prime, Netflix).",
+      "feasibility": "🟢 High alternative",
+      "endpoint": "https://streamwatchhub.p.rapidapi.com/availability"
+    },
+    "unogs": {
+      "provider": "RapidAPI",
+      "coverage": "Netflix worldwide including India (country code 337).",
+      "feasibility": "🟢 High for Netflix specifically",
+      "endpoint": "https://unogsng.p.rapidapi.com/search"
+    },
+    "justwatch_unofficial": {
+      "provider": "PyWatchman / Parse / Unofficial wrappers",
+      "coverage": "Industry standard accuracy in India.",
+      "feasibility": "🟡 Medium (Official API requires enterprise contract; GraphQL endpoints subject to rate limits)"
+    },
+    "watchmode": {
+      "provider": "Watchmode REST API",
+      "coverage": "Good global coverage, covers major Indian platforms (Prime, Netflix, Hotstar, SonyLIV).",
+      "feasibility": "🟢 High"
+    }
+  }
+}

@@ -1,0 +1,26 @@
+{
+  "platform": "Aha (Telugu / Tamil)",
+  "market_share_2026": "Leading South Indian regional SVOD (~2.5M+ paid subscribers)",
+  "feasibility_rating": "🟢 workable",
+  "primary_method": "Direct Web Scraping / Internal GraphQL & REST APIs",
+  "endpoints": {
+    "web_movies": "https://www.aha.video/movies",
+    "web_shows": "https://www.aha.video/shows",
+    "graphql_catalog": "https://www.aha.video/api/graphql",
+    "unoffical_movie_api": "https://aha.hin.life/movie?query={aha_url}"
+  },
+  "headers_and_auth": {
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "content_type": "application/json"
+  },
+  "anti_bot_and_cdn": "Low anti-bot friction for HTML and internal JSON catalog queries. Akamai tokenization for HLS m3u8 streams.",
+  "dump_vs_sync": "1-Time Dump: Scrape `/movies` and `/shows` listing pages or query GraphQL catalog schema. Continuous Sync: Daily crawl of home trays.",
+  "tos_and_legal_risk": "Low risk for public metadata collection.",
+  "sanitized_response_signature": {
+    "title": "Unstoppable with NBK",
+    "type": "show",
+    "language": "Telugu",
+    "poster": "https://snagfilms-a.akamaihd.net/...",
+    "release_year": "2023"
+  }
+}

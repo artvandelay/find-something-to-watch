@@ -1,0 +1,33 @@
+{
+  "platform": "Netflix India",
+  "market_share_2026": "22% SVOD market share (~15-24M paid subscribers)",
+  "feasibility_rating": "🟡 partial",
+  "primary_method": "uNoGS (Unofficial Netflix Online Global Search) via RapidAPI / Aggregators",
+  "endpoints": {
+    "unogs_search": "https://unogsng.p.rapidapi.com/search?countrylist=337&type=movie,series&offset=0&limit=100",
+    "unogs_title_details": "https://unogsng.p.rapidapi.com/title?netflixid={netflix_id}",
+    "direct_web_sitemap": "https://www.netflix.com/sitemap.xml"
+  },
+  "headers_and_auth": {
+    "x_rapidapi_key": "Project .env RAPIDAPI Key",
+    "x_rapidapi_host": "unogsng.p.rapidapi.com"
+  },
+  "anti_bot_and_cdn": "Netflix Web UI uses complex Falcor GraphQL state trees, custom browser fingerprinting, and dynamic token rotation. Datacenter IP ranges are blocked instantly.",
+  "dump_vs_sync": "1-Time Dump: Query uNoGS API with `countrylist=337` (India) paginated by offset (100 items per call). Continuous Sync: Poll uNoGS `https://unogsng.p.rapidapi.com/newtitles?countrylist=337` weekly.",
+  "tos_and_legal_risk": "Direct scraping has high ToS risk and IP ban probability. Aggregator API via uNoGS is fully compliant and legally safe.",
+  "sanitized_response_signature": {
+    "results": [
+      {
+        "nfid": "81040344",
+        "title": "Sacred Games",
+        "type": "series",
+        "synopsis": "A policeman, a time-obsessed crime lord...",
+        "img": "https://occ-0-2794-2219.1.nflxso.net/dnm/api/v6/...",
+        "year": "2018",
+        "vtype": "series",
+        "cl4": "337"
+      }
+    ],
+    "total": 5420
+  }
+}

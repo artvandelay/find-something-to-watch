@@ -1,0 +1,30 @@
+{
+  "platform": "SonyLIV",
+  "market_share_2026": "5% SVOD market share (~10-12M paid subscribers)",
+  "feasibility_rating": "🟢 workable",
+  "primary_method": "Internal REST API reverse-engineering (`apiv2.sonyliv.com`)",
+  "endpoints": {
+    "get_token": "https://apiv2.sonyliv.com/AGL/1.4/A/ENG/WEB/ALL/GETTOKEN",
+    "content_detail": "https://apiv2.sonyliv.com/AGL/1.9/R/ENG/WEB/IN/DL/DETAIL/{content_id}",
+    "bundle_detail": "https://apiv2.sonyliv.com/AGL/1.4/R/ENG/WEB/IN/CONTENT/DETAIL/BUNDLE/{season_id}",
+    "category_grid": "https://apiv2.sonyliv.com/AGL/1.4/R/ENG/WEB/IN/CONTENT/CONTAINER/LIST/1000?from=0&to=49"
+  },
+  "headers_and_auth": {
+    "security_token": "Obtained dynamically via GET /AGL/1.4/A/ENG/WEB/ALL/GETTOKEN",
+    "user_agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36",
+    "referer": "https://www.sonyliv.com"
+  },
+  "anti_bot_and_cdn": "Moderate anti-bot; relies on `security_token` in headers. Akamai DRM for playback streams, but public metadata JSON endpoints have generous rate limits.",
+  "dump_vs_sync": "1-Time Dump: Iterate through container IDs and paginate `from`/`to` offset parameters. Continuous Sync: Weekly crawl of container 1000 (Latest Additions).",
+  "tos_and_legal_risk": "Low to medium risk; public API endpoints respond directly to custom security token headers.",
+  "sanitized_response_signature": {
+    "resultObj": {
+      "id": "1000216599",
+      "title": "Scam 1992: The Harshad Mehta Story",
+      "description": "Set in 1980s and 90s Bombay, Scam 1992 follows the life of Harshad Mehta...",
+      "genre": ["Crime", "Drama"],
+      "releaseYear": "2020",
+      "duration": 3200
+    }
+  }
+}

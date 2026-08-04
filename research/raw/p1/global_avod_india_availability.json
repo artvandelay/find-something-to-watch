@@ -1,0 +1,30 @@
+{
+  "platform": "Global AVOD (Tubi / Pluto TV / Plex)",
+  "probe_timestamp_utc": "2026-08-03 20:38:47",
+  "latency_ms": 1959.31,
+  "availability_matrix": {
+    "Tubi": {
+      "status_code": 200,
+      "final_url": "https://gdpr.tubi.tv",
+      "is_blocked_or_redirected": true,
+      "notes": "Tubi is geo-restricted outside North America/Australia and returns geo-block in India."
+    },
+    "Pluto TV": {
+      "status_code": 200,
+      "final_url": "https://static-homepage-en.pluto.tv/plutotv-is-not-available",
+      "is_blocked_or_not_available": true,
+      "notes": "Pluto TV is primarily US/Europe focused and unavailable in India without VPN."
+    },
+    "Plex": {
+      "status_code": 200,
+      "final_url": "https://watch.plex.tv/movies-and-tv",
+      "is_available_in_india": true,
+      "notes": "Plex Free Movies & TV is globally accessible including India with ad-supported content."
+    }
+  },
+  "summary": "Tubi & Pluto TV are strictly geo-blocked in India (HTTP 403 / geo-redirect). Plex is fully accessible in India with ad-supported free catalog.",
+  "firecrawl_comparison": {
+    "firecrawl_status": "Firecrawl nodes in US might see Tubi/Pluto, but results are irrelevant for India-based users without regional access.",
+    "recommendation": "Exclude Tubi & Pluto TV from India catalog pipeline; include Plex IN catalog."
+  }
+}

@@ -1,0 +1,576 @@
+{
+  "country": "IN",
+  "provider_count": 114,
+  "providers": [
+    {
+      "name": " AP International South Cinema Amazon Channel",
+      "package_id": 2708,
+      "technical_name": "amazonapinternational"
+    },
+    {
+      "name": "AD tv",
+      "package_id": 1958,
+      "technical_name": "adtv"
+    },
+    {
+      "name": "Amazon MX Player",
+      "package_id": 1898,
+      "technical_name": "amazonminitv"
+    },
+    {
+      "name": "Amazon Prime Video",
+      "package_id": 119,
+      "technical_name": "amazonprimevideo"
+    },
+    {
+      "name": "Amazon Prime Video with Ads",
+      "package_id": 2100,
+      "technical_name": "amazonprimevideowithads"
+    },
+    {
+      "name": "Amazon Video",
+      "package_id": 10,
+      "technical_name": "amazon"
+    },
+    {
+      "name": "Animax Amazon Channel",
+      "package_id": 2613,
+      "technical_name": "amazonanimaxplusgem"
+    },
+    {
+      "name": "Anime Times Amazon Channel",
+      "package_id": 2182,
+      "technical_name": "amazonanimetimes"
+    },
+    {
+      "name": "Apple TV",
+      "package_id": 350,
+      "technical_name": "appletvplus"
+    },
+    {
+      "name": "Apple TV Amazon Channel",
+      "package_id": 2243,
+      "technical_name": "amazonappletvplus"
+    },
+    {
+      "name": "Apple TV Store",
+      "package_id": 2,
+      "technical_name": "itunes"
+    },
+    {
+      "name": "Artiflix",
+      "package_id": 2623,
+      "technical_name": "artflix"
+    },
+    {
+      "name": "Artify",
+      "package_id": 2685,
+      "technical_name": "artify"
+    },
+    {
+      "name": "BBC Kids Amazon Channel",
+      "package_id": 2179,
+      "technical_name": "amazonbbckids"
+    },
+    {
+      "name": "BBC Player Amazon Channel",
+      "package_id": 285,
+      "technical_name": "amazonbbcplayer"
+    },
+    {
+      "name": "BTV",
+      "package_id": 1871,
+      "technical_name": "benficatv"
+    },
+    {
+      "name": "Bloodstream",
+      "package_id": 2555,
+      "technical_name": "bloodstream"
+    },
+    {
+      "name": "Bookmyshow",
+      "package_id": 124,
+      "technical_name": "bookmyshow"
+    },
+    {
+      "name": "Brew",
+      "package_id": 2736,
+      "technical_name": "brew"
+    },
+    {
+      "name": "BroadwayHD",
+      "package_id": 554,
+      "technical_name": "broadwayhd"
+    },
+    {
+      "name": "CN Rewind Amazon Channel",
+      "package_id": 2612,
+      "technical_name": "amazoncnrewind"
+    },
+    {
+      "name": "CaixaForum+",
+      "package_id": 2620,
+      "technical_name": "caixaforumplus"
+    },
+    {
+      "name": "Channel K Amazon Channel",
+      "package_id": 2491,
+      "technical_name": "amazonchannelk"
+    },
+    {
+      "name": "Chaupal Amazon Channel",
+      "package_id": 2178,
+      "technical_name": "amazonchaupal"
+    },
+    {
+      "name": "Cin\u00e9polis India",
+      "package_id": 2705,
+      "technical_name": "cinepolisindia"
+    },
+    {
+      "name": "Crunchyroll",
+      "package_id": 283,
+      "technical_name": "crunchyroll"
+    },
+    {
+      "name": "Crunchyroll Amazon Channel",
+      "package_id": 1968,
+      "technical_name": "amazoncrunchyroll"
+    },
+    {
+      "name": "Cultpix",
+      "package_id": 692,
+      "technical_name": "cultpix"
+    },
+    {
+      "name": "Curiosity Stream",
+      "package_id": 190,
+      "technical_name": "curiositystream"
+    },
+    {
+      "name": "CuriosityStream Amazon Channel",
+      "package_id": 603,
+      "technical_name": "amazoncuriositystreamstandard"
+    },
+    {
+      "name": "DAZN",
+      "package_id": 695,
+      "technical_name": "dazn"
+    },
+    {
+      "name": "DAZN NFL Game Pass",
+      "package_id": 1942,
+      "technical_name": "daznnflgp"
+    },
+    {
+      "name": "DFB Play",
+      "package_id": 2028,
+      "technical_name": "dfbplay"
+    },
+    {
+      "name": "DOCSVILLE",
+      "package_id": 475,
+      "technical_name": "docsville"
+    },
+    {
+      "name": "Dekkoo",
+      "package_id": 444,
+      "technical_name": "dekkoo"
+    },
+    {
+      "name": "Discovery+",
+      "package_id": 510,
+      "technical_name": "discoveryplus"
+    },
+    {
+      "name": "Discovery+ Amazon Channel",
+      "package_id": 584,
+      "technical_name": "amazondiscoveryplus"
+    },
+    {
+      "name": "District by Zomato",
+      "package_id": 2664,
+      "technical_name": "district"
+    },
+    {
+      "name": "DocuBay Amazon Channel",
+      "package_id": 604,
+      "technical_name": "amazondocubay"
+    },
+    {
+      "name": "EPCR TV",
+      "package_id": 1987,
+      "technical_name": "epcrtv"
+    },
+    {
+      "name": "EPIC ON",
+      "package_id": 476,
+      "technical_name": "epicon"
+    },
+    {
+      "name": "Eros Now Select Apple TV Channel",
+      "package_id": 2059,
+      "technical_name": "appletverosnow"
+    },
+    {
+      "name": "EuroLeague TV",
+      "package_id": 1952,
+      "technical_name": "euroleaguetv"
+    },
+    {
+      "name": "Eventive",
+      "package_id": 677,
+      "technical_name": "eventive"
+    },
+    {
+      "name": "F1TV Pro",
+      "package_id": 1720,
+      "technical_name": "f1tv"
+    },
+    {
+      "name": "FIFA+",
+      "package_id": 1934,
+      "technical_name": "fifaplus"
+    },
+    {
+      "name": "FOUND TV",
+      "package_id": 2478,
+      "technical_name": "foundtv"
+    },
+    {
+      "name": "FanCode",
+      "package_id": 1917,
+      "technical_name": "fancode"
+    },
+    {
+      "name": "FanCode Amazon Channel",
+      "package_id": 1981,
+      "technical_name": "amazonfancode"
+    },
+    {
+      "name": "Fanatiz",
+      "package_id": 1979,
+      "technical_name": "fanatiz"
+    },
+    {
+      "name": "FilmBox+",
+      "package_id": 701,
+      "technical_name": "filmbox"
+    },
+    {
+      "name": "Filmzie",
+      "package_id": 559,
+      "technical_name": "filmzie"
+    },
+    {
+      "name": "GuideDoc",
+      "package_id": 100,
+      "technical_name": "guidedoc"
+    },
+    {
+      "name": "Hoichoi",
+      "package_id": 315,
+      "technical_name": "hoichoi"
+    },
+    {
+      "name": "Hoichoi Amazon Channel",
+      "package_id": 2176,
+      "technical_name": "amazonhoichoi"
+    },
+    {
+      "name": "Hungama Play",
+      "package_id": 437,
+      "technical_name": "hungamaplay"
+    },
+    {
+      "name": "Iwonder Amazon Channel",
+      "package_id": 2169,
+      "technical_name": "amazoniwonder"
+    },
+    {
+      "name": "JioHotstar",
+      "package_id": 2336,
+      "technical_name": "jiohotstar"
+    },
+    {
+      "name": "Jolt Film",
+      "package_id": 2330,
+      "technical_name": "joltfilm"
+    },
+    {
+      "name": "JustWatch TV",
+      "package_id": 2285,
+      "technical_name": "justwatchtv"
+    },
+    {
+      "name": "K League TV",
+      "package_id": 2335,
+      "technical_name": "kleaguetv"
+    },
+    {
+      "name": "KableOne",
+      "package_id": 2603,
+      "technical_name": "kableone"
+    },
+    {
+      "name": "Lionsgate Play",
+      "package_id": 561,
+      "technical_name": "lionsgateplay"
+    },
+    {
+      "name": "Lionsgate Play Amazon Channel",
+      "package_id": 2074,
+      "technical_name": "amazonlionsgateplay"
+    },
+    {
+      "name": "Lionsgate Play Apple TV Channel",
+      "package_id": 2053,
+      "technical_name": "appletvlionsgateplay"
+    },
+    {
+      "name": "MGM Plus Amazon Channel",
+      "package_id": 2141,
+      "technical_name": "amazonmgmplus"
+    },
+    {
+      "name": "MLB TV",
+      "package_id": 1769,
+      "technical_name": "mlbtv"
+    },
+    {
+      "name": "MLS on Apple TV",
+      "package_id": 1851,
+      "technical_name": "mlsseasonpass"
+    },
+    {
+      "name": "MUBI",
+      "package_id": 11,
+      "technical_name": "mubi"
+    },
+    {
+      "name": "MUBI Amazon Channel",
+      "package_id": 201,
+      "technical_name": "amazonmubi"
+    },
+    {
+      "name": "MX Player",
+      "package_id": 515,
+      "technical_name": "mxplayer"
+    },
+    {
+      "name": "Magellan TV",
+      "package_id": 551,
+      "technical_name": "magellantv"
+    },
+    {
+      "name": "ManoramaMAX Amazon Channel",
+      "package_id": 2177,
+      "technical_name": "amazonmanoramamax"
+    },
+    {
+      "name": "ManoramaMax",
+      "package_id": 482,
+      "technical_name": "manoramamax"
+    },
+    {
+      "name": "MovieMe",
+      "package_id": 2565,
+      "technical_name": "movieme"
+    },
+    {
+      "name": "Museum Tv Amazon Channel",
+      "package_id": 2184,
+      "technical_name": "amazonmuseumtv"
+    },
+    {
+      "name": "MyZen TV Amazon Channel",
+      "package_id": 2183,
+      "technical_name": "amazonmyzentv"
+    },
+    {
+      "name": "NBA League Pass",
+      "package_id": 1761,
+      "technical_name": "nbaleaguepass"
+    },
+    {
+      "name": "NFDC Amazon Channel",
+      "package_id": 2530,
+      "technical_name": "amazonnfdc"
+    },
+    {
+      "name": "NFL Game Pass",
+      "package_id": 1762,
+      "technical_name": "nflgamepass"
+    },
+    {
+      "name": "NHL TV",
+      "package_id": 1843,
+      "technical_name": "nhltv"
+    },
+    {
+      "name": "NWSL+",
+      "package_id": 1915,
+      "technical_name": "nwslsoccercom"
+    },
+    {
+      "name": "NammaFlix Amazon Channel",
+      "package_id": 2185,
+      "technical_name": "amazonnammaflix"
+    },
+    {
+      "name": "Netflix",
+      "package_id": 8,
+      "technical_name": "netflix"
+    },
+    {
+      "name": "Netflix Kids",
+      "package_id": 175,
+      "technical_name": "netflixkids"
+    },
+    {
+      "name": "OneFootball",
+      "package_id": 1820,
+      "technical_name": "onefootball"
+    },
+    {
+      "name": "PRTV",
+      "package_id": 1822,
+      "technical_name": "prtv"
+    },
+    {
+      "name": "Plex Channel",
+      "package_id": 2077,
+      "technical_name": "justwatchplexchannel"
+    },
+    {
+      "name": "Plex Player",
+      "package_id": 1945,
+      "technical_name": "plexplayer"
+    },
+    {
+      "name": "Premier Sports",
+      "package_id": 1752,
+      "technical_name": "premiersports"
+    },
+    {
+      "name": "RugbyPass TV",
+      "package_id": 2547,
+      "technical_name": "rugbypasstv"
+    },
+    {
+      "name": "Shahid VIP",
+      "package_id": 1715,
+      "technical_name": "shahidvip"
+    },
+    {
+      "name": "ShemarooMe",
+      "package_id": 474,
+      "technical_name": "shemaroome"
+    },
+    {
+      "name": "ShortsTV Amazon Channel",
+      "package_id": 688,
+      "technical_name": "amazonshorts"
+    },
+    {
+      "name": "Sony Liv",
+      "package_id": 237,
+      "technical_name": "sonyliv"
+    },
+    {
+      "name": "Sony Pictures Amazon Channel",
+      "package_id": 2180,
+      "technical_name": "amazonsonypictures"
+    },
+    {
+      "name": "Stingray Amazon Channel",
+      "package_id": 2158,
+      "technical_name": "amazonstingray"
+    },
+    {
+      "name": "Stupid Co",
+      "package_id": 2479,
+      "technical_name": "stupidco"
+    },
+    {
+      "name": "Sun Nxt",
+      "package_id": 309,
+      "technical_name": "sunnxt"
+    },
+    {
+      "name": "Tata Play",
+      "package_id": 502,
+      "technical_name": "tatasky"
+    },
+    {
+      "name": "Tennis TV",
+      "package_id": 1863,
+      "technical_name": "tennistv"
+    },
+    {
+      "name": "Ticket New",
+      "package_id": 2662,
+      "technical_name": "ticketnew"
+    },
+    {
+      "name": "True Story",
+      "package_id": 567,
+      "technical_name": "truestory"
+    },
+    {
+      "name": "Twitch",
+      "package_id": 1785,
+      "technical_name": "twitch"
+    },
+    {
+      "name": "UEFA tv",
+      "package_id": 1886,
+      "technical_name": "uefatv"
+    },
+    {
+      "name": "URC TV",
+      "package_id": 1823,
+      "technical_name": "urctv"
+    },
+    {
+      "name": "VI movies and tv",
+      "package_id": 614,
+      "technical_name": "vimoviesandtv"
+    },
+    {
+      "name": "Vrott Amazon Channel",
+      "package_id": 2181,
+      "technical_name": "amazonvrott"
+    },
+    {
+      "name": "WILLOW",
+      "package_id": 1918,
+      "technical_name": "willowtv"
+    },
+    {
+      "name": "WOW Presents Plus",
+      "package_id": 546,
+      "technical_name": "wowpresentsplus"
+    },
+    {
+      "name": "WTA TV",
+      "package_id": 1864,
+      "technical_name": "wtatv"
+    },
+    {
+      "name": "YouTube Sports",
+      "package_id": 1789,
+      "technical_name": "youtubesports"
+    },
+    {
+      "name": "Zee5",
+      "package_id": 232,
+      "technical_name": "zee5"
+    },
+    {
+      "name": "aha",
+      "package_id": 532,
+      "technical_name": "aha"
+    }
+  ]
+}
