@@ -1,0 +1,3304 @@
+{
+  "version": "1.0.0",
+  "gitCommitHash": "f1d09ebd6fe185061a4fafaed8b4b11a361bc0b0",
+  "generatedAt": "2026-08-04T19:03:40.047Z",
+  "files": {
+    "CHANGELOG.md": {
+      "filePath": "CHANGELOG.md",
+      "contentHash": "f729821b5db3d4ec14948b7f09e0c3bd8692677464a9a6a1a1ace5ddc9a8bbab",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "CONTRACT.md": {
+      "filePath": "CONTRACT.md",
+      "contentHash": "6b90c9fb6fde503d19a600a3392398dae0cbb8aa87ab2aaee0bfc5624ee8e68c",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 214,
+      "hasStructuralAnalysis": true
+    },
+    "README.md": {
+      "filePath": "README.md",
+      "contentHash": "4fc3492ffdce3fc6974e0494b240297e7d64b1f7ba822629970052866a2bbd17",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 170,
+      "hasStructuralAnalysis": true
+    },
+    "RELEASE_CHECKLIST.md": {
+      "filePath": "RELEASE_CHECKLIST.md",
+      "contentHash": "2df0dd2f1ea36c7964b467ed9f5895c390b67f5ee3b1a485e219fe4360ca2d91",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 21,
+      "hasStructuralAnalysis": true
+    },
+    "USER_GUIDE.md": {
+      "filePath": "USER_GUIDE.md",
+      "contentHash": "17a515138e1b30a1edd95fcedb3c563005eb294a4b0bf58f0556237a5144bdf4",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 116,
+      "hasStructuralAnalysis": true
+    },
+    "catalog/README.md": {
+      "filePath": "catalog/README.md",
+      "contentHash": "9f4332967e0fce8f1f6082b8280857aacfdcfc0c5fbaa917c80cf2ade7e92c9b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 102,
+      "hasStructuralAnalysis": true
+    },
+    "catalog/catalog.py": {
+      "filePath": "catalog/catalog.py",
+      "contentHash": "edd1096c416d5a956bdd61996242bf07613513aeb9b38b5766ffa58dc0ef34a2",
+      "functions": [
+        {
+          "name": "log",
+          "params": [
+            "msg"
+          ],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "load_dotenv",
+          "params": [
+            "path"
+          ],
+          "exported": true,
+          "lineCount": 15
+        },
+        {
+          "name": "get_token",
+          "params": [],
+          "exported": true,
+          "lineCount": 13
+        },
+        {
+          "name": "year_buckets",
+          "params": [
+            "today"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "build_shard_params",
+          "params": [
+            "region",
+            "provider_id",
+            "media_type",
+            "monetization",
+            "gte",
+            "lte",
+            "language"
+          ],
+          "exported": true,
+          "lineCount": 22
+        },
+        {
+          "name": "shard_page_count",
+          "params": [
+            "total_pages"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "needs_language_split",
+          "params": [
+            "total_pages",
+            "depth"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "init_db",
+          "params": [
+            "db_path"
+          ],
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "_pid_alive",
+          "params": [
+            "pid"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "acquire_lock",
+          "params": [
+            "db_path"
+          ],
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "release_lock",
+          "params": [
+            "lock_path"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "upsert_provider",
+          "params": [
+            "conn",
+            "p"
+          ],
+          "exported": true,
+          "lineCount": 11
+        },
+        {
+          "name": "upsert_title",
+          "params": [
+            "conn",
+            "media_type",
+            "item"
+          ],
+          "exported": true,
+          "lineCount": 30
+        },
+        {
+          "name": "upsert_availability",
+          "params": [
+            "conn",
+            "tmdb_id",
+            "media_type",
+            "provider_id",
+            "monetization",
+            "run_date"
+          ],
+          "exported": true,
+          "lineCount": 12
+        },
+        {
+          "name": "fetch_json",
+          "params": [
+            "client",
+            "sem",
+            "path",
+            "params",
+            "stats",
+            "retries"
+          ],
+          "exported": true,
+          "lineCount": 40
+        },
+        {
+          "name": "fetch_shard",
+          "params": [
+            "fetch_page",
+            "base_params",
+            "desc",
+            "depth"
+          ],
+          "exported": true,
+          "lineCount": 34
+        },
+        {
+          "name": "get_providers",
+          "params": [
+            "client",
+            "sem",
+            "region",
+            "stats"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "sweep_provider_media",
+          "params": [
+            "client",
+            "sem",
+            "conn",
+            "provider",
+            "media_type",
+            "monetizations",
+            "args",
+            "run_date",
+            "stats"
+          ],
+          "exported": true,
+          "lineCount": 31
+        },
+        {
+          "name": "cmd_sweep",
+          "params": [
+            "args"
+          ],
+          "exported": true,
+          "lineCount": 71
+        },
+        {
+          "name": "cmd_enrich",
+          "params": [
+            "args"
+          ],
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "_run_enrich",
+          "params": [
+            "token",
+            "args"
+          ],
+          "exported": true,
+          "lineCount": 42
+        },
+        {
+          "name": "cmd_diff",
+          "params": [
+            "args"
+          ],
+          "exported": true,
+          "lineCount": 50
+        },
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 27
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "argparse",
+          "specifiers": [
+            "argparse"
+          ]
+        },
+        {
+          "source": "asyncio",
+          "specifiers": [
+            "asyncio"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "random",
+          "specifiers": [
+            "random"
+          ]
+        },
+        {
+          "source": "sqlite3",
+          "specifiers": [
+            "sqlite3"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "date"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        }
+      ],
+      "exports": [
+        "log",
+        "load_dotenv",
+        "get_token",
+        "year_buckets",
+        "build_shard_params",
+        "shard_page_count",
+        "needs_language_split",
+        "init_db",
+        "_pid_alive",
+        "acquire_lock",
+        "release_lock",
+        "upsert_provider",
+        "upsert_title",
+        "upsert_availability",
+        "fetch_json",
+        "fetch_shard",
+        "get_providers",
+        "sweep_provider_media",
+        "cmd_sweep",
+        "cmd_enrich",
+        "_run_enrich",
+        "cmd_diff",
+        "main"
+      ],
+      "totalLines": 642,
+      "hasStructuralAnalysis": true
+    },
+    "catalog/examples.sql": {
+      "filePath": "catalog/examples.sql",
+      "contentHash": "b07a1bef0a898de15e031ffd4187985398974650c8031dc9bcc09e40357722e7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 49,
+      "hasStructuralAnalysis": true
+    },
+    "catalog/smoke_test.py": {
+      "filePath": "catalog/smoke_test.py",
+      "contentHash": "f33fb6ec479242bd429564e6d91be66980cfb4e485db4af9f69c47ff227d1b5b",
+      "functions": [
+        {
+          "name": "check",
+          "params": [
+            "name",
+            "cond",
+            "detail"
+          ],
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "fake_overflow_shard",
+          "params": [],
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "fake_small_shard",
+          "params": [],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "asyncio",
+          "specifiers": [
+            "asyncio"
+          ]
+        },
+        {
+          "source": "sqlite3",
+          "specifiers": [
+            "sqlite3"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "date"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        },
+        {
+          "source": "catalog",
+          "specifiers": [
+            "catalog"
+          ]
+        }
+      ],
+      "exports": [
+        "check",
+        "fake_overflow_shard",
+        "fake_small_shard"
+      ],
+      "totalLines": 186,
+      "hasStructuralAnalysis": true
+    },
+    "data/fixtures/netflix_history_sample.csv": {
+      "filePath": "data/fixtures/netflix_history_sample.csv",
+      "contentHash": "de1052954bf6685c255a2c7b6771da76b60aeb5413914695ff4f95b27297ee92",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 14,
+      "hasStructuralAnalysis": false
+    },
+    "docs/.nojekyll": {
+      "filePath": "docs/.nojekyll",
+      "contentHash": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": false
+    },
+    "docs/assets/catalog.json": {
+      "filePath": "docs/assets/catalog.json",
+      "contentHash": "f79badcf32f88243997827d1fb4722cfd37dd7e616dbea1dca1c36064c86ce66",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "docs/assets/catalog.meta.json": {
+      "filePath": "docs/assets/catalog.meta.json",
+      "contentHash": "a6d633d4fe24f86764d3314329c43823fd0101e92bd08e73253607222248b157",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "docs/assets/catalog.text.json": {
+      "filePath": "docs/assets/catalog.text.json",
+      "contentHash": "f79ff75e7a63298b09a83dd9b791f0534c80ab58112bcbdbd52a39247a24d411",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "docs/assets/prompts.json": {
+      "filePath": "docs/assets/prompts.json",
+      "contentHash": "e1e5fba647cd559b40ac12b90c32f69b5737460a473cee60abbe437b06cf298b",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 8,
+      "hasStructuralAnalysis": true
+    },
+    "docs/css/app.css": {
+      "filePath": "docs/css/app.css",
+      "contentHash": "0660ffaa56f0f42db27e5670d6a6f44dd8d4d109c2bc1cb03a24adb5a5a8c61a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 391,
+      "hasStructuralAnalysis": false
+    },
+    "docs/index.html": {
+      "filePath": "docs/index.html",
+      "contentHash": "6b769d0f13f4cffe88fa1850c08d01bf88814ff99ae1198c3be151a6f4d2e8a1",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 138,
+      "hasStructuralAnalysis": false
+    },
+    "docs/js/agent.js": {
+      "filePath": "docs/js/agent.js",
+      "contentHash": "a623467c1c2c8aa4bc64580c162fa9769c6eebadf346cbe14e7fc36585a700df",
+      "functions": [
+        {
+          "name": "mapError",
+          "params": [
+            "status"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "errorMessage",
+          "params": [
+            "code",
+            "status"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "callLlm",
+          "params": [
+            "config",
+            "body",
+            "fetchImpl",
+            "signal"
+          ],
+          "exported": false,
+          "lineCount": 19
+        },
+        {
+          "name": "buildContextBlock",
+          "params": [
+            "context"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "addUsage",
+          "params": [
+            "total",
+            "chunk"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "stripFence",
+          "params": [
+            "text"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "runAgent",
+          "params": [
+            "opts"
+          ],
+          "exported": true,
+          "lineCount": 144
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "runAgent"
+      ],
+      "totalLines": 223,
+      "hasStructuralAnalysis": true
+    },
+    "docs/js/catalog.js": {
+      "filePath": "docs/js/catalog.js",
+      "contentHash": "30780a9ce0b52420f479a330e0f40bf42b3f547d54ce383fda873ea815117f37",
+      "functions": [
+        {
+          "name": "normalizeTitle",
+          "params": [
+            "s"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "tokenize",
+          "params": [
+            "s"
+          ],
+          "exported": true,
+          "lineCount": 5
+        },
+        {
+          "name": "buildIndex",
+          "params": [
+            "records"
+          ],
+          "exported": true,
+          "lineCount": 23
+        },
+        {
+          "name": "search",
+          "params": [
+            "index",
+            "query"
+          ],
+          "exported": true,
+          "lineCount": 26
+        },
+        {
+          "name": "filterIndices",
+          "params": [
+            "records",
+            "filters"
+          ],
+          "exported": true,
+          "lineCount": 23
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "normalizeTitle",
+        "tokenize",
+        "buildIndex",
+        "search",
+        "filterIndices"
+      ],
+      "totalLines": 93,
+      "hasStructuralAnalysis": true
+    },
+    "docs/js/exporters.js": {
+      "filePath": "docs/js/exporters.js",
+      "contentHash": "95575323e5987346dff10fe8fb5caed9dbebf1b390721202c3ba20eaff9aa2d1",
+      "functions": [
+        {
+          "name": "providerLabel",
+          "params": [
+            "slug"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "providerLinks",
+          "params": [
+            "u"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "firstUrl",
+          "params": [
+            "u"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "toMarkdown",
+          "params": [
+            "picks",
+            "meta"
+          ],
+          "exported": true,
+          "lineCount": 19
+        },
+        {
+          "name": "toJson",
+          "params": [
+            "picks",
+            "meta"
+          ],
+          "exported": true,
+          "lineCount": 4
+        },
+        {
+          "name": "csvField",
+          "params": [
+            "value"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "toCsv",
+          "params": [
+            "picks",
+            "meta"
+          ],
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "toYouMd",
+          "params": [
+            "youmd",
+            "history"
+          ],
+          "exported": true,
+          "lineCount": 13
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "toMarkdown",
+        "toJson",
+        "toCsv",
+        "toYouMd"
+      ],
+      "totalLines": 117,
+      "hasStructuralAnalysis": true
+    },
+    "docs/js/history.js": {
+      "filePath": "docs/js/history.js",
+      "contentHash": "fe02062f4862f86f064dd11586c66d13234330d42ec818aaa571b71122d07286",
+      "functions": [
+        {
+          "name": "normalizeTitle",
+          "params": [
+            "s"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "parseCsv",
+          "params": [
+            "text"
+          ],
+          "exported": false,
+          "lineCount": 67
+        },
+        {
+          "name": "parseDate",
+          "params": [
+            "s"
+          ],
+          "exported": false,
+          "lineCount": 23
+        },
+        {
+          "name": "parseNetflixCsv",
+          "params": [
+            "text"
+          ],
+          "exported": true,
+          "lineCount": 92
+        },
+        {
+          "name": "summarize",
+          "params": [
+            "parsed"
+          ],
+          "exported": true,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "parseNetflixCsv",
+        "summarize"
+      ],
+      "totalLines": 197,
+      "hasStructuralAnalysis": true
+    },
+    "docs/js/store.js": {
+      "filePath": "docs/js/store.js",
+      "contentHash": "1f4d290824787bc8a83418046797e8cc803bb54333b60d2087f5507c68cbf296",
+      "functions": [
+        {
+          "name": "createStore",
+          "params": [
+            "storage"
+          ],
+          "exported": true,
+          "lineCount": 113
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "KEYS",
+        "DEFAULT_LLM",
+        "YOUMD_TEMPLATE",
+        "createStore"
+      ],
+      "totalLines": 146,
+      "hasStructuralAnalysis": true
+    },
+    "docs/js/tools.js": {
+      "filePath": "docs/js/tools.js",
+      "contentHash": "d444de498fa915c58fa1e62ac746c744be3cc51553a2de463920b82084909cdb",
+      "functions": [
+        {
+          "name": "createTools",
+          "params": [
+            "deps"
+          ],
+          "exported": true,
+          "lineCount": 192
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [
+        "createTools"
+      ],
+      "totalLines": 207,
+      "hasStructuralAnalysis": true
+    },
+    "docs/js/ui.js": {
+      "filePath": "docs/js/ui.js",
+      "contentHash": "3a0c00980d118aaf65c334e4fd8849888dcaaed8a1abd2d3c69733695e742dcf",
+      "functions": [
+        {
+          "name": "camelize",
+          "params": [
+            "id"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "collectDom",
+          "params": [],
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "showError",
+          "params": [
+            "message"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "clearError",
+          "params": [],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "setNote",
+          "params": [
+            "text"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "clearTrace",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "appendTrace",
+          "params": [
+            "text"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "compactArgs",
+          "params": [
+            "args"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "providerLabel",
+          "params": [
+            "slug"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "languageLabel",
+          "params": [
+            "code"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "titleInitials",
+          "params": [
+            "title"
+          ],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "buildPoster",
+          "params": [
+            "pick"
+          ],
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "metaLine",
+          "params": [
+            "pick"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "linkRow",
+          "params": [
+            "pick"
+          ],
+          "exported": false,
+          "lineCount": 17
+        },
+        {
+          "name": "buildCard",
+          "params": [
+            "pick"
+          ],
+          "exported": false,
+          "lineCount": 29
+        },
+        {
+          "name": "renderPicks",
+          "params": [
+            "picks"
+          ],
+          "exported": false,
+          "lineCount": 13
+        },
+        {
+          "name": "download",
+          "params": [
+            "filename",
+            "mime",
+            "text"
+          ],
+          "exported": false,
+          "lineCount": 12
+        },
+        {
+          "name": "exportMeta",
+          "params": [],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "hasPicks",
+          "params": [],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "fetchJson",
+          "params": [
+            "url"
+          ],
+          "exported": false,
+          "lineCount": 5
+        },
+        {
+          "name": "scheduleIndex",
+          "params": [],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "scheduleSidecar",
+          "params": [],
+          "exported": false,
+          "lineCount": 26
+        },
+        {
+          "name": "facetFilters",
+          "params": [],
+          "exported": false,
+          "lineCount": 7
+        },
+        {
+          "name": "makeTools",
+          "params": [
+            "seenKeys"
+          ],
+          "exported": false,
+          "lineCount": 11
+        },
+        {
+          "name": "hydrate",
+          "params": [
+            "row"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "runKeywordFallback",
+          "params": [
+            "query",
+            "tools",
+            "seenKeys"
+          ],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "makeEventHandler",
+          "params": [],
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "onSubmit",
+          "params": [
+            "event"
+          ],
+          "exported": false,
+          "lineCount": 63
+        },
+        {
+          "name": "readHistoryFile",
+          "params": [
+            "file"
+          ],
+          "exported": false,
+          "lineCount": 18
+        },
+        {
+          "name": "wireSettings",
+          "params": [],
+          "exported": false,
+          "lineCount": 22
+        },
+        {
+          "name": "wireContext",
+          "params": [],
+          "exported": false,
+          "lineCount": 27
+        },
+        {
+          "name": "fillSelect",
+          "params": [
+            "select",
+            "values",
+            "labelFor",
+            "placeholderText"
+          ],
+          "exported": false,
+          "lineCount": 15
+        },
+        {
+          "name": "populateFacets",
+          "params": [
+            "meta"
+          ],
+          "exported": false,
+          "lineCount": 9
+        },
+        {
+          "name": "fillCatalogDetail",
+          "params": [
+            "meta"
+          ],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "wireFacets",
+          "params": [],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "wireExports",
+          "params": [],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "loadData",
+          "params": [],
+          "exported": false,
+          "lineCount": 20
+        },
+        {
+          "name": "init",
+          "params": [],
+          "exported": false,
+          "lineCount": 43
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "./catalog.js",
+          "specifiers": [
+            "normalizeTitle",
+            "buildIndex",
+            "search",
+            "filterIndices"
+          ]
+        },
+        {
+          "source": "./history.js",
+          "specifiers": [
+            "parseNetflixCsv",
+            "summarize"
+          ]
+        },
+        {
+          "source": "./tools.js",
+          "specifiers": [
+            "createTools"
+          ]
+        },
+        {
+          "source": "./agent.js",
+          "specifiers": [
+            "runAgent"
+          ]
+        },
+        {
+          "source": "./store.js",
+          "specifiers": [
+            "createStore"
+          ]
+        },
+        {
+          "source": "./exporters.js",
+          "specifiers": [
+            "toMarkdown",
+            "toJson",
+            "toCsv",
+            "toYouMd"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 709,
+      "hasStructuralAnalysis": true
+    },
+    "research/CATALOG-STRATEGY.md": {
+      "filePath": "research/CATALOG-STRATEGY.md",
+      "contentHash": "03091755eca5c593e73c2819212e27a85c226e72edc72b4ca54fadca617b70cb",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 141,
+      "hasStructuralAnalysis": true
+    },
+    "research/india-ott-aggregators-coverage.md": {
+      "filePath": "research/india-ott-aggregators-coverage.md",
+      "contentHash": "ba3b75df0f1be945c58ebfc08b03acfca4e2456092ebe554b4f00c9e0a17ff44",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 253,
+      "hasStructuralAnalysis": true
+    },
+    "research/india-ott-p0-catalog-scrape-playbook.md": {
+      "filePath": "research/india-ott-p0-catalog-scrape-playbook.md",
+      "contentHash": "1a193c3d347366e2086a28da4403acaaf654d8eb6a1eb8dbabadf256734ab772",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 472,
+      "hasStructuralAnalysis": true
+    },
+    "research/india-ott-p1-free-firecrawl-playbook.md": {
+      "filePath": "research/india-ott-p1-free-firecrawl-playbook.md",
+      "contentHash": "a1e5c9ad3c0d56dd73c7eda99cea44c541893f0be30e8d731bbd5985ea08397f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 303,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/justwatch_in_probe.json": {
+      "filePath": "research/raw/aggregators/justwatch_in_probe.json",
+      "contentHash": "33420716434cd02092dfa7ec3cfeac7d72f33ca9595c7bfe742bb83b75a2b0cd",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 425,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/justwatch_providers_in.json": {
+      "filePath": "research/raw/aggregators/justwatch_providers_in.json",
+      "contentHash": "b8d2dee37934c4118604dbf53b31bcf7657064d9e9342f7463a9e01a886ff947",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 576,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/justwatch_title_search_samples_in.json": {
+      "filePath": "research/raw/aggregators/justwatch_title_search_samples_in.json",
+      "contentHash": "f5d93904f05fb3e5bef82fcf2daba1884a1ca62c42fb5c46baa756084d35b0f0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 120,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/open_datasets_probe.json": {
+      "filePath": "research/raw/aggregators/open_datasets_probe.json",
+      "contentHash": "bdced0b6055b5f1044a6ce823363e1cfffa4b259011ebc077b8f9153f1b05c50",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 55,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json": {
+      "filePath": "research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json",
+      "contentHash": "80e0a4aa02643a9fa0a508a0f83ea0fe32982ddb265c8bed805e8daac7afe0ff",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 11,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/streaming_availability_countries_in.json": {
+      "filePath": "research/raw/aggregators/streaming_availability_countries_in.json",
+      "contentHash": "5a04c89d29ac73bed934f0690aed2255bb394af272da81b0e5b1911639c5e8c8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json": {
+      "filePath": "research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json",
+      "contentHash": "a167bdf56d5b9210b4d9e5b5904bc5fd6138fb5ef589845e0de6151634622dca",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/streaming_availability_search_in.json": {
+      "filePath": "research/raw/aggregators/streaming_availability_search_in.json",
+      "contentHash": "b9fa6318443057565509c2b55adb7a764c0fb6221dcac9b0e0f893ff0c936bc7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 3917,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json": {
+      "filePath": "research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json",
+      "contentHash": "9feaecf03fe7cfeaee43126e9c0e858f4c1cd7380ec2e70a97c489dd338d4f9a",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/streaming_availability_zee5_search_sample.json": {
+      "filePath": "research/raw/aggregators/streaming_availability_zee5_search_sample.json",
+      "contentHash": "8ed8b9bdcd4a908d4774973472fa1344222caf50a90ce6d4eb535f32034bc357",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 1,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/tmdb_watch_providers_in.json": {
+      "filePath": "research/raw/aggregators/tmdb_watch_providers_in.json",
+      "contentHash": "fc8d4cf79448e956abd03cce54ab5649f8e5c1e8d40b0a6e57a51bede8b48c9f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 16,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/unogs_probe.json": {
+      "filePath": "research/raw/aggregators/unogs_probe.json",
+      "contentHash": "20d4c2d1673abf4559b7cacdb5d5bac7baeb666e48da188f990c0fc465b2cc20",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 12,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/aggregators/watchmode_in_probe.json": {
+      "filePath": "research/raw/aggregators/watchmode_in_probe.json",
+      "contentHash": "3648a15a5bd1d097a23bae549cb651d5f03c252e2b4cc439c5e8097679522e3f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 16,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/aggregators.json": {
+      "filePath": "research/raw/p0/aggregators.json",
+      "contentHash": "4909956dd6c22151af4e57026f99b75f7edc45a6d314e3fb66265001ae6ebe91",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 34,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/aha_ott.json": {
+      "filePath": "research/raw/p0/aha_ott.json",
+      "contentHash": "3eefd63bc3558c7e1d9fbba4a6027b9898a241ba3f70b456000cfe523aefcdc9",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 27,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/amazon_prime.json": {
+      "filePath": "research/raw/p0/amazon_prime.json",
+      "contentHash": "ccd942d3dbcfbb600abffe93d63ea7f49538075757187be2992257ca4fb1f2ae",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/apple_tv.json": {
+      "filePath": "research/raw/p0/apple_tv.json",
+      "contentHash": "15be3b1fd8d9b93dd2f79399ac4a0c3fbfdb504d3989378fb9ded3538388ff48",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/hoichoi.json": {
+      "filePath": "research/raw/p0/hoichoi.json",
+      "contentHash": "777850dea3d83b3179d0379f3380e2d58f6515b69a47192197780f0daa590886",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 27,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/jiohotstar.json": {
+      "filePath": "research/raw/p0/jiohotstar.json",
+      "contentHash": "c9be4c80a279c6e6cf8d7a0aa425b9834bf5b56e1a7bc49bb3de0e1d03987073",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 44,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/netflix_india.json": {
+      "filePath": "research/raw/p0/netflix_india.json",
+      "contentHash": "119d05543313f738e5ba82dd01d40574852e42d72f57036f11b2bece29f5e3da",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 34,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/niche_platforms.json": {
+      "filePath": "research/raw/p0/niche_platforms.json",
+      "contentHash": "804dc7acdc8ab84c8f5d6a9f45b18f522cba794ab6391c7d71f5ac172bbfb94e",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/sonyliv.json": {
+      "filePath": "research/raw/p0/sonyliv.json",
+      "contentHash": "5692295d1590d39d8952f3a5e41fa9fee7604491cf55b4524788994a6d7864af",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 31,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/sun_nxt.json": {
+      "filePath": "research/raw/p0/sun_nxt.json",
+      "contentHash": "e45295a29ad230ba4f84a2e078ebac979ad25c8a6e6c834295c3a03d4fd663e9",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 26,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p0/zee5.json": {
+      "filePath": "research/raw/p0/zee5.json",
+      "contentHash": "fa667289f809400e27a4639677a0c7e778b4742ccc65dc131eddaefad3d1ae16",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 29,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/archive_org_india.json": {
+      "filePath": "research/raw/p1/archive_org_india.json",
+      "contentHash": "a8557d6b9e5912a911e5899421515aa6393cdde9ff2e9d6602f4701c67a70ae7",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 61,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/dailymotion_india.json": {
+      "filePath": "research/raw/p1/dailymotion_india.json",
+      "contentHash": "75adbcc7fe0fe53e6d1a8e9ccbd4f91d2c7702ab2446f1cf7001adc2519d5840",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 33,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/fast_channels_india.json": {
+      "filePath": "research/raw/p1/fast_channels_india.json",
+      "contentHash": "6e8b6482522d3062fb193924051ccf9d55c6074eecbde0bfd6ec717a0fcee51f",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 25,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/global_avod_india_availability.json": {
+      "filePath": "research/raw/p1/global_avod_india_availability.json",
+      "contentHash": "e44f07be7aaf2de50c232103356ec70c59ec12bf26b18b129ffbc970311a4acc",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/mx_player.json": {
+      "filePath": "research/raw/p1/mx_player.json",
+      "contentHash": "4ae1de338d322093b3d170196123a2e51fb414d66316b4a8efd1a10f0ef90ff0",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/regional_free_shemaroo_hungama_jio.json": {
+      "filePath": "research/raw/p1/regional_free_shemaroo_hungama_jio.json",
+      "contentHash": "a628fd9ad8392c551dff4dd58a9217fc180f90b7b751d73f49a114a8d348b308",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 28,
+      "hasStructuralAnalysis": true
+    },
+    "research/raw/p1/youtube_india.json": {
+      "filePath": "research/raw/p1/youtube_india.json",
+      "contentHash": "a8c77211cadff5dd4a98e3e1f7ac449d1cce9ce27667be30364e145f950e6ca8",
+      "functions": [],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 70,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/build_catalog.py": {
+      "filePath": "scripts/build_catalog.py",
+      "contentHash": "061beac340fba5d778e91bcba3c795a286b2677adc9433b88529f5e4c80f9536",
+      "functions": [
+        {
+          "name": "_clean_text",
+          "params": [
+            "v"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "build_parser",
+          "params": [],
+          "returnType": "argparse.ArgumentParser",
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "normalize_unogs",
+          "params": [
+            "row",
+            "provider"
+          ],
+          "returnType": "dict | None",
+          "exported": true,
+          "lineCount": 60
+        },
+        {
+          "name": "_smallest_image",
+          "params": [
+            "image_set"
+          ],
+          "returnType": "str | None",
+          "exported": true,
+          "lineCount": 19
+        },
+        {
+          "name": "normalize_streaming_availability",
+          "params": [
+            "row",
+            "provider"
+          ],
+          "returnType": "dict | None",
+          "exported": true,
+          "lineCount": 84
+        },
+        {
+          "name": "_merge_records",
+          "params": [
+            "rec",
+            "records",
+            "seen",
+            "skipped",
+            "args"
+          ],
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "build",
+          "params": [
+            "args"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 78
+        },
+        {
+          "name": "main",
+          "params": [
+            "argv"
+          ],
+          "returnType": "int",
+          "exported": true,
+          "lineCount": 8
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "argparse",
+          "specifiers": [
+            "argparse"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "datetime"
+          ]
+        },
+        {
+          "source": "gzip",
+          "specifiers": [
+            "gzip"
+          ]
+        },
+        {
+          "source": "html",
+          "specifiers": [
+            "html"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "re",
+          "specifiers": [
+            "re"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        }
+      ],
+      "exports": [
+        "_clean_text",
+        "build_parser",
+        "normalize_unogs",
+        "_smallest_image",
+        "normalize_streaming_availability",
+        "_merge_records",
+        "build",
+        "main"
+      ],
+      "totalLines": 327,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/build_catalog_tmdb.py": {
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "contentHash": "e9f6a08031c941ee85eeccb459b27c87196cf5ffac5c1581cdfeb38735923438",
+      "functions": [
+        {
+          "name": "log",
+          "params": [
+            "msg"
+          ],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "norm_title",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 3
+        },
+        {
+          "name": "norm_title_js",
+          "params": [
+            "t"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "clamp_year",
+          "params": [
+            "value"
+          ],
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "clamp_runtime",
+          "params": [
+            "value"
+          ],
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "clamp_rating",
+          "params": [
+            "value"
+          ],
+          "exported": true,
+          "lineCount": 6
+        },
+        {
+          "name": "tmdb_get",
+          "params": [
+            "path",
+            "token",
+            "retries"
+          ],
+          "exported": true,
+          "lineCount": 19
+        },
+        {
+          "name": "fetch_genre_maps",
+          "params": [],
+          "exported": true,
+          "lineCount": 13
+        },
+        {
+          "name": "load_tmdb",
+          "params": [
+            "genre_map"
+          ],
+          "exported": true,
+          "lineCount": 67
+        },
+        {
+          "name": "watch_url",
+          "params": [
+            "slug",
+            "rec"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "provider_rank",
+          "params": [
+            "slugs_present",
+            "priorities"
+          ],
+          "exported": true,
+          "lineCount": 8
+        },
+        {
+          "name": "dedupe_records",
+          "params": [
+            "records",
+            "texts",
+            "rank"
+          ],
+          "exported": true,
+          "lineCount": 59
+        },
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 182
+        },
+        {
+          "name": "find_unmatched_non_netflix",
+          "params": [
+            "tmdb_records",
+            "old_records"
+          ],
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "backfill",
+          "params": [],
+          "exported": true,
+          "lineCount": 116
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "gzip",
+          "specifiers": [
+            "gzip"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "re",
+          "specifiers": [
+            "re"
+          ]
+        },
+        {
+          "source": "sqlite3",
+          "specifiers": [
+            "sqlite3"
+          ]
+        },
+        {
+          "source": "subprocess",
+          "specifiers": [
+            "subprocess"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "unicodedata",
+          "specifiers": [
+            "unicodedata"
+          ]
+        },
+        {
+          "source": "concurrent.futures",
+          "specifiers": [
+            "ThreadPoolExecutor"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "date",
+            "datetime",
+            "timezone"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        },
+        {
+          "source": "urllib.parse",
+          "specifiers": [
+            "quote"
+          ]
+        },
+        {
+          "source": "catalog",
+          "specifiers": [
+            "acquire_lock",
+            "get_token",
+            "release_lock"
+          ]
+        }
+      ],
+      "exports": [
+        "log",
+        "norm_title",
+        "norm_title_js",
+        "clamp_year",
+        "clamp_runtime",
+        "clamp_rating",
+        "tmdb_get",
+        "fetch_genre_maps",
+        "load_tmdb",
+        "watch_url",
+        "provider_rank",
+        "dedupe_records",
+        "main",
+        "find_unmatched_non_netflix",
+        "backfill"
+      ],
+      "totalLines": 649,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/check_agent.mjs": {
+      "filePath": "scripts/check_agent.mjs",
+      "contentHash": "3cc1322ac865066afa8c497384167c76ce49c61b39dcbd57e8c2143478d4487b",
+      "functions": [
+        {
+          "name": "sequenceFetch",
+          "params": [
+            "responses"
+          ],
+          "exported": false,
+          "lineCount": 8
+        },
+        {
+          "name": "ok",
+          "params": [
+            "payload"
+          ],
+          "exported": false,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "assert"
+          ]
+        },
+        {
+          "source": "../docs/js/agent.js",
+          "specifiers": [
+            "runAgent"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 170,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/check_catalog.mjs": {
+      "filePath": "scripts/check_catalog.mjs",
+      "contentHash": "58cdf1ddb2f147b0a2ea081023933de0af484f272e08e9fb5224203ed4edee0e",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "deepStrictEqual",
+            "ok",
+            "strictEqual"
+          ]
+        },
+        {
+          "source": "../docs/js/catalog.js",
+          "specifiers": [
+            "buildIndex",
+            "filterIndices",
+            "normalizeTitle",
+            "search",
+            "tokenize"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 43,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/check_exporters.mjs": {
+      "filePath": "scripts/check_exporters.mjs",
+      "contentHash": "dfea2318cbd8910039cfbd7514924f9ce14d3303f549b937b934cf356434ed0b",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "ok",
+            "strictEqual"
+          ]
+        },
+        {
+          "source": "../docs/js/exporters.js",
+          "specifiers": [
+            "toMarkdown",
+            "toJson",
+            "toCsv",
+            "toYouMd"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 74,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/check_history.mjs": {
+      "filePath": "scripts/check_history.mjs",
+      "contentHash": "39f6562f5f67076951f10afef421ad904af3b7be5c76afc2bd9677ceea64a629",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync"
+          ]
+        },
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "assert"
+          ]
+        },
+        {
+          "source": "../docs/js/history.js",
+          "specifiers": [
+            "parseNetflixCsv",
+            "summarize"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 32,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/check_store.mjs": {
+      "filePath": "scripts/check_store.mjs",
+      "contentHash": "58b389e8034586b7047d5042ab3591145a760d9cecfd37bbcfd232a288b65394",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "deepStrictEqual",
+            "strictEqual"
+          ]
+        },
+        {
+          "source": "../docs/js/store.js",
+          "specifiers": [
+            "createStore",
+            "KEYS",
+            "DEFAULT_LLM",
+            "YOUMD_TEMPLATE"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 38,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/check_tools.mjs": {
+      "filePath": "scripts/check_tools.mjs",
+      "contentHash": "d929ec8114123e4d4276a4a8cb8029416adaa55146539be120133ac68f5805f0",
+      "functions": [],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "strictEqual",
+            "deepStrictEqual",
+            "ok"
+          ]
+        },
+        {
+          "source": "../docs/js/tools.js",
+          "specifiers": [
+            "createTools"
+          ]
+        },
+        {
+          "source": "../docs/js/catalog.js",
+          "specifiers": [
+            "buildIndex",
+            "search",
+            "filterIndices",
+            "normalizeTitle"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 73,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/fetch_streaming_availability.py": {
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "contentHash": "86ebfd52c98653c2243dcbea44dc1f2a0375c4665fecc719a50992665c6f1a53",
+      "functions": [
+        {
+          "name": "_read_env_file",
+          "params": [
+            "path"
+          ],
+          "returnType": "dict[str, str]",
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "find_project_root_env",
+          "params": [
+            "start"
+          ],
+          "returnType": "Path",
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "load_rapidapi_key",
+          "params": [],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "_quota_from_headers",
+          "params": [
+            "headers"
+          ],
+          "returnType": "dict[str, Any]",
+          "exported": true,
+          "lineCount": 28
+        },
+        {
+          "name": "apply_quota_guardrail",
+          "params": [
+            "client"
+          ],
+          "returnType": "None",
+          "exported": true,
+          "lineCount": 18
+        },
+        {
+          "name": "probe",
+          "params": [
+            "client",
+            "country"
+          ],
+          "returnType": "int",
+          "exported": true,
+          "lineCount": 27
+        },
+        {
+          "name": "fetch_service",
+          "params": [
+            "client",
+            "service",
+            "country",
+            "order_by",
+            "out_dir",
+            "max_pages"
+          ],
+          "returnType": "dict[str, Any]",
+          "exported": true,
+          "lineCount": 94
+        },
+        {
+          "name": "observed_service_ids",
+          "params": [
+            "rows",
+            "country"
+          ],
+          "returnType": "set[str]",
+          "exported": true,
+          "lineCount": 13
+        },
+        {
+          "name": "build_parser",
+          "params": [],
+          "returnType": "argparse.ArgumentParser",
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "main",
+          "params": [
+            "argv"
+          ],
+          "returnType": "int",
+          "exported": true,
+          "lineCount": 117
+        }
+      ],
+      "classes": [
+        {
+          "name": "CliError",
+          "methods": [],
+          "properties": [],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "QuotaExhausted",
+          "methods": [],
+          "properties": [],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "ApiClient",
+          "methods": [
+            "__init__",
+            "budget_left",
+            "_request_once",
+            "_record_quota",
+            "get"
+          ],
+          "properties": [],
+          "exported": true,
+          "lineCount": 94
+        }
+      ],
+      "imports": [
+        {
+          "source": "argparse",
+          "specifiers": [
+            "argparse"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "dt"
+          ]
+        },
+        {
+          "source": "gzip",
+          "specifiers": [
+            "gzip"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "urllib.error",
+          "specifiers": [
+            "urllib.error"
+          ]
+        },
+        {
+          "source": "urllib.parse",
+          "specifiers": [
+            "urllib.parse"
+          ]
+        },
+        {
+          "source": "urllib.request",
+          "specifiers": [
+            "urllib.request"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        },
+        {
+          "source": "typing",
+          "specifiers": [
+            "Any"
+          ]
+        }
+      ],
+      "exports": [
+        "CliError",
+        "QuotaExhausted",
+        "_read_env_file",
+        "find_project_root_env",
+        "load_rapidapi_key",
+        "_quota_from_headers",
+        "ApiClient",
+        "apply_quota_guardrail",
+        "probe",
+        "fetch_service",
+        "observed_service_ids",
+        "build_parser",
+        "main"
+      ],
+      "totalLines": 516,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/finalize_probes.py": {
+      "filePath": "scripts/finalize_probes.py",
+      "contentHash": "3fc77f5ca89d55712709ce48db79b1f2ba6471ce724b77c96a20c868a74e3519",
+      "functions": [
+        {
+          "name": "update_justwatch_probe",
+          "params": [],
+          "exported": true,
+          "lineCount": 60
+        },
+        {
+          "name": "create_open_datasets_probe",
+          "params": [],
+          "exported": true,
+          "lineCount": 39
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "urllib.request",
+          "specifiers": [
+            "urllib.request"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        }
+      ],
+      "exports": [
+        "update_justwatch_probe",
+        "create_open_datasets_probe"
+      ],
+      "totalLines": 117,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/probe_aggregators.py": {
+      "filePath": "scripts/probe_aggregators.py",
+      "contentHash": "751148a6cebaf5ab70a1e9cf92a302640fcb14c6d9681b0407f051578f5c8462",
+      "functions": [
+        {
+          "name": "load_env",
+          "params": [],
+          "returnType": "dict[str, str]",
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "fetch_json",
+          "params": [
+            "url",
+            "headers",
+            "post_data",
+            "timeout"
+          ],
+          "exported": true,
+          "lineCount": 15
+        },
+        {
+          "name": "probe_justwatch",
+          "params": [],
+          "exported": true,
+          "lineCount": 49
+        },
+        {
+          "name": "probe_unogs",
+          "params": [],
+          "exported": true,
+          "lineCount": 35
+        },
+        {
+          "name": "probe_streaming_availability",
+          "params": [],
+          "exported": true,
+          "lineCount": 19
+        },
+        {
+          "name": "probe_watchmode",
+          "params": [],
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "probe_tmdb",
+          "params": [],
+          "exported": true,
+          "lineCount": 20
+        },
+        {
+          "name": "probe_trakt_flixpatrol_reelgood",
+          "params": [],
+          "exported": true,
+          "lineCount": 22
+        },
+        {
+          "name": "main",
+          "params": [],
+          "exported": true,
+          "lineCount": 7
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "urllib.request",
+          "specifiers": [
+            "urllib.request"
+          ]
+        },
+        {
+          "source": "urllib.parse",
+          "specifiers": [
+            "urllib.parse"
+          ]
+        },
+        {
+          "source": "urllib.error",
+          "specifiers": [
+            "urllib.error"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        }
+      ],
+      "exports": [
+        "load_env",
+        "fetch_json",
+        "probe_justwatch",
+        "probe_unogs",
+        "probe_streaming_availability",
+        "probe_watchmode",
+        "probe_tmdb",
+        "probe_trakt_flixpatrol_reelgood",
+        "main"
+      ],
+      "totalLines": 225,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/probe_hoichoi.py": {
+      "filePath": "scripts/probe_hoichoi.py",
+      "contentHash": "549edcaa288335816193143304c7d926ab62fc227fcb464f3db038f0c77a8dba",
+      "functions": [
+        {
+          "name": "scrape_hoichoi_shows",
+          "params": [],
+          "exported": true,
+          "lineCount": 18
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "requests",
+          "specifiers": [
+            "requests"
+          ]
+        }
+      ],
+      "exports": [
+        "scrape_hoichoi_shows"
+      ],
+      "totalLines": 27,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/probe_p1_catalog.py": {
+      "filePath": "scripts/probe_p1_catalog.py",
+      "contentHash": "fbc6d40d53af1ae7975e3c6709d17b0c802501589a7526e88f8121159e01b2a4",
+      "functions": [
+        {
+          "name": "probe_youtube",
+          "params": [],
+          "exported": true,
+          "lineCount": 74
+        },
+        {
+          "name": "probe_dailymotion",
+          "params": [],
+          "exported": true,
+          "lineCount": 53
+        },
+        {
+          "name": "probe_mx_player",
+          "params": [],
+          "exported": true,
+          "lineCount": 54
+        },
+        {
+          "name": "probe_global_avod",
+          "params": [],
+          "exported": true,
+          "lineCount": 64
+        },
+        {
+          "name": "probe_fast_channels",
+          "params": [],
+          "exported": true,
+          "lineCount": 56
+        },
+        {
+          "name": "probe_archive_org",
+          "params": [],
+          "exported": true,
+          "lineCount": 61
+        },
+        {
+          "name": "probe_regional_free",
+          "params": [],
+          "exported": true,
+          "lineCount": 62
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "requests",
+          "specifiers": [
+            "requests"
+          ]
+        },
+        {
+          "source": "httpx",
+          "specifiers": [
+            "httpx"
+          ]
+        },
+        {
+          "source": "urllib.parse",
+          "specifiers": [
+            "quote"
+          ]
+        }
+      ],
+      "exports": [
+        "probe_youtube",
+        "probe_dailymotion",
+        "probe_mx_player",
+        "probe_global_avod",
+        "probe_fast_channels",
+        "probe_archive_org",
+        "probe_regional_free"
+      ],
+      "totalLines": 463,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/probe_sonyliv.py": {
+      "filePath": "scripts/probe_sonyliv.py",
+      "contentHash": "8b59c6e971eb78ad4a4e4f33cb289d6ea769ce9797206a5df14c0efe04a5b028",
+      "functions": [
+        {
+          "name": "scrape_sonyliv_container",
+          "params": [],
+          "exported": true,
+          "lineCount": 21
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "requests",
+          "specifiers": [
+            "requests"
+          ]
+        }
+      ],
+      "exports": [
+        "scrape_sonyliv_container"
+      ],
+      "totalLines": 30,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/probe_zee5.py": {
+      "filePath": "scripts/probe_zee5.py",
+      "contentHash": "1ed417d671f3e17242ca490c0f9d0b0dbc5e8a2085e071e477f8949fc5ec5664",
+      "functions": [
+        {
+          "name": "scrape_zee5_grid",
+          "params": [
+            "content_type",
+            "max_pages"
+          ],
+          "exported": true,
+          "lineCount": 30
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "requests",
+          "specifiers": [
+            "requests"
+          ]
+        }
+      ],
+      "exports": [
+        "scrape_zee5_grid"
+      ],
+      "totalLines": 40,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/scan_secrets.sh": {
+      "filePath": "scripts/scan_secrets.sh",
+      "contentHash": "6847ecb50ece6fc6a46157e7ea697a7f96813eda8d016b6371f517cfa64f0162",
+      "functions": [
+        {
+          "name": "scan",
+          "params": [],
+          "exported": false,
+          "lineCount": 18
+        }
+      ],
+      "classes": [],
+      "imports": [],
+      "exports": [],
+      "totalLines": 84,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/stress_agent_hostile.mjs": {
+      "filePath": "scripts/stress_agent_hostile.mjs",
+      "contentHash": "457efe63c70cafca97415149b1a0e6ade229c19887e66ea4f0e2c7409b08fee8",
+      "functions": [
+        {
+          "name": "counted",
+          "params": [
+            "fn"
+          ],
+          "exported": false,
+          "lineCount": 6
+        },
+        {
+          "name": "ok",
+          "params": [
+            "payload"
+          ],
+          "exported": false,
+          "lineCount": 3
+        },
+        {
+          "name": "makeTools",
+          "params": [],
+          "exported": false,
+          "lineCount": 28
+        },
+        {
+          "name": "happyFetch",
+          "params": [],
+          "exported": false,
+          "lineCount": 31
+        },
+        {
+          "name": "drive",
+          "params": [
+            "opts"
+          ],
+          "exported": false,
+          "lineCount": 14
+        },
+        {
+          "name": "errorOf",
+          "params": [
+            "events"
+          ],
+          "exported": false,
+          "lineCount": 3
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:assert/strict",
+          "specifiers": [
+            "assert"
+          ]
+        },
+        {
+          "source": "../docs/js/agent.js",
+          "specifiers": [
+            "runAgent"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 306,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/stress_agent_live.mjs": {
+      "filePath": "scripts/stress_agent_live.mjs",
+      "contentHash": "2e4e997dd2f4fd4bfcb55da8549a7469c3a4a9dfac8957ca86855fbbcae0e2e5",
+      "functions": [
+        {
+          "name": "parseLimit",
+          "params": [
+            "argv"
+          ],
+          "exported": false,
+          "lineCount": 10
+        },
+        {
+          "name": "readKeyFromEnvFile",
+          "params": [
+            "file"
+          ],
+          "exported": false,
+          "lineCount": 24
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs/promises",
+          "specifiers": [
+            "readFile"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "path"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath"
+          ]
+        },
+        {
+          "source": "../docs/js/agent.js",
+          "specifiers": [
+            "runAgent"
+          ]
+        },
+        {
+          "source": "../docs/js/store.js",
+          "specifiers": [
+            "DEFAULT_LLM"
+          ]
+        },
+        {
+          "source": "../docs/js/tools.js",
+          "specifiers": [
+            "createTools"
+          ]
+        },
+        {
+          "source": "../docs/js/catalog.js",
+          "specifiers": [
+            "buildIndex",
+            "search",
+            "filterIndices"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 202,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/stress_catalog_data.mjs": {
+      "filePath": "scripts/stress_catalog_data.mjs",
+      "contentHash": "acef40a49f5b8989aed1a73500258f3a7d550f286c86dcf7e75a6e2dee889f4c",
+      "functions": [
+        {
+          "name": "normalizeForDup",
+          "params": [
+            "s"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "topEntries",
+          "params": [
+            "map",
+            "n"
+          ],
+          "exported": false,
+          "lineCount": 4
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "dirname",
+            "join"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 211,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/stress_search_perf.mjs": {
+      "filePath": "scripts/stress_search_perf.mjs",
+      "contentHash": "5c39778edbeccd1c9a5c3f9d999d04c1cbcdb1f869f1a9834ad52404f676001d",
+      "functions": [
+        {
+          "name": "percentile",
+          "params": [
+            "sorted",
+            "p"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "fail",
+          "params": [
+            "msg"
+          ],
+          "exported": false,
+          "lineCount": 4
+        },
+        {
+          "name": "maybeGc",
+          "params": [],
+          "exported": false,
+          "lineCount": 1
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "node:fs",
+          "specifiers": [
+            "readFileSync"
+          ]
+        },
+        {
+          "source": "node:url",
+          "specifiers": [
+            "fileURLToPath"
+          ]
+        },
+        {
+          "source": "node:path",
+          "specifiers": [
+            "dirname",
+            "join"
+          ]
+        },
+        {
+          "source": "../docs/js/catalog.js",
+          "specifiers": [
+            "buildIndex",
+            "search"
+          ]
+        }
+      ],
+      "exports": [],
+      "totalLines": 126,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/unogs_dump_catalog.py": {
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "contentHash": "4f1182997ba11b921447d91deee9ca3d972a24e63e9bd9d2419e4aa301f4e5a1",
+      "functions": [
+        {
+          "name": "_read_env_file",
+          "params": [
+            "path"
+          ],
+          "returnType": "dict[str, str]",
+          "exported": true,
+          "lineCount": 16
+        },
+        {
+          "name": "find_project_root_env",
+          "params": [
+            "start"
+          ],
+          "returnType": "Path",
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "load_rapidapi_key",
+          "params": [],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 7
+        },
+        {
+          "name": "_http_get_json",
+          "params": [
+            "base_url",
+            "path",
+            "params",
+            "rapidapi_key",
+            "timeout_s"
+          ],
+          "returnType": "Any",
+          "exported": true,
+          "lineCount": 38
+        },
+        {
+          "name": "_as_list",
+          "params": [
+            "x"
+          ],
+          "returnType": "list[Any]",
+          "exported": true,
+          "lineCount": 10
+        },
+        {
+          "name": "_norm",
+          "params": [
+            "s"
+          ],
+          "returnType": "str",
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "get_countries",
+          "params": [
+            "base_url",
+            "rapidapi_key"
+          ],
+          "returnType": "list[Country]",
+          "exported": true,
+          "lineCount": 17
+        },
+        {
+          "name": "match_country",
+          "params": [
+            "countries",
+            "country_query"
+          ],
+          "returnType": "Country",
+          "exported": true,
+          "lineCount": 14
+        },
+        {
+          "name": "_search_page",
+          "params": [
+            "base_url",
+            "rapidapi_key",
+            "country_id",
+            "limit",
+            "offset",
+            "orderby"
+          ],
+          "returnType": "dict[str, Any]",
+          "exported": true,
+          "lineCount": 24
+        },
+        {
+          "name": "_canonicalize_title",
+          "params": [
+            "row"
+          ],
+          "returnType": "dict[str, Any]",
+          "exported": true,
+          "lineCount": 17
+        },
+        {
+          "name": "dump_country_catalog",
+          "params": [
+            "base_url",
+            "rapidapi_key",
+            "country",
+            "out_dir",
+            "limit",
+            "orderby",
+            "sleep_s"
+          ],
+          "returnType": "Path",
+          "exported": true,
+          "lineCount": 89
+        },
+        {
+          "name": "build_parser",
+          "params": [],
+          "returnType": "argparse.ArgumentParser",
+          "exported": true,
+          "lineCount": 15
+        },
+        {
+          "name": "main",
+          "params": [
+            "argv"
+          ],
+          "returnType": "int",
+          "exported": true,
+          "lineCount": 39
+        }
+      ],
+      "classes": [
+        {
+          "name": "CliError",
+          "methods": [],
+          "properties": [],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "Country",
+          "methods": [],
+          "properties": [
+            "id",
+            "name",
+            "code"
+          ],
+          "exported": true,
+          "lineCount": 4
+        }
+      ],
+      "imports": [
+        {
+          "source": "argparse",
+          "specifiers": [
+            "argparse"
+          ]
+        },
+        {
+          "source": "datetime",
+          "specifiers": [
+            "dt"
+          ]
+        },
+        {
+          "source": "gzip",
+          "specifiers": [
+            "gzip"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "os",
+          "specifiers": [
+            "os"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "time",
+          "specifiers": [
+            "time"
+          ]
+        },
+        {
+          "source": "urllib.parse",
+          "specifiers": [
+            "urllib.parse"
+          ]
+        },
+        {
+          "source": "urllib.request",
+          "specifiers": [
+            "urllib.request"
+          ]
+        },
+        {
+          "source": "dataclasses",
+          "specifiers": [
+            "dataclass"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        },
+        {
+          "source": "typing",
+          "specifiers": [
+            "Any"
+          ]
+        }
+      ],
+      "exports": [
+        "CliError",
+        "_read_env_file",
+        "find_project_root_env",
+        "load_rapidapi_key",
+        "_http_get_json",
+        "_as_list",
+        "Country",
+        "_norm",
+        "get_countries",
+        "match_country",
+        "_search_page",
+        "_canonicalize_title",
+        "dump_country_catalog",
+        "build_parser",
+        "main"
+      ],
+      "totalLines": 357,
+      "hasStructuralAnalysis": true
+    },
+    "scripts/validate_catalog.py": {
+      "filePath": "scripts/validate_catalog.py",
+      "contentHash": "6900e7e943fe1b451c971ef5e7bcfdd7482de0e116e61365a8969a02b50fc709",
+      "functions": [
+        {
+          "name": "_is_int",
+          "params": [
+            "value"
+          ],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "_is_number",
+          "params": [
+            "value"
+          ],
+          "exported": true,
+          "lineCount": 2
+        },
+        {
+          "name": "_validate_record",
+          "params": [
+            "rec",
+            "i"
+          ],
+          "exported": true,
+          "lineCount": 75
+        },
+        {
+          "name": "validate",
+          "params": [
+            "doc"
+          ],
+          "returnType": "list[str]",
+          "exported": true,
+          "lineCount": 69
+        },
+        {
+          "name": "validate_text",
+          "params": [
+            "doc",
+            "catalog_ids"
+          ],
+          "returnType": "list[str]",
+          "exported": true,
+          "lineCount": 28
+        },
+        {
+          "name": "_load_json",
+          "params": [
+            "path"
+          ],
+          "exported": true,
+          "lineCount": 9
+        },
+        {
+          "name": "main",
+          "params": [
+            "argv"
+          ],
+          "exported": true,
+          "lineCount": 56
+        }
+      ],
+      "classes": [],
+      "imports": [
+        {
+          "source": "argparse",
+          "specifiers": [
+            "argparse"
+          ]
+        },
+        {
+          "source": "json",
+          "specifiers": [
+            "json"
+          ]
+        },
+        {
+          "source": "re",
+          "specifiers": [
+            "re"
+          ]
+        },
+        {
+          "source": "sys",
+          "specifiers": [
+            "sys"
+          ]
+        },
+        {
+          "source": "pathlib",
+          "specifiers": [
+            "Path"
+          ]
+        }
+      ],
+      "exports": [
+        "_is_int",
+        "_is_number",
+        "_validate_record",
+        "validate",
+        "validate_text",
+        "_load_json",
+        "main"
+      ],
+      "totalLines": 288,
+      "hasStructuralAnalysis": true
+    }
+  }
+}

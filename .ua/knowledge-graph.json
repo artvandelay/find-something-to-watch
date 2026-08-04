@@ -1,0 +1,5060 @@
+{
+  "version": "1.0.0",
+  "project": {
+    "name": "India OTT Search",
+    "languages": [
+      "css",
+      "html",
+      "javascript",
+      "json",
+      "markdown",
+      "python",
+      "shell",
+      "sql"
+    ],
+    "frameworks": [],
+    "description": "A static, backend-free web app for semantic search over India OTT catalog data. Visitors bring their own LLM API key and watch history; search runs entirely in the browser over a shipped catalog snapshot.",
+    "analyzedAt": "2026-08-04T19:03:26.000Z",
+    "gitCommitHash": "f1d09ebd6fe185061a4fafaed8b4b11a361bc0b0"
+  },
+  "nodes": [
+    {
+      "id": "file:scripts/check_catalog.mjs",
+      "type": "file",
+      "name": "check_catalog.mjs",
+      "filePath": "scripts/check_catalog.mjs",
+      "summary": "Dependency-free smoke test, run directly with node, that exercises catalog.js's tokenize, normalizeTitle, buildIndex, search, and filterIndices against a small fixture dataset and asserts the expected outputs.",
+      "tags": [
+        "test",
+        "smoke-test",
+        "dev-tooling"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/js/history.js",
+      "type": "file",
+      "name": "history.js",
+      "filePath": "docs/js/history.js",
+      "summary": "Parses a raw Netflix 'viewing activity' CSV export into structured series/movie lists and a normalized set of watched titles.",
+      "tags": [
+        "utility",
+        "parser",
+        "csv",
+        "data-transformation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/check_history.mjs",
+      "type": "file",
+      "name": "check_history.mjs",
+      "filePath": "scripts/check_history.mjs",
+      "summary": "Dev-only smoke test verifying that the Netflix history CSV parser correctly extracts series, movies, and watched titles from a fixture file.",
+      "tags": [
+        "test",
+        "smoke-test",
+        "csv",
+        "validation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/history.js:parseCsv",
+      "type": "function",
+      "name": "parseCsv",
+      "filePath": "docs/js/history.js",
+      "lineRange": [
+        9,
+        75
+      ],
+      "summary": "Low-level RFC4180-style CSV tokenizer that handles quoted fields, escaped quotes, and CRLF/LF row boundaries, returning an array of row arrays.",
+      "tags": [
+        "parser",
+        "csv",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/history.js:parseDate",
+      "type": "function",
+      "name": "parseDate",
+      "filePath": "docs/js/history.js",
+      "lineRange": [
+        77,
+        99
+      ],
+      "summary": "Parses Netflix's localized M/D/YY date strings into a zero-padded YYYY-MM-DD ISO date string.",
+      "tags": [
+        "parser",
+        "date",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/history.js:parseNetflixCsv",
+      "type": "function",
+      "name": "parseNetflixCsv",
+      "filePath": "docs/js/history.js",
+      "lineRange": [
+        101,
+        192
+      ],
+      "summary": "Parses a raw Netflix viewing-history CSV export into de-duplicated series (with episode counts and last-watched dates) and movies lists, plus a normalized set of watched titles.",
+      "tags": [
+        "parser",
+        "csv",
+        "data-transformation",
+        "history"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:docs/js/history.js:summarize",
+      "type": "function",
+      "name": "summarize",
+      "filePath": "docs/js/history.js",
+      "lineRange": [
+        194,
+        196
+      ],
+      "summary": "Produces a short human-readable summary string reporting the counts of parsed series and movies.",
+      "tags": [
+        "utility",
+        "formatting",
+        "summary"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:research/CATALOG-STRATEGY.md",
+      "type": "document",
+      "name": "CATALOG-STRATEGY.md",
+      "filePath": "research/CATALOG-STRATEGY.md",
+      "summary": "Decision log aggregating three parallel India OTT sourcing research tracks (direct-platform scraping, aggregator/commercial APIs, free/AVOD sources) into a single strategy: adopt the Streaming Availability API as the primary multi-provider catalog source, keep uNoGSNG for deep Netflix data, and defer TMDB enrichment, Watchmode verification, and scraping behind future user-provided keys.",
+      "tags": [
+        "documentation",
+        "research",
+        "decision-log",
+        "catalog-sourcing",
+        "planning"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:research/india-ott-aggregators-coverage.md",
+      "type": "document",
+      "name": "india-ott-aggregators-coverage.md",
+      "filePath": "research/india-ott-aggregators-coverage.md",
+      "summary": "Coverage research comparing commercial OTT catalog aggregators and APIs (JustWatch, Watchmode, Streaming Availability API, TMDB watch/providers, uNoGSNG, Reelgood, FlixPatrol) for India availability data, with a coverage matrix, deep-dive notes per aggregator, and signup/curl quick-start examples.",
+      "tags": [
+        "documentation",
+        "research",
+        "api-comparison",
+        "catalog-sourcing",
+        "coverage-analysis"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:research/india-ott-p0-catalog-scrape-playbook.md",
+      "type": "document",
+      "name": "india-ott-p0-catalog-scrape-playbook.md",
+      "filePath": "research/india-ott-p0-catalog-scrape-playbook.md",
+      "summary": "Deep research and live-probe playbook investigating direct-scrape feasibility for major India OTT platforms (JioHotstar, Netflix India, ZEE5, SonyLIV, Prime Video, and regional apps), capturing raw BFF response samples and proposing a normalized SQLite/DuckDB catalog schema with ready-to-run experiment scripts.",
+      "tags": [
+        "documentation",
+        "research",
+        "web-scraping",
+        "catalog-sourcing",
+        "architecture-planning"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:research/india-ott-p1-free-firecrawl-playbook.md",
+      "type": "document",
+      "name": "india-ott-p1-free-firecrawl-playbook.md",
+      "filePath": "research/india-ott-p1-free-firecrawl-playbook.md",
+      "summary": "Track 3 research playbook evaluating free and ad-supported (AVOD) India OTT sources (YouTube, Dailymotion, Amazon MX Player, FAST channels, Archive.org, regional free tiers), benchmarking Firecrawl against native APIs and proposing a standardized catalog schema with runnable harvester experiments.",
+      "tags": [
+        "documentation",
+        "research",
+        "avod",
+        "firecrawl",
+        "catalog-sourcing"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:research/raw/aggregators/justwatch_in_probe.json",
+      "type": "config",
+      "name": "justwatch_in_probe.json",
+      "filePath": "research/raw/aggregators/justwatch_in_probe.json",
+      "summary": "Raw JustWatch India API probe capturing REST provider listings and a GraphQL popular-titles response; provenance artifact from evaluating JustWatch as a data source, superseded by the current TMDB-only pipeline.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "justwatch",
+        "superseded"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:research/raw/aggregators/justwatch_providers_in.json",
+      "type": "config",
+      "name": "justwatch_providers_in.json",
+      "filePath": "research/raw/aggregators/justwatch_providers_in.json",
+      "summary": "Raw dump of JustWatch's India streaming provider catalog (country, provider_count, providers) captured during aggregator evaluation; historical artifact not used by the current build.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "justwatch",
+        "superseded"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:research/raw/aggregators/justwatch_title_search_samples_in.json",
+      "type": "config",
+      "name": "justwatch_title_search_samples_in.json",
+      "filePath": "research/raw/aggregators/justwatch_title_search_samples_in.json",
+      "summary": "Sample JustWatch title-search responses for a handful of India-relevant titles (Kaalidhar Laapata, Tharangam, Panchayat, Sacred Games, Kumkum Bhagya, Bigg Boss, Modern Family) captured to gauge search coverage; superseded provenance data.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "justwatch",
+        "superseded"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:research/raw/aggregators/open_datasets_probe.json",
+      "type": "config",
+      "name": "open_datasets_probe.json",
+      "filePath": "research/raw/aggregators/open_datasets_probe.json",
+      "summary": "Probe notes on open/public dataset sources (github_kaggle_dumps) considered as alternative catalog data feeds; research artifact, not a live build input.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "open-dataset",
+        "superseded"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json",
+      "type": "config",
+      "name": "reelgood_trakt_flixpatrol_probe.json",
+      "filePath": "research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json",
+      "summary": "Combined probe of Trakt popular-movies and FlixPatrol India data, captured while evaluating third-party ranking/availability aggregators; superseded by current sourcing approach.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "trakt",
+        "flixpatrol"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/streaming_availability_countries_in.json",
+      "type": "config",
+      "name": "streaming_availability_countries_in.json",
+      "filePath": "research/raw/aggregators/streaming_availability_countries_in.json",
+      "summary": "Minified probe response listing the India country entry (countryCode, name, services) from the Streaming Availability RapidAPI; provenance data from an evaluated-but-unused aggregator.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "streaming-availability",
+        "superseded"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json",
+      "type": "config",
+      "name": "streaming_availability_kumkum_bhagya_sample.json",
+      "filePath": "research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json",
+      "summary": "Minified sample response for the title \"Kumkum Bhagya\" from the Streaming Availability RapidAPI, captured to spot-check India availability data quality; not used at build/runtime.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "streaming-availability",
+        "superseded"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/streaming_availability_search_in.json",
+      "type": "config",
+      "name": "streaming_availability_search_in.json",
+      "filePath": "research/raw/aggregators/streaming_availability_search_in.json",
+      "summary": "Large raw India title-search response dump (shows_search_IN) from the Streaming Availability RapidAPI, captured to evaluate catalog coverage; superseded by the current TMDB-only pipeline and kept only as research provenance.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "streaming-availability",
+        "superseded"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "config:research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json",
+      "type": "config",
+      "name": "streaming_availability_tharangam_gap_evidence.json",
+      "filePath": "research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json",
+      "summary": "Minified probe capturing evidence of a catalog gap for the title \"Tharangam\" in the Streaming Availability RapidAPI, used to justify moving away from that aggregator.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "streaming-availability",
+        "gap-evidence"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/streaming_availability_zee5_search_sample.json",
+      "type": "config",
+      "name": "streaming_availability_zee5_search_sample.json",
+      "filePath": "research/raw/aggregators/streaming_availability_zee5_search_sample.json",
+      "summary": "Minified sample search response (shows, hasMore, nextCursor) scoped to ZEE5 from the Streaming Availability RapidAPI, captured during aggregator evaluation.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "streaming-availability",
+        "superseded"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/tmdb_watch_providers_in.json",
+      "type": "config",
+      "name": "tmdb_watch_providers_in.json",
+      "filePath": "research/raw/aggregators/tmdb_watch_providers_in.json",
+      "summary": "Probe of TMDB's India watch-provider endpoints for movies and TV (watch_providers_movie_IN, watch_providers_tv_IN), an early exploration that informed the project's eventual adoption of TMDB as the sole catalog source.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "tmdb",
+        "watch-providers"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/unogs_probe.json",
+      "type": "config",
+      "name": "unogs_probe.json",
+      "filePath": "research/raw/aggregators/unogs_probe.json",
+      "summary": "Probe of the uNoGS (unofficial Netflix Online Global Search) API covering supported countries and an India title search, evaluated and ultimately not adopted (per project README's \"no RapidAPI\" constraint).",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "unogs",
+        "superseded"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/aggregators/watchmode_in_probe.json",
+      "type": "config",
+      "name": "watchmode_in_probe.json",
+      "filePath": "research/raw/aggregators/watchmode_in_probe.json",
+      "summary": "Probe of the Watchmode API's India sources under a no-key and demo-key tier (sources_IN_nokey, sources_IN_demokey), captured to assess free-tier viability before settling on the current architecture.",
+      "tags": [
+        "raw-data",
+        "api-probe",
+        "aggregator-research",
+        "watchmode",
+        "superseded"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/aggregators.json",
+      "type": "config",
+      "name": "aggregators.json",
+      "filePath": "research/raw/p0/aggregators.json",
+      "summary": "Early feasibility-research probe recording an overview analysis of India OTT aggregator platforms (services that surface catalog listings across multiple streaming providers), captured before the project settled on the TMDB-based build pipeline.",
+      "tags": [
+        "research",
+        "provenance",
+        "data-sourcing",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/aha_ott.json",
+      "type": "config",
+      "name": "aha_ott.json",
+      "filePath": "research/raw/p0/aha_ott.json",
+      "summary": "Priority-0 research probe on the Aha OTT platform capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/amazon_prime.json",
+      "type": "config",
+      "name": "amazon_prime.json",
+      "filePath": "research/raw/p0/amazon_prime.json",
+      "summary": "Priority-0 research probe on Amazon Prime Video India capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/apple_tv.json",
+      "type": "config",
+      "name": "apple_tv.json",
+      "filePath": "research/raw/p0/apple_tv.json",
+      "summary": "Priority-0 research probe on Apple TV+ India capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/hoichoi.json",
+      "type": "config",
+      "name": "hoichoi.json",
+      "filePath": "research/raw/p0/hoichoi.json",
+      "summary": "Priority-0 research probe on the Hoichoi (Bengali-language) OTT platform capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/jiohotstar.json",
+      "type": "config",
+      "name": "jiohotstar.json",
+      "filePath": "research/raw/p0/jiohotstar.json",
+      "summary": "Priority-0 research probe on JioHotstar capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, an Akamai CDN key, anti-bot notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/netflix_india.json",
+      "type": "config",
+      "name": "netflix_india.json",
+      "filePath": "research/raw/p0/netflix_india.json",
+      "summary": "Priority-0 research probe on Netflix India capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/niche_platforms.json",
+      "type": "config",
+      "name": "niche_platforms.json",
+      "filePath": "research/raw/p0/niche_platforms.json",
+      "summary": "Priority-0 research probe rounding up smaller/niche India OTT platforms, capturing market share, feasibility rating, candidate scraping methods, auth headers, anti-bot/CDN notes, and ToS/legal risk for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "data-sourcing",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/sonyliv.json",
+      "type": "config",
+      "name": "sonyliv.json",
+      "filePath": "research/raw/p0/sonyliv.json",
+      "summary": "Priority-0 research probe on SonyLIV capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/sun_nxt.json",
+      "type": "config",
+      "name": "sun_nxt.json",
+      "filePath": "research/raw/p0/sun_nxt.json",
+      "summary": "Priority-0 research probe on Sun NXT (South Indian regional OTT) capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p0/zee5.json",
+      "type": "config",
+      "name": "zee5.json",
+      "filePath": "research/raw/p0/zee5.json",
+      "summary": "Priority-0 research probe on ZEE5 capturing market share, catalog-scraping feasibility rating, candidate API endpoints, auth headers, anti-bot/CDN notes, and ToS/legal risk assessment for sourcing catalog data.",
+      "tags": [
+        "research",
+        "provenance",
+        "api-probe",
+        "configuration",
+        "ott-platform"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p1/archive_org_india.json",
+      "type": "config",
+      "name": "archive_org_india.json",
+      "filePath": "research/raw/p1/archive_org_india.json",
+      "summary": "Raw feasibility probe result for the Internet Archive's public-domain Indian film catalog, capturing sample search records, metadata shape, and a recommendation to use the free Advanced Search API directly instead of Firecrawl.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "avod",
+        "public-domain",
+        "api-evaluation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:research/raw/p1/dailymotion_india.json",
+      "type": "config",
+      "name": "dailymotion_india.json",
+      "filePath": "research/raw/p1/dailymotion_india.json",
+      "summary": "Raw feasibility probe result for Dailymotion India, recording native REST API and search response samples and concluding the native API is far cheaper and faster than Firecrawl for this source.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "avod",
+        "api-evaluation",
+        "free-tier"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p1/fast_channels_india.json",
+      "type": "config",
+      "name": "fast_channels_india.json",
+      "filePath": "research/raw/p1/fast_channels_india.json",
+      "summary": "Raw feasibility probe result surveying India's FAST (Free Ad-supported Streaming TV) channel landscape across Samsung TV Plus, Xiaomi PatchWall, and LG Channels, noting moderate scrape feasibility for OEM-bundled linear channel metadata.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "fast-channels",
+        "oem-platforms",
+        "feasibility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p1/global_avod_india_availability.json",
+      "type": "config",
+      "name": "global_avod_india_availability.json",
+      "filePath": "research/raw/p1/global_avod_india_availability.json",
+      "summary": "Raw feasibility probe comparing India availability of global AVOD services (Tubi, Pluto TV, Plex), concluding Tubi and Pluto are geo-blocked in India while Plex's free catalog is accessible and worth including.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "avod",
+        "geo-availability",
+        "feasibility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p1/mx_player.json",
+      "type": "config",
+      "name": "mx_player.json",
+      "filePath": "research/raw/p1/mx_player.json",
+      "summary": "Raw feasibility probe result for Amazon MX Player's free AVOD catalog, capturing its internal web BFF API response shape and recommending reverse-engineered guest-header requests over Firecrawl due to heavy React hydration.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "avod",
+        "api-evaluation",
+        "free-tier"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p1/regional_free_shemaroo_hungama_jio.json",
+      "type": "config",
+      "name": "regional_free_shemaroo_hungama_jio.json",
+      "filePath": "research/raw/p1/regional_free_shemaroo_hungama_jio.json",
+      "summary": "Raw feasibility probe covering India's regional free-tier platforms (ShemarooMe, Hungama Play, JioCinema/JioHotstar), noting their web/BFF endpoints and vintage regional-language catalog depth.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "avod",
+        "regional-content",
+        "free-tier"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "config:research/raw/p1/youtube_india.json",
+      "type": "config",
+      "name": "youtube_india.json",
+      "filePath": "research/raw/p1/youtube_india.json",
+      "summary": "Raw feasibility probe result for YouTube India covering RSS channel feeds, the free-movies storefront, oEmbed metadata, and the YouTube Data API v3, recommending the native API/RSS route over Firecrawl for cost reasons.",
+      "tags": [
+        "research-probe",
+        "provenance",
+        "avod",
+        "api-evaluation",
+        "free-tier"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:.ua/.understandignore",
+      "type": "file",
+      "name": ".understandignore",
+      "filePath": ".ua/.understandignore",
+      "summary": "Understand-Anything knowledge-graph tool's own ignore-file config, listing gitignore-style patterns (env files, viewing-history CSVs, SQLite DB files, etc.) to exclude from codebase analysis.",
+      "tags": [
+        "configuration",
+        "tooling",
+        "ignore-patterns"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:catalog/README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "catalog/README.md",
+      "summary": "Setup and usage guide for catalog.py: the four commands to run (sweep, restricted test run, --enrich, --diff), JustWatch attribution requirements, sharding rationale, expected data volumes, and the weekly cron line.",
+      "tags": [
+        "documentation",
+        "setup-guide",
+        "cli-reference"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:catalog/catalog.py",
+      "type": "file",
+      "name": "catalog.py",
+      "filePath": "catalog/catalog.py",
+      "summary": "TMDB sweep CLI: sweeps TMDB discover + watch/providers (region IN) into catalog/catalog.db, with sweep/enrich/diff subcommands, provider-sharded pagination, and PID-based file locking. The primary build-time data-collection entry point for the catalog/ subproject.",
+      "tags": [
+        "entry-point",
+        "cli",
+        "data-pipeline",
+        "database",
+        "async",
+        "tested"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:catalog/catalog.py:get_token",
+      "type": "function",
+      "name": "get_token",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        112,
+        124
+      ],
+      "summary": "Reads the TMDB v4 read-access token from the project-root .env file (via load_dotenv) or the environment, exiting with an error if neither is set.",
+      "tags": [
+        "config",
+        "cli",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:catalog/catalog.py:build_shard_params",
+      "type": "function",
+      "name": "build_shard_params",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        141,
+        162
+      ],
+      "summary": "Builds the query parameter dict for one discover-API shard, combining provider, media type, monetization, release-year range, and optional language filter.",
+      "tags": [
+        "utility",
+        "data-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:catalog/catalog.py:acquire_lock",
+      "type": "function",
+      "name": "acquire_lock",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        199,
+        218
+      ],
+      "summary": "Acquires an exclusive PID-based lock file for the SQLite DB, refusing to start if a live process already holds it and cleaning up stale locks left by dead PIDs.",
+      "tags": [
+        "concurrency",
+        "locking",
+        "cli"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:catalog/catalog.py:upsert_title",
+      "type": "function",
+      "name": "upsert_title",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        241,
+        270
+      ],
+      "summary": "Inserts or updates a title row (movie or TV) in SQLite from a TMDB discover result, storing genre IDs, popularity, and original language.",
+      "tags": [
+        "database",
+        "data-model",
+        "upsert"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/catalog.py:fetch_json",
+      "type": "function",
+      "name": "fetch_json",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        291,
+        330
+      ],
+      "summary": "Performs a single rate-limited HTTP GET against the TMDB API with bounded concurrency, exponential backoff on 429s, and retry accounting in a shared stats dict.",
+      "tags": [
+        "http-client",
+        "retry-logic",
+        "rate-limiting",
+        "async"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/catalog.py:fetch_shard",
+      "type": "function",
+      "name": "fetch_shard",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        333,
+        366
+      ],
+      "summary": "Pages through one discover-query shard up to TMDB's 500-page cap, recursively subdividing by original_language when a shard's first page still reports overflow.",
+      "tags": [
+        "pagination",
+        "recursion",
+        "data-pipeline"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/catalog.py:sweep_provider_media",
+      "type": "function",
+      "name": "sweep_provider_media",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        385,
+        415
+      ],
+      "summary": "Sweeps one (provider, media_type) pair across all monetizations and year buckets, fetching every shard and upserting titles/availability rows into SQLite.",
+      "tags": [
+        "data-pipeline",
+        "orchestration",
+        "database"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/catalog.py:cmd_sweep",
+      "type": "function",
+      "name": "cmd_sweep",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        418,
+        488
+      ],
+      "summary": "Implements the `sweep` CLI subcommand: acquires the DB lock, initializes the schema, discovers providers, sweeps each provider/media-type combination concurrently, records a snapshot row, and reports summary stats.",
+      "tags": [
+        "entry-point",
+        "cli",
+        "orchestration"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:catalog/catalog.py:_run_enrich",
+      "type": "function",
+      "name": "_run_enrich",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        507,
+        548
+      ],
+      "summary": "Backfills imdb_id and runtime for every title still missing imdb_id by concurrently calling the TMDB details+external_ids endpoint and writing results back to SQLite.",
+      "tags": [
+        "data-pipeline",
+        "enrichment",
+        "async"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/catalog.py:cmd_diff",
+      "type": "function",
+      "name": "cmd_diff",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        555,
+        604
+      ],
+      "summary": "Implements the offline `--diff` CLI subcommand, comparing the latest two snapshot dates and printing new-arrival/leaving/provider/language breakdown reports without any network calls.",
+      "tags": [
+        "cli",
+        "reporting",
+        "offline"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/catalog.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "catalog/catalog.py",
+      "lineRange": [
+        611,
+        637
+      ],
+      "summary": "Argparse-based CLI entry point wiring up the sweep, enrich, and diff subcommands with their shared flags (region, db path, types, monetization, providers, concurrency).",
+      "tags": [
+        "entry-point",
+        "cli",
+        "argument-parsing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "table:catalog/examples.sql:availability",
+      "type": "table",
+      "name": "availability",
+      "filePath": "catalog/examples.sql",
+      "summary": "Five read-only example SQL queries against catalog.db's availability/title/provider/snapshot tables: new arrivals this week, titles leaving soon, titles on multiple providers, catalog size by provider, and catalog size by original language.",
+      "tags": [
+        "database",
+        "sql",
+        "reference-queries",
+        "reporting"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:catalog/smoke_test.py",
+      "type": "file",
+      "name": "smoke_test.py",
+      "filePath": "catalog/smoke_test.py",
+      "summary": "Test suite for catalog.py exercising sharding/pagination edge cases (overflow shards, small shards, shard-parameter building) using fake async HTTP fetchers instead of real TMDB calls.",
+      "tags": [
+        "test",
+        "unit-test",
+        "mocking"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:catalog/smoke_test.py:fake_overflow_shard",
+      "type": "function",
+      "name": "fake_overflow_shard",
+      "filePath": "catalog/smoke_test.py",
+      "lineRange": [
+        78,
+        97
+      ],
+      "summary": "Test double simulating a discover-API shard whose first page reports more pages than the 500-page cap, used to verify catalog.py's language-based subdivision logic in fetch_shard.",
+      "tags": [
+        "test",
+        "fixture",
+        "mocking"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "table:data/fixtures/netflix_history_sample.csv:viewing_history",
+      "type": "table",
+      "name": "viewing_history",
+      "filePath": "data/fixtures/netflix_history_sample.csv",
+      "summary": "Small hand-crafted sample mimicking Netflix's exported viewing-history CSV format (Title, Date columns), used as fixture data for testing the browser-side watch-history CSV upload/parse feature.",
+      "tags": [
+        "fixture",
+        "sample-data",
+        "csv",
+        "test-data"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/.nojekyll",
+      "type": "file",
+      "name": ".nojekyll",
+      "filePath": "docs/.nojekyll",
+      "summary": "Empty marker file telling GitHub Pages to skip Jekyll processing so the static docs/ site is served as-is.",
+      "tags": [
+        "configuration",
+        "deployment",
+        "github-pages"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/build_catalog.py",
+      "type": "file",
+      "name": "build_catalog.py",
+      "filePath": "scripts/build_catalog.py",
+      "summary": "Older/legacy catalog-builder CLI predating the TMDB-only pipeline: normalizes raw uNoGS and StreamingAvailability API dumps into the shared catalog schema and merges them into a single output; superseded by build_catalog_tmdb.py.",
+      "tags": [
+        "legacy",
+        "data-pipeline",
+        "normalization",
+        "build-system"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/build_catalog.py:normalize_unogs",
+      "type": "function",
+      "name": "normalize_unogs",
+      "filePath": "scripts/build_catalog.py",
+      "lineRange": [
+        50,
+        109
+      ],
+      "summary": "Normalizes a raw uNoGS API dump record into the project's common catalog schema (title, type, providers, images, language).",
+      "tags": [
+        "normalization",
+        "legacy",
+        "data-pipeline"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/build_catalog.py:_smallest_image",
+      "type": "function",
+      "name": "_smallest_image",
+      "filePath": "scripts/build_catalog.py",
+      "lineRange": [
+        112,
+        130
+      ],
+      "summary": "Picks the smallest usable poster/backdrop image URL from a record's image candidates to minimize payload size.",
+      "tags": [
+        "utility",
+        "image-processing",
+        "legacy"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/build_catalog.py:normalize_streaming_availability",
+      "type": "function",
+      "name": "normalize_streaming_availability",
+      "filePath": "scripts/build_catalog.py",
+      "lineRange": [
+        133,
+        216
+      ],
+      "summary": "Normalizes a raw Streaming Availability API record (legacy RapidAPI source) into the common catalog schema, mapping provider IDs and monetization types.",
+      "tags": [
+        "normalization",
+        "legacy",
+        "data-pipeline"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/build_catalog.py:_merge_records",
+      "type": "function",
+      "name": "_merge_records",
+      "filePath": "scripts/build_catalog.py",
+      "lineRange": [
+        219,
+        232
+      ],
+      "summary": "Merges two normalized catalog records that refer to the same title, unioning their provider/availability lists.",
+      "tags": [
+        "data-merging",
+        "utility",
+        "legacy"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/build_catalog.py:build",
+      "type": "function",
+      "name": "build",
+      "filePath": "scripts/build_catalog.py",
+      "lineRange": [
+        235,
+        312
+      ],
+      "summary": "Main build routine: reads the raw legacy source dumps, normalizes and merges them by title, and writes the combined catalog JSON output.",
+      "tags": [
+        "build-system",
+        "orchestration",
+        "data-pipeline",
+        "legacy"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/fetch_streaming_availability.py",
+      "type": "file",
+      "name": "fetch_streaming_availability.py",
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "summary": "Legacy/retired CLI that queried the RapidAPI 'Streaming Availability' service for India OTT catalogs. Per the project README, no RapidAPI is used anywhere in the current pipeline — this script remains on disk for provenance only and is not part of the build or runtime flow.",
+      "tags": [
+        "legacy",
+        "retired",
+        "api-client",
+        "provenance"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "class:scripts/fetch_streaming_availability.py:ApiClient",
+      "type": "class",
+      "name": "ApiClient",
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "lineRange": [
+        121,
+        214
+      ],
+      "summary": "HTTP client wrapper for the legacy RapidAPI Streaming Availability service, tracking quota budget, issuing rate-limited GET requests, and recording usage from response headers.",
+      "tags": [
+        "legacy",
+        "api-client",
+        "http-client"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/fetch_streaming_availability.py:apply_quota_guardrail",
+      "type": "function",
+      "name": "apply_quota_guardrail",
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "lineRange": [
+        217,
+        234
+      ],
+      "summary": "Checks RapidAPI rate-limit headers against a configured safety margin and raises QuotaExhausted before further calls would exceed the plan's quota.",
+      "tags": [
+        "legacy",
+        "rate-limiting",
+        "guardrail"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/fetch_streaming_availability.py:probe",
+      "type": "function",
+      "name": "probe",
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "lineRange": [
+        237,
+        263
+      ],
+      "summary": "Issues a single probe request against a streaming-availability service endpoint and reports quota/response status, used for exploratory API testing.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/fetch_streaming_availability.py:fetch_service",
+      "type": "function",
+      "name": "fetch_service",
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "lineRange": [
+        266,
+        359
+      ],
+      "summary": "Core legacy fetch routine that pages through one streaming service's full catalog via the RapidAPI endpoint, applying the quota guardrail and retry logic.",
+      "tags": [
+        "legacy",
+        "pagination",
+        "api-client"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/fetch_streaming_availability.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/fetch_streaming_availability.py",
+      "lineRange": [
+        395,
+        511
+      ],
+      "summary": "CLI entry point for the legacy fetch script: parses arguments, iterates configured services/regions, and writes raw JSON dumps to disk for later processing.",
+      "tags": [
+        "legacy",
+        "entry-point",
+        "cli"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/finalize_probes.py",
+      "type": "file",
+      "name": "finalize_probes.py",
+      "filePath": "scripts/finalize_probes.py",
+      "summary": "One-off legacy script that folds ad-hoc JustWatch and open-datasets probe results into finalized JSON probe files, part of the retired exploratory data-collection phase and not used by the current build.",
+      "tags": [
+        "legacy",
+        "exploratory",
+        "data-pipeline"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/finalize_probes.py:update_justwatch_probe",
+      "type": "function",
+      "name": "update_justwatch_probe",
+      "filePath": "scripts/finalize_probes.py",
+      "lineRange": [
+        13,
+        72
+      ],
+      "summary": "Reads an existing JustWatch probe JSON dump and rewrites/normalizes it into the finalized probe format used by later analysis.",
+      "tags": [
+        "legacy",
+        "normalization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/finalize_probes.py:create_open_datasets_probe",
+      "type": "function",
+      "name": "create_open_datasets_probe",
+      "filePath": "scripts/finalize_probes.py",
+      "lineRange": [
+        74,
+        112
+      ],
+      "summary": "Builds a finalized probe JSON file summarizing findings from public open-dataset sources explored during the research phase.",
+      "tags": [
+        "legacy",
+        "data-pipeline"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/probe_aggregators.py",
+      "type": "file",
+      "name": "probe_aggregators.py",
+      "filePath": "scripts/probe_aggregators.py",
+      "summary": "Legacy exploratory script probing multiple third-party catalog-aggregator APIs (JustWatch, uNoGS, Streaming Availability, Watchmode, TMDB, Trakt/FlixPatrol/Reelgood) to evaluate them as data sources; a one-off research tool, not part of the current build.",
+      "tags": [
+        "legacy",
+        "exploratory",
+        "api-probe",
+        "research"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_aggregators.py:probe_justwatch",
+      "type": "function",
+      "name": "probe_justwatch",
+      "filePath": "scripts/probe_aggregators.py",
+      "lineRange": [
+        48,
+        96
+      ],
+      "summary": "Probes the JustWatch API/site for India catalog coverage and logs a sample of the response shape.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_aggregators.py:probe_unogs",
+      "type": "function",
+      "name": "probe_unogs",
+      "filePath": "scripts/probe_aggregators.py",
+      "lineRange": [
+        98,
+        132
+      ],
+      "summary": "Probes the uNoGS (unofficial Netflix Online Global Search) RapidAPI endpoint for India Netflix catalog data.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_aggregators.py:probe_tmdb",
+      "type": "function",
+      "name": "probe_tmdb",
+      "filePath": "scripts/probe_aggregators.py",
+      "lineRange": [
+        171,
+        190
+      ],
+      "summary": "Probes the TMDB discover/watch-providers endpoints as a candidate primary data source — ultimately the approach the project settled on for the current pipeline.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/probe_aggregators.py:probe_trakt_flixpatrol_reelgood",
+      "type": "function",
+      "name": "probe_trakt_flixpatrol_reelgood",
+      "filePath": "scripts/probe_aggregators.py",
+      "lineRange": [
+        192,
+        213
+      ],
+      "summary": "Probes Trakt, FlixPatrol, and Reelgood as potential supplementary ranking/availability data sources.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/probe_hoichoi.py",
+      "type": "file",
+      "name": "probe_hoichoi.py",
+      "filePath": "scripts/probe_hoichoi.py",
+      "summary": "Tiny one-off scraping probe that fetches and parses the Hoichoi (Bengali OTT service) shows grid to sanity-check whether the service's catalog is scrapeable; exploratory/legacy, not part of the build.",
+      "tags": [
+        "legacy",
+        "scraping",
+        "exploratory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/probe_hoichoi.py:scrape_hoichoi_shows",
+      "type": "function",
+      "name": "scrape_hoichoi_shows",
+      "filePath": "scripts/probe_hoichoi.py",
+      "lineRange": [
+        4,
+        21
+      ],
+      "summary": "Fetches the Hoichoi shows page and extracts a rough list of show titles via HTML parsing, to gauge catalog scrapeability.",
+      "tags": [
+        "legacy",
+        "scraping"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/probe_p1_catalog.py",
+      "type": "file",
+      "name": "probe_p1_catalog.py",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "summary": "Legacy exploratory script probing seven free/AVOD-style platforms (YouTube, Dailymotion, MX Player, global AVOD services, FAST channels, Archive.org, regional free platforms) as candidate free-content sources; one-off research tied to research/raw/ JSON dumps, not part of the current build.",
+      "tags": [
+        "legacy",
+        "exploratory",
+        "scraping",
+        "research"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_youtube",
+      "type": "function",
+      "name": "probe_youtube",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        16,
+        89
+      ],
+      "summary": "Probes YouTube for free movies/shows relevant to the India catalog as a candidate free-content source.",
+      "tags": [
+        "legacy",
+        "api-probe",
+        "scraping"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_dailymotion",
+      "type": "function",
+      "name": "probe_dailymotion",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        92,
+        144
+      ],
+      "summary": "Probes Dailymotion for relevant free video content as a candidate catalog source.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_mx_player",
+      "type": "function",
+      "name": "probe_mx_player",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        147,
+        200
+      ],
+      "summary": "Probes MX Player's catalog surface for scrapeable free-content listings.",
+      "tags": [
+        "legacy",
+        "scraping"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_global_avod",
+      "type": "function",
+      "name": "probe_global_avod",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        203,
+        266
+      ],
+      "summary": "Probes a set of global AVOD (ad-supported video-on-demand) services for India-relevant free content.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_fast_channels",
+      "type": "function",
+      "name": "probe_fast_channels",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        269,
+        324
+      ],
+      "summary": "Probes FAST (free ad-supported streaming TV) channel listings as a candidate data source.",
+      "tags": [
+        "legacy",
+        "scraping"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_archive_org",
+      "type": "function",
+      "name": "probe_archive_org",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        327,
+        387
+      ],
+      "summary": "Probes the Internet Archive (archive.org) for relevant free films/shows available to stream.",
+      "tags": [
+        "legacy",
+        "api-probe"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/probe_p1_catalog.py:probe_regional_free",
+      "type": "function",
+      "name": "probe_regional_free",
+      "filePath": "scripts/probe_p1_catalog.py",
+      "lineRange": [
+        390,
+        451
+      ],
+      "summary": "Probes a set of regional India-specific free-content platforms not covered by the other probes in this file.",
+      "tags": [
+        "legacy",
+        "scraping",
+        "research"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/probe_sonyliv.py",
+      "type": "file",
+      "name": "probe_sonyliv.py",
+      "filePath": "scripts/probe_sonyliv.py",
+      "summary": "Tiny legacy scraping probe that fetches the SonyLIV content container/grid to check whether the catalog is scrapeable; exploratory, not part of the build.",
+      "tags": [
+        "legacy",
+        "scraping",
+        "exploratory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/probe_sonyliv.py:scrape_sonyliv_container",
+      "type": "function",
+      "name": "scrape_sonyliv_container",
+      "filePath": "scripts/probe_sonyliv.py",
+      "lineRange": [
+        4,
+        24
+      ],
+      "summary": "Fetches a SonyLIV listing page and extracts titles from its content container markup.",
+      "tags": [
+        "legacy",
+        "scraping"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/probe_zee5.py",
+      "type": "file",
+      "name": "probe_zee5.py",
+      "filePath": "scripts/probe_zee5.py",
+      "summary": "Tiny legacy scraping probe that fetches the Zee5 shows grid to check whether the catalog is scrapeable; exploratory, not part of the build.",
+      "tags": [
+        "legacy",
+        "scraping",
+        "exploratory"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/probe_zee5.py:scrape_zee5_grid",
+      "type": "function",
+      "name": "scrape_zee5_grid",
+      "filePath": "scripts/probe_zee5.py",
+      "lineRange": [
+        4,
+        33
+      ],
+      "summary": "Fetches a Zee5 listing page and extracts titles from its grid markup.",
+      "tags": [
+        "legacy",
+        "scraping"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/unogs_dump_catalog.py",
+      "type": "file",
+      "name": "unogs_dump_catalog.py",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "summary": "Legacy/retired CLI that dumped a country's full Netflix catalog via the uNoGS RapidAPI service. Per the project README, no RapidAPI is used anywhere in the current pipeline — this script remains on disk for provenance only and is not part of the build or runtime flow.",
+      "tags": [
+        "legacy",
+        "retired",
+        "api-client",
+        "provenance"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:_http_get_json",
+      "type": "function",
+      "name": "_http_get_json",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        62,
+        99
+      ],
+      "summary": "Low-level HTTP GET helper for the uNoGS API with the RapidAPI key header, retry handling, and JSON decoding.",
+      "tags": [
+        "legacy",
+        "http-client"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:get_countries",
+      "type": "function",
+      "name": "get_countries",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        125,
+        141
+      ],
+      "summary": "Fetches and caches the uNoGS API's list of supported countries and their IDs/codes.",
+      "tags": [
+        "legacy",
+        "api-client"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:match_country",
+      "type": "function",
+      "name": "match_country",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        144,
+        157
+      ],
+      "summary": "Resolves a user-supplied country name or code to the matching uNoGS Country record.",
+      "tags": [
+        "legacy",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:_search_page",
+      "type": "function",
+      "name": "_search_page",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        160,
+        183
+      ],
+      "summary": "Fetches one page of uNoGS search results for a given country's Netflix catalog.",
+      "tags": [
+        "legacy",
+        "pagination",
+        "api-client"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:_canonicalize_title",
+      "type": "function",
+      "name": "_canonicalize_title",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        186,
+        202
+      ],
+      "summary": "Cleans and canonicalizes a raw uNoGS title string for consistent downstream matching and deduplication.",
+      "tags": [
+        "legacy",
+        "normalization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:dump_country_catalog",
+      "type": "function",
+      "name": "dump_country_catalog",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        205,
+        293
+      ],
+      "summary": "Pages through and dumps a country's entire Netflix catalog from uNoGS to a local JSON file, handling pagination and rate limits.",
+      "tags": [
+        "legacy",
+        "data-pipeline",
+        "api-client"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/unogs_dump_catalog.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/unogs_dump_catalog.py",
+      "lineRange": [
+        313,
+        351
+      ],
+      "summary": "CLI entry point for the legacy uNoGS dump script: parses country/output arguments and invokes dump_country_catalog.",
+      "tags": [
+        "legacy",
+        "entry-point",
+        "cli"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/js/catalog.js",
+      "type": "file",
+      "name": "catalog.js",
+      "filePath": "docs/js/catalog.js",
+      "summary": "Client-side inverted-index search engine for the India OTT catalog using BM25 scoring with title normalization, tokenization, indexing, full-text search, and structured record filtering.",
+      "tags": [
+        "utility",
+        "search",
+        "indexing",
+        "data-model",
+        "serialization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/catalog.js:normalizeTitle",
+      "type": "function",
+      "name": "normalizeTitle",
+      "filePath": "docs/js/catalog.js",
+      "lineRange": [
+        8,
+        11
+      ],
+      "summary": "Normalizes titles by stripping diacritics, lowercasing, and collapsing non-alphanumeric characters for consistent matching.",
+      "tags": [
+        "utility",
+        "normalization",
+        "search",
+        "text-processing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/catalog.js:tokenize",
+      "type": "function",
+      "name": "tokenize",
+      "filePath": "docs/js/catalog.js",
+      "lineRange": [
+        13,
+        17
+      ],
+      "summary": "Splits normalized text into search terms, dropping stop words and tokens shorter than two characters.",
+      "tags": [
+        "utility",
+        "tokenization",
+        "search",
+        "text-processing"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/catalog.js:buildIndex",
+      "type": "function",
+      "name": "buildIndex",
+      "filePath": "docs/js/catalog.js",
+      "lineRange": [
+        19,
+        41
+      ],
+      "summary": "Builds an inverted index with document frequency, postings lists, average document length, and vote metadata from catalog records.",
+      "tags": [
+        "indexing",
+        "search",
+        "data-model",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/catalog.js:search",
+      "type": "function",
+      "name": "search",
+      "filePath": "docs/js/catalog.js",
+      "lineRange": [
+        43,
+        68
+      ],
+      "summary": "Runs BM25 full-text search over the inverted index with optional allow-list filtering and vote-based score boosting.",
+      "tags": [
+        "search",
+        "ranking",
+        "utility",
+        "indexing"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/catalog.js:filterIndices",
+      "type": "function",
+      "name": "filterIndices",
+      "filePath": "docs/js/catalog.js",
+      "lineRange": [
+        70,
+        92
+      ],
+      "summary": "Returns record indices matching structured filters such as year, runtime, rating, provider, genre, language, and excluded titles.",
+      "tags": [
+        "filtering",
+        "validation",
+        "search",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:docs/js/tools.js",
+      "type": "file",
+      "name": "tools.js",
+      "filePath": "docs/js/tools.js",
+      "summary": "Factory that exposes LLM-callable tool schemas and handlers for searching, filtering, fetching, and sampling India OTT catalog titles via injected catalog dependencies.",
+      "tags": [
+        "api-handler",
+        "factory",
+        "agent-tools",
+        "search",
+        "validation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:docs/js/tools.js:createTools",
+      "type": "function",
+      "name": "createTools",
+      "filePath": "docs/js/tools.js",
+      "lineRange": [
+        15,
+        206
+      ],
+      "summary": "Creates OpenAI function-calling schemas and async handlers that delegate to injected search, filter, and record dependencies for four catalog operations.",
+      "tags": [
+        "factory",
+        "api-handler",
+        "agent-tools",
+        "search",
+        "validation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/check_tools.mjs",
+      "type": "file",
+      "name": "check_tools.mjs",
+      "filePath": "scripts/check_tools.mjs",
+      "summary": "Integration test script validating createTools handlers against a fixture catalog, covering search, filter, get, and sample operations plus schema shape.",
+      "tags": [
+        "test",
+        "validation",
+        "integration-test",
+        "agent-tools"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/stress_search_perf.mjs",
+      "type": "file",
+      "name": "stress_search_perf.mjs",
+      "filePath": "scripts/stress_search_perf.mjs",
+      "summary": "Performance regression script that loads the full catalog JSON and asserts index build time, heap retention, and query latency percentiles stay within thresholds.",
+      "tags": [
+        "test",
+        "performance",
+        "benchmark",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:docs/js/exporters.js",
+      "type": "file",
+      "name": "exporters.js",
+      "filePath": "docs/js/exporters.js",
+      "summary": "Pure export formatters that convert search pick arrays into Markdown, JSON, CSV, and You.md strings without DOM or external dependencies.",
+      "tags": [
+        "utility",
+        "serialization",
+        "export",
+        "formatting"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Side-effect-free module with provider label lookup tables and CSV escaping helpers."
+    },
+    {
+      "id": "function:docs/js/exporters.js:toMarkdown",
+      "type": "function",
+      "name": "toMarkdown",
+      "filePath": "docs/js/exporters.js",
+      "lineRange": [
+        55,
+        73
+      ],
+      "summary": "Renders ranked watch picks as a Markdown document with numbered titles, metadata facts, provider links, and reasons.",
+      "tags": [
+        "serialization",
+        "markdown",
+        "export"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/exporters.js:toJson",
+      "type": "function",
+      "name": "toJson",
+      "filePath": "docs/js/exporters.js",
+      "lineRange": [
+        75,
+        78
+      ],
+      "summary": "Serializes picks and query metadata to a pretty-printed JSON string for download.",
+      "tags": [
+        "serialization",
+        "json",
+        "export"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/exporters.js:toCsv",
+      "type": "function",
+      "name": "toCsv",
+      "filePath": "docs/js/exporters.js",
+      "lineRange": [
+        89,
+        102
+      ],
+      "summary": "Builds a CSV export with header row and escaped fields for titles, genres, providers, and streaming URLs.",
+      "tags": [
+        "serialization",
+        "csv",
+        "export"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/exporters.js:toYouMd",
+      "type": "function",
+      "name": "toYouMd",
+      "filePath": "docs/js/exporters.js",
+      "lineRange": [
+        104,
+        116
+      ],
+      "summary": "Appends a Recently watched section to a You.md profile from parsed Netflix history series and movie lists.",
+      "tags": [
+        "serialization",
+        "markdown",
+        "export",
+        "history"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:docs/js/ui.js",
+      "type": "file",
+      "name": "ui.js",
+      "filePath": "docs/js/ui.js",
+      "summary": "Main browser UI controller that loads catalog data, wires search and settings dialogs, renders result cards, and orchestrates the LLM agent with export and facet filtering.",
+      "tags": [
+        "entry-point",
+        "component",
+        "event-handler",
+        "dom"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Large imperative DOM module with module-level state for catalog index, picks, and localStorage-backed settings."
+    },
+    {
+      "id": "function:docs/js/ui.js:collectDom",
+      "type": "function",
+      "name": "collectDom",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        130,
+        143
+      ],
+      "summary": "Resolves required DOM element IDs into a camelCase property map and logs missing nodes.",
+      "tags": [
+        "dom",
+        "initialization",
+        "utility"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:buildPoster",
+      "type": "function",
+      "name": "buildPoster",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        200,
+        213
+      ],
+      "summary": "Creates a poster image element or initials fallback placeholder for a result card.",
+      "tags": [
+        "dom",
+        "component",
+        "rendering"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:metaLine",
+      "type": "function",
+      "name": "metaLine",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        215,
+        226
+      ],
+      "summary": "Builds a metadata line element showing year, runtime, rating, and kind for a pick.",
+      "tags": [
+        "dom",
+        "component",
+        "rendering"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:linkRow",
+      "type": "function",
+      "name": "linkRow",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        228,
+        244
+      ],
+      "summary": "Renders a row of streaming provider links with human-readable labels for a pick.",
+      "tags": [
+        "dom",
+        "component",
+        "rendering"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:buildCard",
+      "type": "function",
+      "name": "buildCard",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        246,
+        274
+      ],
+      "summary": "Assembles a full result card DOM subtree with poster, title, metadata, reason, and provider links.",
+      "tags": [
+        "dom",
+        "component",
+        "rendering"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:renderPicks",
+      "type": "function",
+      "name": "renderPicks",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        276,
+        288
+      ],
+      "summary": "Clears the results container and appends one card per pick or a no-results message.",
+      "tags": [
+        "dom",
+        "rendering",
+        "event-handler"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:download",
+      "type": "function",
+      "name": "download",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        290,
+        301
+      ],
+      "summary": "Triggers a browser file download from an in-memory Blob with the given filename and MIME type.",
+      "tags": [
+        "utility",
+        "export",
+        "dom"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:scheduleIndex",
+      "type": "function",
+      "name": "scheduleIndex",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        319,
+        333
+      ],
+      "summary": "Defers catalog inverted-index construction to an idle callback or timeout so initial paint stays fast.",
+      "tags": [
+        "performance",
+        "catalog",
+        "initialization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:scheduleSidecar",
+      "type": "function",
+      "name": "scheduleSidecar",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        335,
+        360
+      ],
+      "summary": "Lazy-loads optional sidecar JSON data in the background after the main catalog is ready.",
+      "tags": [
+        "performance",
+        "catalog",
+        "initialization"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:makeTools",
+      "type": "function",
+      "name": "makeTools",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        370,
+        380
+      ],
+      "summary": "Constructs agent tool handlers bound to the current catalog index, facet filters, and deduplication keys.",
+      "tags": [
+        "factory",
+        "agent",
+        "catalog"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:hydrate",
+      "type": "function",
+      "name": "hydrate",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        382,
+        399
+      ],
+      "summary": "Enriches a compact agent result row with full catalog record fields from the in-memory records map.",
+      "tags": [
+        "utility",
+        "catalog",
+        "data-model"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:makeEventHandler",
+      "type": "function",
+      "name": "makeEventHandler",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        411,
+        438
+      ],
+      "summary": "Returns a callback that logs agent trace events, updates status notes, and renders incremental pick results.",
+      "tags": [
+        "event-handler",
+        "agent",
+        "rendering"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:onSubmit",
+      "type": "function",
+      "name": "onSubmit",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        440,
+        502
+      ],
+      "summary": "Handles search form submission by running the LLM agent or falling back to keyword search when no API key is configured.",
+      "tags": [
+        "event-handler",
+        "agent",
+        "entry-point"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:docs/js/ui.js:readHistoryFile",
+      "type": "function",
+      "name": "readHistoryFile",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        504,
+        521
+      ],
+      "summary": "Reads a Netflix viewing-history CSV upload, parses it, and displays a human-readable summary in the context dialog.",
+      "tags": [
+        "event-handler",
+        "history",
+        "validation"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:wireSettings",
+      "type": "function",
+      "name": "wireSettings",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        523,
+        544
+      ],
+      "summary": "Binds the LLM settings dialog open, save, and close handlers to localStorage via the store module.",
+      "tags": [
+        "event-handler",
+        "configuration",
+        "dom"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:wireContext",
+      "type": "function",
+      "name": "wireContext",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        546,
+        572
+      ],
+      "summary": "Wires the You.md and Netflix history context dialog for file upload, preview, and persistence.",
+      "tags": [
+        "event-handler",
+        "configuration",
+        "history"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:fillSelect",
+      "type": "function",
+      "name": "fillSelect",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        574,
+        588
+      ],
+      "summary": "Populates a facet select element with placeholder and labeled option values.",
+      "tags": [
+        "dom",
+        "utility",
+        "rendering"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:fillCatalogDetail",
+      "type": "function",
+      "name": "fillCatalogDetail",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        600,
+        609
+      ],
+      "summary": "Updates the catalog status detail line with region, build timestamp, and record count.",
+      "tags": [
+        "dom",
+        "rendering",
+        "catalog"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:docs/js/ui.js:wireExports",
+      "type": "function",
+      "name": "wireExports",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        622,
+        641
+      ],
+      "summary": "Attaches click handlers to export buttons that download picks as Markdown, JSON, CSV, or You.md.",
+      "tags": [
+        "event-handler",
+        "export",
+        "dom"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:loadData",
+      "type": "function",
+      "name": "loadData",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        643,
+        662
+      ],
+      "summary": "Fetches catalog records and metadata JSON, builds the records lookup map, and populates facet controls.",
+      "tags": [
+        "initialization",
+        "catalog",
+        "data-loading"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/ui.js:init",
+      "type": "function",
+      "name": "init",
+      "filePath": "docs/js/ui.js",
+      "lineRange": [
+        664,
+        706
+      ],
+      "summary": "Bootstraps the application by collecting DOM refs, wiring all event handlers, loading catalog data, and scheduling background index builds.",
+      "tags": [
+        "entry-point",
+        "initialization",
+        "event-handler"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/check_exporters.mjs",
+      "type": "file",
+      "name": "check_exporters.mjs",
+      "filePath": "scripts/check_exporters.mjs",
+      "summary": "Node.js assertion script that validates Markdown, JSON, CSV, and You.md export output from sample picks including edge cases like quoted titles and null fields.",
+      "tags": [
+        "test",
+        "validation",
+        "export"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/js/agent.js",
+      "type": "file",
+      "name": "agent.js",
+      "filePath": "docs/js/agent.js",
+      "summary": "Browser- and Node-compatible LLM agent loop that plans OTT searches via tool-calling, reranks model picks against the catalog, and emits lifecycle events. Fetch is injected (no DOM or localStorage) so the same module runs under Node test harnesses.",
+      "tags": [
+        "agent",
+        "llm",
+        "tool-calling",
+        "service",
+        "event-handler"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Dependency-free ES module: no imports; fetchImpl and onEvent are injected at runtime for testability."
+    },
+    {
+      "id": "function:docs/js/agent.js:callLlm",
+      "type": "function",
+      "name": "callLlm",
+      "filePath": "docs/js/agent.js",
+      "lineRange": [
+        22,
+        40
+      ],
+      "summary": "Posts a non-streaming chat-completions request to the configured OpenAI-compatible endpoint, mapping HTTP error statuses to typed error codes (auth, credit, rate, context, network).",
+      "tags": [
+        "llm",
+        "api-handler",
+        "error-handling"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/agent.js:buildContextBlock",
+      "type": "function",
+      "name": "buildContextBlock",
+      "filePath": "docs/js/agent.js",
+      "lineRange": [
+        42,
+        59
+      ],
+      "summary": "Serializes viewer mood, You.md profile text, and recently-watched history into a markdown system-context block appended to the agent's message stack.",
+      "tags": [
+        "context",
+        "serialization",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/agent.js:runAgent",
+      "type": "function",
+      "name": "runAgent",
+      "filePath": "docs/js/agent.js",
+      "lineRange": [
+        79,
+        222
+      ],
+      "summary": "Main exported agent orchestrator: validates API key, runs a budgeted tool-calling loop against injected catalog tools, reranks final picks via a second LLM call, resolves title metadata, and streams status/delta/done/error events.",
+      "tags": [
+        "agent",
+        "entry-point",
+        "tool-calling",
+        "orchestration"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "file:scripts/check_agent.mjs",
+      "type": "file",
+      "name": "check_agent.mjs",
+      "filePath": "scripts/check_agent.mjs",
+      "summary": "Dependency-free smoke test run with node that mocks fetch and exercises runAgent across four scenarios: happy-path tool calling with pick resolution, HTTP error-code mapping, missing API key rejection, and abort-signal handling.",
+      "tags": [
+        "test",
+        "smoke-test",
+        "dev-tooling"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/stress_agent_hostile.mjs",
+      "type": "file",
+      "name": "stress_agent_hostile.mjs",
+      "filePath": "scripts/stress_agent_hostile.mjs",
+      "summary": "Hostile-input stress harness for the agent loop with fully mocked fetch (zero network calls). Runs twelve failure-mode cases covering auth/credit/rate/network errors, abort, truncated JSON, infinite tool-call loops, oversized queries, prompt injection in tool results, unicode queries, and malformed API responses.",
+      "tags": [
+        "test",
+        "stress-test",
+        "dev-tooling",
+        "validation"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/stress_agent_hostile.mjs:makeTools",
+      "type": "function",
+      "name": "makeTools",
+      "filePath": "scripts/stress_agent_hostile.mjs",
+      "lineRange": [
+        46,
+        73
+      ],
+      "summary": "Builds a minimal tools object with search_titles and get_titles handlers and schemas, accepting optional handler overrides for per-case hostile scenarios.",
+      "tags": [
+        "test",
+        "factory",
+        "agent-tools"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/stress_agent_hostile.mjs:happyFetch",
+      "type": "function",
+      "name": "happyFetch",
+      "filePath": "scripts/stress_agent_hostile.mjs",
+      "lineRange": [
+        75,
+        105
+      ],
+      "summary": "Returns a counted mock fetch that replays a three-step happy-path LLM response sequence: tool call, interim text, and final JSON picks payload.",
+      "tags": [
+        "test",
+        "mock",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/stress_agent_hostile.mjs:drive",
+      "type": "function",
+      "name": "drive",
+      "filePath": "scripts/stress_agent_hostile.mjs",
+      "lineRange": [
+        107,
+        120
+      ],
+      "summary": "Test helper that invokes runAgent with default config/prompts, collects emitted events, and returns both the event log and result object for assertion.",
+      "tags": [
+        "test",
+        "utility",
+        "orchestration"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/js/store.js",
+      "type": "file",
+      "name": "store.js",
+      "filePath": "docs/js/store.js",
+      "summary": "Wraps a pluggable storage backend (e.g. browser localStorage) with a `createStore` factory exposing typed getters/setters for the LLM connection config, the You.md taste-profile text, and watch history, all with defensive parse/serialize error handling.",
+      "tags": [
+        "local-storage",
+        "factory",
+        "persistence",
+        "state-management",
+        "utility"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:docs/js/store.js:createStore",
+      "type": "function",
+      "name": "createStore",
+      "filePath": "docs/js/store.js",
+      "lineRange": [
+        33,
+        145
+      ],
+      "summary": "Factory that closes over a storage backend and returns an object with getLlm/setLlm, getYouMd/setYouMd, getHistory/setHistory, clearAll, and hasKey methods, each guarding storage access and JSON parsing with try/catch fallbacks.",
+      "tags": [
+        "factory",
+        "closure",
+        "persistence",
+        "error-handling"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/check_store.mjs",
+      "type": "file",
+      "name": "check_store.mjs",
+      "filePath": "scripts/check_store.mjs",
+      "summary": "Dev-only smoke test that exercises `createStore` against an in-memory mock storage, asserting default values, round-trip persistence, and recovery from corrupt JSON.",
+      "tags": [
+        "test",
+        "smoke-test",
+        "dev-only",
+        "assertions"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:scripts/stress_agent_live.mjs",
+      "type": "file",
+      "name": "stress_agent_live.mjs",
+      "filePath": "scripts/stress_agent_live.mjs",
+      "summary": "CLI stress harness that runs a fixed list of India-OTT queries through the live agent loop against the real OpenRouter API, reporting pass/fail, token usage, and timing; skips (exit 1) when no API key is available so it is safe in CI.",
+      "tags": [
+        "integration-test",
+        "stress-test",
+        "cli",
+        "live-api"
+      ],
+      "complexity": "moderate",
+      "languageNotes": "Resolves the API key from process.env first, then falls back to manually parsing the root .env file, avoiding a dotenv dependency for a single-value lookup."
+    },
+    {
+      "id": "function:scripts/stress_agent_live.mjs:parseLimit",
+      "type": "function",
+      "name": "parseLimit",
+      "filePath": "scripts/stress_agent_live.mjs",
+      "lineRange": [
+        17,
+        26
+      ],
+      "summary": "Parses an optional `--limit N` CLI argument, validating it as a positive integer and exiting the process with an error on malformed input.",
+      "tags": [
+        "cli",
+        "argument-parsing",
+        "validation"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/stress_agent_live.mjs:readKeyFromEnvFile",
+      "type": "function",
+      "name": "readKeyFromEnvFile",
+      "filePath": "scripts/stress_agent_live.mjs",
+      "lineRange": [
+        28,
+        51
+      ],
+      "summary": "Asynchronously reads a `.env`-style file and extracts the `OPENROUTER_API_KEY` value by manually scanning lines, stripping surrounding quotes per dotenv convention, and returning an empty string if the file or key is missing.",
+      "tags": [
+        "env-parsing",
+        "utility",
+        "async"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:CHANGELOG.md",
+      "type": "document",
+      "name": "CHANGELOG.md",
+      "filePath": "CHANGELOG.md",
+      "summary": "v0.1.0 release notes covering India OTT search features, TMDB catalog union, BM25 ranking, export formats, and verification results from offline and live agent stress suites.",
+      "tags": [
+        "documentation",
+        "changelog",
+        "release-notes",
+        "verification"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:CONTRACT.md",
+      "type": "document",
+      "name": "CONTRACT.md",
+      "filePath": "CONTRACT.md",
+      "summary": "Frozen data contract defining Title records, catalog JSON schemas, provider registry, search index shape, storage keys, agent event types, tool names, and DOM IDs that every browser module must conform to without breaking consumers.",
+      "tags": [
+        "documentation",
+        "schema-definition",
+        "api-contract",
+        "data-model"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "document:README.md",
+      "type": "document",
+      "name": "README.md",
+      "filePath": "README.md",
+      "summary": "Project overview for the static BYOK India OTT search app: architecture rationale, local setup, catalog rebuild pipeline, module check commands, repo layout, and TMDB attribution requirements.",
+      "tags": [
+        "documentation",
+        "entry-point",
+        "overview",
+        "getting-started"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "document:RELEASE_CHECKLIST.md",
+      "type": "document",
+      "name": "RELEASE_CHECKLIST.md",
+      "filePath": "RELEASE_CHECKLIST.md",
+      "summary": "Pre-release checklist for v0.1.0 covering token rotation, redistribution rights, secret scanning, catalog validation, module checks, stress suites, browser smoke test, payload size limit, and GitHub Pages deployment.",
+      "tags": [
+        "documentation",
+        "release-process",
+        "deployment",
+        "verification"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "document:USER_GUIDE.md",
+      "type": "document",
+      "name": "USER_GUIDE.md",
+      "filePath": "USER_GUIDE.md",
+      "summary": "End-user guide explaining how to configure an LLM key, ask natural-language search queries, use mood/language/genre/provider filters, import taste context, interpret results, export picks, and troubleshoot common errors.",
+      "tags": [
+        "documentation",
+        "user-guide",
+        "onboarding",
+        "privacy"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:docs/assets/catalog.json",
+      "type": "config",
+      "name": "catalog.json",
+      "filePath": "docs/assets/catalog.json",
+      "summary": "Shipped India OTT title catalog (schema v2) with embedded metadata and 31,884 compact Title records used as the primary runtime data source for search, filtering, and agent tool lookups.",
+      "tags": [
+        "configuration",
+        "data-pipeline",
+        "catalog",
+        "search",
+        "serialization"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Minified single-line JSON with short field keys (t, y, k, rt, p, l, g) to keep the static payload under GitHub Pages limits."
+    },
+    {
+      "id": "config:docs/assets/catalog.meta.json",
+      "type": "config",
+      "name": "catalog.meta.json",
+      "filePath": "docs/assets/catalog.meta.json",
+      "summary": "Standalone catalog metadata snapshot listing region, build timestamp, title count, provider registry, supported languages and genres, and a pointer to the synopsis sidecar file.",
+      "tags": [
+        "configuration",
+        "metadata",
+        "catalog",
+        "schema-definition",
+        "providers"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "config:docs/assets/catalog.text.json",
+      "type": "config",
+      "name": "catalog.text.json",
+      "filePath": "docs/assets/catalog.text.json",
+      "summary": "Lazy-loaded synopsis sidecar mapping catalog ids to plot text for semantic BM25 search; merged into in-memory records after the main catalog loads.",
+      "tags": [
+        "configuration",
+        "search",
+        "text-index",
+        "catalog",
+        "data-pipeline"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Stores ~30k synopsis strings under an id-keyed map (s) separate from the main catalog to defer download cost until idle time."
+    },
+    {
+      "id": "config:docs/assets/prompts.json",
+      "type": "config",
+      "name": "prompts.json",
+      "filePath": "docs/assets/prompts.json",
+      "summary": "Versioned LLM prompt templates defining the agent system role, search planner instructions, JSON rerank schema, and no-results fallback message for India OTT recommendations.",
+      "tags": [
+        "configuration",
+        "prompts",
+        "agent-tools",
+        "llm",
+        "recommendations"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "file:docs/css/app.css",
+      "type": "file",
+      "name": "app.css",
+      "filePath": "docs/css/app.css",
+      "summary": "Stylesheet for the India OTT Search static app shell, defining dark/light theme tokens, layout for the search form, results cards, dialogs, and responsive toolbar.",
+      "tags": [
+        "markup",
+        "stylesheet",
+        "ui",
+        "theme",
+        "component"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Uses CSS custom properties with prefers-color-scheme for automatic light/dark theming."
+    },
+    {
+      "id": "file:docs/index.html",
+      "type": "file",
+      "name": "index.html",
+      "filePath": "docs/index.html",
+      "summary": "Static app shell entry point for India OTT Search: search form, settings/context dialogs, export controls, and the module script bootstrap for client-side catalog search.",
+      "tags": [
+        "entry-point",
+        "markup",
+        "ui",
+        "static-site",
+        "component"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/build_catalog_tmdb.py",
+      "type": "file",
+      "name": "build_catalog_tmdb.py",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "summary": "Build pipeline that merges TMDB India sweep data from catalog.db with the legacy uNoGS catalog into schema-2 docs/assets/catalog.json, applying CONTRACT.md id grammar, dedup, and provider rules.",
+      "tags": [
+        "data-pipeline",
+        "catalog",
+        "build-system",
+        "tmdb",
+        "python"
+      ],
+      "complexity": "complex",
+      "languageNotes": "Imports catalog.py helpers for TMDB token acquisition and SQLite locking; writes gzipped-size-checked JSON outputs."
+    },
+    {
+      "id": "file:scripts/scan_secrets.sh",
+      "type": "file",
+      "name": "scan_secrets.sh",
+      "filePath": "scripts/scan_secrets.sh",
+      "summary": "Security script that scans tracked and untracked source files for common API key and JWT patterns, excluding catalog assets and .env, and verifies .env is gitignored.",
+      "tags": [
+        "security",
+        "script",
+        "validation",
+        "secrets-scan"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/stress_catalog_data.mjs",
+      "type": "file",
+      "name": "stress_catalog_data.mjs",
+      "filePath": "scripts/stress_catalog_data.mjs",
+      "summary": "Node.js stress checker that loads catalog.json and reports violations of CONTRACT.md field constraints: HTML entities, image hosts, URL shapes, genres, providers, duplicate keys, and ID grammar.",
+      "tags": [
+        "validation",
+        "test",
+        "catalog",
+        "data-quality"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "file:scripts/validate_catalog.py",
+      "type": "file",
+      "name": "validate_catalog.py",
+      "filePath": "scripts/validate_catalog.py",
+      "summary": "CLI validator for built OTT catalog JSON and companion catalog.text.json, enforcing schema-2 document shape, record key order, field types, and cross-file ID consistency.",
+      "tags": [
+        "validation",
+        "catalog",
+        "test",
+        "python",
+        "schema-definition"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:tmdb_get",
+      "type": "function",
+      "name": "tmdb_get",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        134,
+        152
+      ],
+      "summary": "Performs authenticated TMDB REST GET requests via curl subprocess with retry/backoff for rate limits.",
+      "tags": [
+        "api-handler",
+        "tmdb",
+        "network",
+        "retry"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:fetch_genre_maps",
+      "type": "function",
+      "name": "fetch_genre_maps",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        155,
+        167
+      ],
+      "summary": "Fetches TMDB movie and TV genre id-to-name maps at build time using the shared catalog token.",
+      "tags": [
+        "tmdb",
+        "data-pipeline",
+        "catalog"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:load_tmdb",
+      "type": "function",
+      "name": "load_tmdb",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        170,
+        236
+      ],
+      "summary": "Reads catalog.db SQLite tables and transforms TMDB title and availability rows into in-memory catalog records with clamped metadata.",
+      "tags": [
+        "data-pipeline",
+        "sqlite",
+        "catalog",
+        "transform"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:watch_url",
+      "type": "function",
+      "name": "watch_url",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        239,
+        246
+      ],
+      "summary": "Builds provider watch URLs from curated slug templates or falls back to TMDB watch-provider links.",
+      "tags": [
+        "utility",
+        "url",
+        "providers"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:provider_rank",
+      "type": "function",
+      "name": "provider_rank",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        249,
+        256
+      ],
+      "summary": "Sorts provider slugs on a record by TMDB display_priority for stable output ordering.",
+      "tags": [
+        "utility",
+        "providers",
+        "sorting"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:dedupe_records",
+      "type": "function",
+      "name": "dedupe_records",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        259,
+        317
+      ],
+      "summary": "Deduplicates catalog records by normalized title/year/kind, merging Netflix deep links and provider slugs from dropped duplicates.",
+      "tags": [
+        "data-pipeline",
+        "dedup",
+        "catalog"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        320,
+        501
+      ],
+      "summary": "Orchestrates the full catalog build: loads TMDB and legacy uNoGS data, merges providers, dedupes, validates skip limits, and writes catalog.json, catalog.text.json, and catalog.meta.json.",
+      "tags": [
+        "entry-point",
+        "data-pipeline",
+        "catalog",
+        "build-system"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:find_unmatched_non_netflix",
+      "type": "function",
+      "name": "find_unmatched_non_netflix",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        504,
+        523
+      ],
+      "summary": "Identifies legacy uNoGS records from non-Netflix providers that failed to match any TMDB-side record during merge.",
+      "tags": [
+        "utility",
+        "catalog",
+        "merge"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/build_catalog_tmdb.py:backfill",
+      "type": "function",
+      "name": "backfill",
+      "filePath": "scripts/build_catalog_tmdb.py",
+      "lineRange": [
+        526,
+        641
+      ],
+      "summary": "Resolves unmatched uNoGS titles via TMDB find API and backfills catalog.db with fetched title and availability rows under a SQLite lock.",
+      "tags": [
+        "data-pipeline",
+        "tmdb",
+        "sqlite",
+        "backfill"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/scan_secrets.sh:scan",
+      "type": "function",
+      "name": "scan",
+      "filePath": "scripts/scan_secrets.sh",
+      "lineRange": [
+        47,
+        64
+      ],
+      "summary": "Runs a grep pattern across all candidate repo files and records file:line hits without printing matched secret content.",
+      "tags": [
+        "security",
+        "validation",
+        "grep"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/validate_catalog.py:_validate_record",
+      "type": "function",
+      "name": "_validate_record",
+      "filePath": "scripts/validate_catalog.py",
+      "lineRange": [
+        39,
+        113
+      ],
+      "summary": "Validates a single catalog record object against CONTRACT.md field types, key order, ID grammar, and URL/image constraints.",
+      "tags": [
+        "validation",
+        "catalog",
+        "schema-definition"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/validate_catalog.py:validate",
+      "type": "function",
+      "name": "validate",
+      "filePath": "scripts/validate_catalog.py",
+      "lineRange": [
+        116,
+        184
+      ],
+      "summary": "Validates a full schema-2 catalog document including meta block, filters, record list, and duplicate ID detection.",
+      "tags": [
+        "validation",
+        "catalog",
+        "schema-definition"
+      ],
+      "complexity": "complex"
+    },
+    {
+      "id": "function:scripts/validate_catalog.py:validate_text",
+      "type": "function",
+      "name": "validate_text",
+      "filePath": "scripts/validate_catalog.py",
+      "lineRange": [
+        187,
+        214
+      ],
+      "summary": "Validates catalog.text.json synopsis sidecar, ensuring IDs match the main catalog and synopsis strings are non-empty.",
+      "tags": [
+        "validation",
+        "catalog",
+        "text"
+      ],
+      "complexity": "moderate"
+    },
+    {
+      "id": "function:scripts/validate_catalog.py:_load_json",
+      "type": "function",
+      "name": "_load_json",
+      "filePath": "scripts/validate_catalog.py",
+      "lineRange": [
+        217,
+        225
+      ],
+      "summary": "Loads and parses a JSON file from disk, surfacing parse errors to stderr.",
+      "tags": [
+        "utility",
+        "serialization"
+      ],
+      "complexity": "simple"
+    },
+    {
+      "id": "function:scripts/validate_catalog.py:main",
+      "type": "function",
+      "name": "main",
+      "filePath": "scripts/validate_catalog.py",
+      "lineRange": [
+        228,
+        283
+      ],
+      "summary": "CLI entry point that loads catalog.json (and optional catalog.text.json) and prints validation errors or success.",
+      "tags": [
+        "entry-point",
+        "validation",
+        "cli"
+      ],
+      "complexity": "moderate"
+    }
+  ],
+  "edges": [
+    {
+      "source": "file:scripts/check_history.mjs",
+      "target": "file:docs/js/history.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/history.js",
+      "target": "function:docs/js/history.js:parseCsv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/history.js",
+      "target": "function:docs/js/history.js:parseDate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/history.js",
+      "target": "function:docs/js/history.js:parseNetflixCsv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/history.js",
+      "target": "function:docs/js/history.js:summarize",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/history.js",
+      "target": "function:docs/js/history.js:parseNetflixCsv",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/history.js",
+      "target": "function:docs/js/history.js:summarize",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "document:research/CATALOG-STRATEGY.md",
+      "target": "document:research/india-ott-p0-catalog-scrape-playbook.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:research/CATALOG-STRATEGY.md",
+      "target": "document:research/india-ott-aggregators-coverage.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:research/CATALOG-STRATEGY.md",
+      "target": "document:research/india-ott-p1-free-firecrawl-playbook.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:research/CATALOG-STRATEGY.md",
+      "target": "file:scripts/fetch_streaming_availability.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:research/india-ott-aggregators-coverage.md",
+      "target": "file:scripts/unogs_dump_catalog.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/archive_org_india.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/dailymotion_india.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/fast_channels_india.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/global_avod_india_availability.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/mx_player.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/regional_free_shemaroo_hungama_jio.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:research/raw/p1/youtube_india.json",
+      "target": "file:scripts/probe_p1_catalog.py",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:get_token",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:build_shard_params",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:acquire_lock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:upsert_title",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:fetch_json",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:fetch_shard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:sweep_provider_media",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:cmd_sweep",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:_run_enrich",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:cmd_diff",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "function:catalog/catalog.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/smoke_test.py",
+      "target": "function:catalog/smoke_test.py:fake_overflow_shard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog.py",
+      "target": "function:scripts/build_catalog.py:normalize_unogs",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog.py",
+      "target": "function:scripts/build_catalog.py:_smallest_image",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog.py",
+      "target": "function:scripts/build_catalog.py:normalize_streaming_availability",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog.py",
+      "target": "function:scripts/build_catalog.py:_merge_records",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog.py",
+      "target": "function:scripts/build_catalog.py:build",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:catalog/smoke_test.py",
+      "target": "file:catalog/catalog.py",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:catalog/catalog.py",
+      "target": "file:catalog/smoke_test.py",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "function:catalog/smoke_test.py:fake_overflow_shard",
+      "target": "function:catalog/catalog.py:build_shard_params",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:catalog/smoke_test.py:fake_overflow_shard",
+      "target": "function:catalog/catalog.py:fetch_shard",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "document:catalog/README.md",
+      "target": "file:catalog/catalog.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "table:catalog/examples.sql:availability",
+      "target": "file:catalog/catalog.py",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:scripts/fetch_streaming_availability.py",
+      "target": "class:scripts/fetch_streaming_availability.py:ApiClient",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/fetch_streaming_availability.py",
+      "target": "function:scripts/fetch_streaming_availability.py:apply_quota_guardrail",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/fetch_streaming_availability.py",
+      "target": "function:scripts/fetch_streaming_availability.py:probe",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/fetch_streaming_availability.py",
+      "target": "function:scripts/fetch_streaming_availability.py:fetch_service",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/fetch_streaming_availability.py",
+      "target": "function:scripts/fetch_streaming_availability.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/finalize_probes.py",
+      "target": "function:scripts/finalize_probes.py:update_justwatch_probe",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/finalize_probes.py",
+      "target": "function:scripts/finalize_probes.py:create_open_datasets_probe",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_aggregators.py",
+      "target": "function:scripts/probe_aggregators.py:probe_justwatch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_aggregators.py",
+      "target": "function:scripts/probe_aggregators.py:probe_unogs",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_aggregators.py",
+      "target": "function:scripts/probe_aggregators.py:probe_tmdb",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_aggregators.py",
+      "target": "function:scripts/probe_aggregators.py:probe_trakt_flixpatrol_reelgood",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_hoichoi.py",
+      "target": "function:scripts/probe_hoichoi.py:scrape_hoichoi_shows",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_youtube",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_dailymotion",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_mx_player",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_global_avod",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_fast_channels",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_archive_org",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_p1_catalog.py",
+      "target": "function:scripts/probe_p1_catalog.py:probe_regional_free",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_sonyliv.py",
+      "target": "function:scripts/probe_sonyliv.py:scrape_sonyliv_container",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/probe_zee5.py",
+      "target": "function:scripts/probe_zee5.py:scrape_zee5_grid",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:_http_get_json",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:get_countries",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:match_country",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:_search_page",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:_canonicalize_title",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:dump_country_catalog",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/unogs_dump_catalog.py",
+      "target": "function:scripts/unogs_dump_catalog.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:normalizeTitle",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:tokenize",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:buildIndex",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:search",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:filterIndices",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:normalizeTitle",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:tokenize",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:buildIndex",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:search",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/catalog.js",
+      "target": "function:docs/js/catalog.js:filterIndices",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/tools.js",
+      "target": "function:docs/js/tools.js:createTools",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/tools.js",
+      "target": "function:docs/js/tools.js:createTools",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_tools.mjs",
+      "target": "file:docs/js/catalog.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/check_tools.mjs",
+      "target": "file:docs/js/tools.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/stress_search_perf.mjs",
+      "target": "file:docs/js/catalog.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "function:docs/js/tools.js:createTools",
+      "target": "function:docs/js/catalog.js:filterIndices",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/tools.js:createTools",
+      "target": "function:docs/js/catalog.js:search",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toMarkdown",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toJson",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toCsv",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toYouMd",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toMarkdown",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toJson",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toCsv",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/exporters.js",
+      "target": "function:docs/js/exporters.js:toYouMd",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "file:docs/js/agent.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "file:docs/js/catalog.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "file:docs/js/exporters.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "file:docs/js/history.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "file:docs/js/store.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "file:docs/js/tools.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:collectDom",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:buildPoster",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:metaLine",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:linkRow",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:buildCard",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:renderPicks",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:download",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:scheduleIndex",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:scheduleSidecar",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:makeTools",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:hydrate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:makeEventHandler",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:onSubmit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:readHistoryFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:wireSettings",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:wireContext",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:fillSelect",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:fillCatalogDetail",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:wireExports",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:loadData",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/ui.js",
+      "target": "function:docs/js/ui.js:init",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "function:docs/js/ui.js:scheduleIndex",
+      "target": "function:docs/js/catalog.js:buildIndex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:makeTools",
+      "target": "function:docs/js/tools.js:createTools",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:makeTools",
+      "target": "function:docs/js/catalog.js:filterIndices",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:onSubmit",
+      "target": "function:docs/js/agent.js:runAgent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:readHistoryFile",
+      "target": "function:docs/js/history.js:parseNetflixCsv",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:readHistoryFile",
+      "target": "function:docs/js/history.js:summarize",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:wireExports",
+      "target": "function:docs/js/exporters.js:toMarkdown",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:wireExports",
+      "target": "function:docs/js/exporters.js:toJson",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:wireExports",
+      "target": "function:docs/js/exporters.js:toCsv",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:docs/js/ui.js:wireExports",
+      "target": "function:docs/js/exporters.js:toYouMd",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_exporters.mjs",
+      "target": "file:docs/js/exporters.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/check_exporters.mjs",
+      "target": "function:docs/js/exporters.js:toMarkdown",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_exporters.mjs",
+      "target": "function:docs/js/exporters.js:toJson",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_exporters.mjs",
+      "target": "function:docs/js/exporters.js:toCsv",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_exporters.mjs",
+      "target": "function:docs/js/exporters.js:toYouMd",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:docs/js/agent.js",
+      "target": "function:docs/js/agent.js:callLlm",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/agent.js",
+      "target": "function:docs/js/agent.js:buildContextBlock",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/agent.js",
+      "target": "function:docs/js/agent.js:runAgent",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/agent.js",
+      "target": "function:docs/js/agent.js:runAgent",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/stress_agent_hostile.mjs",
+      "target": "function:scripts/stress_agent_hostile.mjs:makeTools",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/stress_agent_hostile.mjs",
+      "target": "function:scripts/stress_agent_hostile.mjs:happyFetch",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/stress_agent_hostile.mjs",
+      "target": "function:scripts/stress_agent_hostile.mjs:drive",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/check_agent.mjs",
+      "target": "file:docs/js/agent.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/stress_agent_hostile.mjs",
+      "target": "file:docs/js/agent.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/check_agent.mjs",
+      "target": "function:docs/js/agent.js:runAgent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/stress_agent_hostile.mjs:drive",
+      "target": "function:docs/js/agent.js:runAgent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_store.mjs",
+      "target": "file:docs/js/store.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "file:docs/js/agent.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "file:docs/js/catalog.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "file:docs/js/store.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "file:docs/js/tools.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7
+    },
+    {
+      "source": "file:docs/js/store.js",
+      "target": "function:docs/js/store.js:createStore",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:scripts/stress_agent_live.mjs:parseLimit",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:scripts/stress_agent_live.mjs:readKeyFromEnvFile",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:docs/js/store.js",
+      "target": "function:docs/js/store.js:createStore",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_store.mjs",
+      "target": "function:docs/js/store.js:createStore",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:docs/js/agent.js:runAgent",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:docs/js/tools.js:createTools",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:docs/js/catalog.js:buildIndex",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:docs/js/catalog.js:search",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/stress_agent_live.mjs",
+      "target": "function:docs/js/catalog.js:filterIndices",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "document:CHANGELOG.md",
+      "target": "file:docs/js/catalog.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CHANGELOG.md",
+      "target": "file:docs/js/agent.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CHANGELOG.md",
+      "target": "file:docs/js/exporters.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "file:docs/js/catalog.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "file:docs/js/store.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "file:docs/js/history.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "file:docs/js/tools.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "file:docs/js/agent.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "file:docs/js/ui.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/index.html",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/ui.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/catalog.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/history.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/tools.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/agent.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/store.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:docs/js/exporters.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:scripts/build_catalog_tmdb.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "file:catalog/catalog.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:CONTRACT.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:CHANGELOG.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:README.md",
+      "target": "document:RELEASE_CHECKLIST.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:RELEASE_CHECKLIST.md",
+      "target": "file:scripts/validate_catalog.py",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:RELEASE_CHECKLIST.md",
+      "target": "file:scripts/stress_agent_live.mjs",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:RELEASE_CHECKLIST.md",
+      "target": "document:CHANGELOG.md",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/js/ui.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/js/store.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/js/agent.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/js/history.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/js/exporters.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/js/catalog.js",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:USER_GUIDE.md",
+      "target": "file:docs/index.html",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:docs/assets/catalog.json",
+      "target": "file:docs/js/ui.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/catalog.json",
+      "target": "file:docs/js/catalog.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/catalog.meta.json",
+      "target": "file:docs/js/ui.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/catalog.text.json",
+      "target": "file:docs/js/ui.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/catalog.text.json",
+      "target": "file:docs/js/catalog.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/prompts.json",
+      "target": "file:docs/js/agent.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/prompts.json",
+      "target": "file:docs/js/ui.js",
+      "type": "configures",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/catalog.meta.json",
+      "target": "config:docs/assets/catalog.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:docs/assets/catalog.meta.json",
+      "target": "config:docs/assets/catalog.text.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:docs/assets/catalog.json",
+      "target": "config:docs/assets/catalog.text.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:docs/index.html",
+      "target": "file:docs/css/app.css",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:docs/index.html",
+      "target": "file:docs/js/ui.js",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "file:docs/css/app.css",
+      "target": "file:docs/index.html",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:tmdb_get",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:fetch_genre_maps",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:load_tmdb",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:watch_url",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:provider_rank",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:dedupe_records",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:find_unmatched_non_netflix",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:backfill",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/scan_secrets.sh",
+      "target": "function:scripts/scan_secrets.sh:scan",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:_validate_record",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:validate",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:validate_text",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:_load_json",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:main",
+      "type": "contains",
+      "direction": "forward",
+      "weight": 1
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:tmdb_get",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:fetch_genre_maps",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:load_tmdb",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:watch_url",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:provider_rank",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:dedupe_records",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:find_unmatched_non_netflix",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "function:scripts/build_catalog_tmdb.py:backfill",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:_validate_record",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:validate",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:validate_text",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:_load_json",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "function:scripts/validate_catalog.py:main",
+      "type": "exports",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:fetch_genre_maps",
+      "target": "function:scripts/build_catalog_tmdb.py:tmdb_get",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:main",
+      "target": "function:scripts/build_catalog_tmdb.py:fetch_genre_maps",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:main",
+      "target": "function:scripts/build_catalog_tmdb.py:load_tmdb",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:main",
+      "target": "function:scripts/build_catalog_tmdb.py:provider_rank",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:main",
+      "target": "function:scripts/build_catalog_tmdb.py:watch_url",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:main",
+      "target": "function:scripts/build_catalog_tmdb.py:dedupe_records",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:backfill",
+      "target": "function:scripts/build_catalog_tmdb.py:load_tmdb",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:backfill",
+      "target": "function:scripts/build_catalog_tmdb.py:find_unmatched_non_netflix",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/build_catalog_tmdb.py:backfill",
+      "target": "function:scripts/build_catalog_tmdb.py:tmdb_get",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/validate_catalog.py:validate",
+      "target": "function:scripts/validate_catalog.py:_validate_record",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/validate_catalog.py:main",
+      "target": "function:scripts/validate_catalog.py:validate",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/validate_catalog.py:main",
+      "target": "function:scripts/validate_catalog.py:validate_text",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "function:scripts/validate_catalog.py:main",
+      "target": "function:scripts/validate_catalog.py:_load_json",
+      "type": "calls",
+      "direction": "forward",
+      "weight": 0.8
+    },
+    {
+      "source": "file:scripts/check_catalog.mjs",
+      "target": "file:docs/js/catalog.js",
+      "type": "imports",
+      "direction": "forward",
+      "weight": 0.7,
+      "recoveredFromImportMap": true
+    },
+    {
+      "source": "document:CHANGELOG.md",
+      "target": "config:docs/assets/catalog.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "config:docs/assets/catalog.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:CONTRACT.md",
+      "target": "config:docs/assets/catalog.text.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "document:RELEASE_CHECKLIST.md",
+      "target": "config:docs/assets/catalog.json",
+      "type": "documents",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "config:docs/assets/catalog.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "config:docs/assets/catalog.text.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/build_catalog_tmdb.py",
+      "target": "config:docs/assets/catalog.meta.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "config:docs/assets/catalog.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/validate_catalog.py",
+      "target": "config:docs/assets/catalog.text.json",
+      "type": "related",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "file:scripts/stress_catalog_data.mjs",
+      "target": "config:docs/assets/catalog.json",
+      "type": "depends_on",
+      "direction": "forward",
+      "weight": 0.6
+    },
+    {
+      "source": "config:docs/assets/catalog.json",
+      "target": "file:scripts/validate_catalog.py",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    },
+    {
+      "source": "config:docs/assets/catalog.json",
+      "target": "file:scripts/stress_catalog_data.mjs",
+      "type": "tested_by",
+      "direction": "forward",
+      "weight": 0.5
+    }
+  ],
+  "layers": [
+    {
+      "id": "layer:frontend-app",
+      "name": "Frontend Application",
+      "description": "The entire backend-free static web app served from docs/ — the HTML shell, stylesheet, and seven import-free JavaScript modules (search index, agent loop, store, tools, history parser, exporters) orchestrated by ui.js.",
+      "nodeIds": [
+        "file:docs/index.html",
+        "file:docs/css/app.css",
+        "file:docs/.nojekyll",
+        "file:docs/js/ui.js",
+        "file:docs/js/catalog.js",
+        "file:docs/js/tools.js",
+        "file:docs/js/agent.js",
+        "file:docs/js/store.js",
+        "file:docs/js/history.js",
+        "file:docs/js/exporters.js"
+      ]
+    },
+    {
+      "id": "layer:shipped-catalog-data",
+      "name": "Shipped Catalog Data",
+      "description": "Build-time-generated JSON assets shipped to the browser: the lean catalog with synopses blanked, the synopsis sidecar, the meta object, and the LLM prompt templates used by the agent loop.",
+      "nodeIds": [
+        "config:docs/assets/catalog.json",
+        "config:docs/assets/catalog.text.json",
+        "config:docs/assets/catalog.meta.json",
+        "config:docs/assets/prompts.json"
+      ]
+    },
+    {
+      "id": "layer:catalog-pipeline",
+      "name": "Catalog Build Pipeline",
+      "description": "The active, current data pipeline: the TMDB sweep CLI that populates catalog.db, its smoke test, example SQL queries, and the build/validate scripts that union catalog.db with legacy dumps into the shipped catalog JSON.",
+      "nodeIds": [
+        "document:catalog/README.md",
+        "file:catalog/catalog.py",
+        "file:catalog/smoke_test.py",
+        "table:catalog/examples.sql:availability",
+        "file:scripts/build_catalog_tmdb.py",
+        "file:scripts/build_catalog.py",
+        "file:scripts/validate_catalog.py"
+      ]
+    },
+    {
+      "id": "layer:dev-tooling",
+      "name": "Dev Checks & Stress Suites",
+      "description": "Development-only Node.js smoke tests for each frontend module, adversarial and live-LLM stress suites for the agent/search/catalog code, and a standalone shell script that scans the repo for accidentally committed secrets.",
+      "nodeIds": [
+        "file:scripts/check_catalog.mjs",
+        "file:scripts/check_tools.mjs",
+        "file:scripts/check_exporters.mjs",
+        "file:scripts/check_history.mjs",
+        "file:scripts/check_agent.mjs",
+        "file:scripts/check_store.mjs",
+        "file:scripts/stress_search_perf.mjs",
+        "file:scripts/stress_agent_hostile.mjs",
+        "file:scripts/stress_agent_live.mjs",
+        "file:scripts/stress_catalog_data.mjs",
+        "file:scripts/scan_secrets.sh"
+      ]
+    },
+    {
+      "id": "layer:legacy-scrapers",
+      "name": "Legacy Scrapers & Probes",
+      "description": "Retired RapidAPI/scraper-based data-collection scripts (uNoGS, StreamingAvailability, and per-platform probes) explicitly called out in the README as kept on disk for provenance only — not part of the current build or runtime flow.",
+      "nodeIds": [
+        "file:scripts/fetch_streaming_availability.py",
+        "file:scripts/unogs_dump_catalog.py",
+        "file:scripts/probe_aggregators.py",
+        "file:scripts/probe_hoichoi.py",
+        "file:scripts/probe_p1_catalog.py",
+        "file:scripts/probe_sonyliv.py",
+        "file:scripts/probe_zee5.py",
+        "file:scripts/finalize_probes.py"
+      ]
+    },
+    {
+      "id": "layer:documentation",
+      "name": "Project Documentation",
+      "description": "Root-level documentation: the project README, the frozen data-contract spec every consumer relies on, the end-user guide for the deployed site, plus the CHANGELOG and release checklist for shipping new catalog builds.",
+      "nodeIds": [
+        "document:README.md",
+        "document:CONTRACT.md",
+        "document:USER_GUIDE.md",
+        "document:CHANGELOG.md",
+        "document:RELEASE_CHECKLIST.md"
+      ]
+    },
+    {
+      "id": "layer:research-provenance",
+      "name": "Research & Sourcing Provenance",
+      "description": "Historical sourcing-strategy write-ups and the raw JSON probe dumps they reference, evaluating third-party India-OTT-availability aggregators and per-platform data sources before the project settled on the TMDB-only pipeline.",
+      "nodeIds": [
+        "document:research/CATALOG-STRATEGY.md",
+        "document:research/india-ott-aggregators-coverage.md",
+        "document:research/india-ott-p0-catalog-scrape-playbook.md",
+        "document:research/india-ott-p1-free-firecrawl-playbook.md",
+        "config:research/raw/aggregators/justwatch_in_probe.json",
+        "config:research/raw/aggregators/justwatch_providers_in.json",
+        "config:research/raw/aggregators/justwatch_title_search_samples_in.json",
+        "config:research/raw/aggregators/open_datasets_probe.json",
+        "config:research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json",
+        "config:research/raw/aggregators/streaming_availability_countries_in.json",
+        "config:research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json",
+        "config:research/raw/aggregators/streaming_availability_search_in.json",
+        "config:research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json",
+        "config:research/raw/aggregators/streaming_availability_zee5_search_sample.json",
+        "config:research/raw/aggregators/tmdb_watch_providers_in.json",
+        "config:research/raw/aggregators/unogs_probe.json",
+        "config:research/raw/aggregators/watchmode_in_probe.json",
+        "config:research/raw/p0/aggregators.json",
+        "config:research/raw/p0/aha_ott.json",
+        "config:research/raw/p0/amazon_prime.json",
+        "config:research/raw/p0/apple_tv.json",
+        "config:research/raw/p0/hoichoi.json",
+        "config:research/raw/p0/jiohotstar.json",
+        "config:research/raw/p0/netflix_india.json",
+        "config:research/raw/p0/niche_platforms.json",
+        "config:research/raw/p0/sonyliv.json",
+        "config:research/raw/p0/sun_nxt.json",
+        "config:research/raw/p0/zee5.json",
+        "config:research/raw/p1/archive_org_india.json",
+        "config:research/raw/p1/dailymotion_india.json",
+        "config:research/raw/p1/fast_channels_india.json",
+        "config:research/raw/p1/global_avod_india_availability.json",
+        "config:research/raw/p1/mx_player.json",
+        "config:research/raw/p1/regional_free_shemaroo_hungama_jio.json",
+        "config:research/raw/p1/youtube_india.json"
+      ]
+    },
+    {
+      "id": "layer:fixtures-and-meta",
+      "name": "Fixtures & Repo Meta",
+      "description": "Small supporting artifacts: a sample Netflix viewing-history CSV fixture used for local testing, and the Understand-Anything analysis tool's own ignore-file configuration.",
+      "nodeIds": [
+        "table:data/fixtures/netflix_history_sample.csv:viewing_history",
+        "file:.ua/.understandignore"
+      ]
+    }
+  ],
+  "tour": [
+    {
+      "order": 1,
+      "title": "Project Overview",
+      "description": "Start with README.md to learn what India OTT Search is: a backend-free static site that ships an India streaming catalog snapshot and runs all search logic in the browser. The visitor brings their own LLM API key and optional taste context (You.md, Netflix watch history); nothing is stored on a server. This document also maps the repo layout and explains how to run the app locally and rebuild the catalog.",
+      "nodeIds": [
+        "document:README.md"
+      ]
+    },
+    {
+      "order": 2,
+      "title": "Static App Shell",
+      "description": "The deployed app lives entirely under docs/ and index.html is its entry point. The HTML defines the search form, settings and context dialogs, export controls, and the single module-script tag that bootstraps the client-side application. There is no build step — GitHub Pages serves these files as-is.",
+      "nodeIds": [
+        "file:docs/index.html"
+      ]
+    },
+    {
+      "order": 3,
+      "title": "UI Orchestrator",
+      "description": "ui.js is the only browser module that imports the others; every other JS file is import-free and receives dependencies as arguments. It loads the catalog JSON, wires keyword and LLM search, renders result cards with facet filters, opens settings dialogs, and coordinates exports. Fan-out analysis confirms this file sits at the center of the frontend — understanding it gives you a map of the whole runtime.",
+      "nodeIds": [
+        "file:docs/js/ui.js"
+      ]
+    },
+    {
+      "order": 4,
+      "title": "BM25 Search Engine",
+      "description": "catalog.js implements the client-side inverted index that powers keyword search over ~32k India OTT titles. It tokenizes and normalizes titles, builds a BM25 index (including lazy-loaded synopsis text), runs full-text search, and applies structured filters by provider, genre, language, year, and runtime. This module has the highest fan-in in the graph because both the UI and the agent tools depend on it.",
+      "nodeIds": [
+        "file:docs/js/catalog.js"
+      ]
+    },
+    {
+      "order": 5,
+      "title": "LLM Agent Loop",
+      "description": "agent.js runs the OpenAI-compatible tool-calling loop that turns natural-language queries into catalog searches and reranked picks. Fetch is injected (no DOM or localStorage) so the same module runs in the browser and in Node test harnesses. It emits lifecycle events that ui.js listens to for progress UI, and resolves model-chosen titles back against real catalog records.",
+      "nodeIds": [
+        "file:docs/js/agent.js"
+      ]
+    },
+    {
+      "order": 6,
+      "title": "Agent Tools",
+      "description": "tools.js exposes the LLM-callable tool schemas and handlers — search, filter, get, and sample — that the agent loop invokes. The factory pattern injects catalog dependencies (the index, records, and filter functions from catalog.js) so tools stay testable without a browser. Together with agent.js, this is the bridge between the LLM's planning step and the deterministic catalog queries that follow.",
+      "nodeIds": [
+        "file:docs/js/tools.js",
+        "config:docs/assets/prompts.json"
+      ]
+    },
+    {
+      "order": 7,
+      "title": "Storage & Watch History",
+      "description": "store.js wraps localStorage with typed getters and setters for the LLM connection config, You.md taste profile, and parsed watch history — all with defensive JSON parse/serialize error handling. history.js parses Netflix's exported viewing-activity CSV into structured series/movie lists and a normalized set of watched titles that the agent uses for personalization. Both modules stay import-free; ui.js wires them together at startup.",
+      "nodeIds": [
+        "file:docs/js/store.js",
+        "file:docs/js/history.js"
+      ]
+    },
+    {
+      "order": 8,
+      "title": "Export Formats",
+      "description": "exporters.js provides pure formatters that turn search pick arrays into Markdown, JSON, CSV, or an updated You.md string — no DOM or external dependencies. ui.js calls these after a search completes so visitors can copy or download results. Keeping export logic separate from the UI controller mirrors the project's pattern of small, testable, import-free modules.",
+      "nodeIds": [
+        "file:docs/js/exporters.js"
+      ]
+    },
+    {
+      "order": 9,
+      "title": "Frozen Data Contract",
+      "description": "CONTRACT.md is the authoritative spec every browser module and build script must conform to without breaking consumers. It defines Title record shapes, catalog JSON schema v2, the provider registry, search index layout, localStorage keys, agent event types, tool names, and DOM element IDs. When you change any data shape or interface, start here — the validate and stress scripts enforce these rules automatically.",
+      "nodeIds": [
+        "document:CONTRACT.md"
+      ]
+    },
+    {
+      "order": 10,
+      "title": "Shipped Catalog Assets",
+      "description": "The runtime catalog ships as static JSON under docs/assets/, built ahead of time and never fetched from TMDB at browse time. catalog.json holds ~31,884 compact Title records with synopses blanked for size; catalog.text.json is a lazy-loaded synopsis sidecar merged after the main load; catalog.meta.json carries region, build timestamp, provider registry, and supported facets. These three files are what catalog.js indexes when the app starts.",
+      "nodeIds": [
+        "config:docs/assets/catalog.json",
+        "config:docs/assets/catalog.meta.json",
+        "config:docs/assets/catalog.text.json"
+      ]
+    },
+    {
+      "order": 11,
+      "title": "TMDB Build Pipeline",
+      "description": "Catalog data is collected at build time, not runtime. catalog.py sweeps TMDB discover and watch/providers endpoints for region IN into a local SQLite catalog.db, with enrich and diff subcommands for incremental updates. build_catalog_tmdb.py then unions that database with legacy uNoGS dumps and emits the schema-2 JSON assets under docs/assets/, applying CONTRACT.md id grammar and dedup rules. See catalog/README.md for sweep tuning, sharding, and the weekly cron setup.",
+      "nodeIds": [
+        "file:catalog/catalog.py",
+        "file:scripts/build_catalog_tmdb.py",
+        "document:catalog/README.md"
+      ]
+    }
+  ]
+}

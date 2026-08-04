@@ -1,0 +1,644 @@
+{
+  "name": "India OTT Search",
+  "description": "A static, backend-free web app for semantic search over India OTT catalog data. Visitors bring their own LLM API key and watch history; search runs entirely in the browser over a shipped catalog snapshot.",
+  "languages": [
+    "css",
+    "html",
+    "javascript",
+    "json",
+    "markdown",
+    "python",
+    "shell",
+    "sql"
+  ],
+  "frameworks": [],
+  "files": [
+    {
+      "path": "CHANGELOG.md",
+      "language": "markdown",
+      "sizeLines": 30,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "CONTRACT.md",
+      "language": "markdown",
+      "sizeLines": 213,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "README.md",
+      "language": "markdown",
+      "sizeLines": 169,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "RELEASE_CHECKLIST.md",
+      "language": "markdown",
+      "sizeLines": 20,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "USER_GUIDE.md",
+      "language": "markdown",
+      "sizeLines": 115,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "catalog/README.md",
+      "language": "markdown",
+      "sizeLines": 101,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "catalog/catalog.py",
+      "language": "python",
+      "sizeLines": 641,
+      "fileCategory": "code"
+    },
+    {
+      "path": "catalog/examples.sql",
+      "language": "sql",
+      "sizeLines": 48,
+      "fileCategory": "data"
+    },
+    {
+      "path": "catalog/smoke_test.py",
+      "language": "python",
+      "sizeLines": 185,
+      "fileCategory": "code"
+    },
+    {
+      "path": "data/fixtures/netflix_history_sample.csv",
+      "language": "csv",
+      "sizeLines": 13,
+      "fileCategory": "data"
+    },
+    {
+      "path": "docs/.nojekyll",
+      "language": "unknown",
+      "sizeLines": 0,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/assets/catalog.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docs/assets/catalog.meta.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docs/assets/catalog.text.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docs/assets/prompts.json",
+      "language": "json",
+      "sizeLines": 7,
+      "fileCategory": "config"
+    },
+    {
+      "path": "docs/css/app.css",
+      "language": "css",
+      "sizeLines": 390,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "docs/index.html",
+      "language": "html",
+      "sizeLines": 137,
+      "fileCategory": "markup"
+    },
+    {
+      "path": "docs/js/agent.js",
+      "language": "javascript",
+      "sizeLines": 222,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/js/catalog.js",
+      "language": "javascript",
+      "sizeLines": 92,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/js/exporters.js",
+      "language": "javascript",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/js/history.js",
+      "language": "javascript",
+      "sizeLines": 196,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/js/store.js",
+      "language": "javascript",
+      "sizeLines": 145,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/js/tools.js",
+      "language": "javascript",
+      "sizeLines": 206,
+      "fileCategory": "code"
+    },
+    {
+      "path": "docs/js/ui.js",
+      "language": "javascript",
+      "sizeLines": 708,
+      "fileCategory": "code"
+    },
+    {
+      "path": "research/CATALOG-STRATEGY.md",
+      "language": "markdown",
+      "sizeLines": 140,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "research/india-ott-aggregators-coverage.md",
+      "language": "markdown",
+      "sizeLines": 252,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "research/india-ott-p0-catalog-scrape-playbook.md",
+      "language": "markdown",
+      "sizeLines": 471,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "research/india-ott-p1-free-firecrawl-playbook.md",
+      "language": "markdown",
+      "sizeLines": 302,
+      "fileCategory": "docs"
+    },
+    {
+      "path": "research/raw/aggregators/justwatch_in_probe.json",
+      "language": "json",
+      "sizeLines": 424,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/justwatch_providers_in.json",
+      "language": "json",
+      "sizeLines": 575,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/justwatch_title_search_samples_in.json",
+      "language": "json",
+      "sizeLines": 119,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/open_datasets_probe.json",
+      "language": "json",
+      "sizeLines": 54,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json",
+      "language": "json",
+      "sizeLines": 10,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/streaming_availability_countries_in.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/streaming_availability_search_in.json",
+      "language": "json",
+      "sizeLines": 3916,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/streaming_availability_zee5_search_sample.json",
+      "language": "json",
+      "sizeLines": 0,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/tmdb_watch_providers_in.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/unogs_probe.json",
+      "language": "json",
+      "sizeLines": 11,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/aggregators/watchmode_in_probe.json",
+      "language": "json",
+      "sizeLines": 15,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/aggregators.json",
+      "language": "json",
+      "sizeLines": 33,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/aha_ott.json",
+      "language": "json",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/amazon_prime.json",
+      "language": "json",
+      "sizeLines": 37,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/apple_tv.json",
+      "language": "json",
+      "sizeLines": 29,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/hoichoi.json",
+      "language": "json",
+      "sizeLines": 26,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/jiohotstar.json",
+      "language": "json",
+      "sizeLines": 43,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/netflix_india.json",
+      "language": "json",
+      "sizeLines": 33,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/niche_platforms.json",
+      "language": "json",
+      "sizeLines": 30,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/sonyliv.json",
+      "language": "json",
+      "sizeLines": 30,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/sun_nxt.json",
+      "language": "json",
+      "sizeLines": 25,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p0/zee5.json",
+      "language": "json",
+      "sizeLines": 28,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/archive_org_india.json",
+      "language": "json",
+      "sizeLines": 60,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/dailymotion_india.json",
+      "language": "json",
+      "sizeLines": 32,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/fast_channels_india.json",
+      "language": "json",
+      "sizeLines": 24,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/global_avod_india_availability.json",
+      "language": "json",
+      "sizeLines": 29,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/mx_player.json",
+      "language": "json",
+      "sizeLines": 39,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/regional_free_shemaroo_hungama_jio.json",
+      "language": "json",
+      "sizeLines": 27,
+      "fileCategory": "config"
+    },
+    {
+      "path": "research/raw/p1/youtube_india.json",
+      "language": "json",
+      "sizeLines": 69,
+      "fileCategory": "config"
+    },
+    {
+      "path": "scripts/build_catalog.py",
+      "language": "python",
+      "sizeLines": 326,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/build_catalog_tmdb.py",
+      "language": "python",
+      "sizeLines": 648,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check_agent.mjs",
+      "language": "javascript",
+      "sizeLines": 169,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check_catalog.mjs",
+      "language": "javascript",
+      "sizeLines": 42,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check_exporters.mjs",
+      "language": "javascript",
+      "sizeLines": 73,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check_history.mjs",
+      "language": "javascript",
+      "sizeLines": 31,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check_store.mjs",
+      "language": "javascript",
+      "sizeLines": 37,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/check_tools.mjs",
+      "language": "javascript",
+      "sizeLines": 72,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/fetch_streaming_availability.py",
+      "language": "python",
+      "sizeLines": 515,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/finalize_probes.py",
+      "language": "python",
+      "sizeLines": 116,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/probe_aggregators.py",
+      "language": "python",
+      "sizeLines": 224,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/probe_hoichoi.py",
+      "language": "python",
+      "sizeLines": 26,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/probe_p1_catalog.py",
+      "language": "python",
+      "sizeLines": 462,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/probe_sonyliv.py",
+      "language": "python",
+      "sizeLines": 29,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/probe_zee5.py",
+      "language": "python",
+      "sizeLines": 39,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/scan_secrets.sh",
+      "language": "shell",
+      "sizeLines": 83,
+      "fileCategory": "script"
+    },
+    {
+      "path": "scripts/stress_agent_hostile.mjs",
+      "language": "javascript",
+      "sizeLines": 305,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/stress_agent_live.mjs",
+      "language": "javascript",
+      "sizeLines": 201,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/stress_catalog_data.mjs",
+      "language": "javascript",
+      "sizeLines": 210,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/stress_search_perf.mjs",
+      "language": "javascript",
+      "sizeLines": 125,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/unogs_dump_catalog.py",
+      "language": "python",
+      "sizeLines": 356,
+      "fileCategory": "code"
+    },
+    {
+      "path": "scripts/validate_catalog.py",
+      "language": "python",
+      "sizeLines": 287,
+      "fileCategory": "code"
+    }
+  ],
+  "totalFiles": 81,
+  "filteredByIgnore": 59,
+  "estimatedComplexity": "moderate",
+  "stats": {
+    "filesScanned": 81,
+    "byCategory": {
+      "docs": 10,
+      "code": 31,
+      "data": 2,
+      "config": 35,
+      "markup": 2,
+      "script": 1
+    },
+    "byLanguage": {
+      "markdown": 10,
+      "python": 13,
+      "sql": 1,
+      "csv": 1,
+      "unknown": 1,
+      "json": 35,
+      "css": 1,
+      "html": 1,
+      "javascript": 17,
+      "shell": 1
+    }
+  },
+  "importMap": {
+    "CHANGELOG.md": [],
+    "CONTRACT.md": [],
+    "README.md": [],
+    "RELEASE_CHECKLIST.md": [],
+    "USER_GUIDE.md": [],
+    "catalog/README.md": [],
+    "catalog/catalog.py": [],
+    "catalog/examples.sql": [],
+    "catalog/smoke_test.py": [
+      "catalog/catalog.py"
+    ],
+    "data/fixtures/netflix_history_sample.csv": [],
+    "docs/.nojekyll": [],
+    "docs/assets/catalog.json": [],
+    "docs/assets/catalog.meta.json": [],
+    "docs/assets/catalog.text.json": [],
+    "docs/assets/prompts.json": [],
+    "docs/css/app.css": [],
+    "docs/index.html": [],
+    "docs/js/agent.js": [],
+    "docs/js/catalog.js": [],
+    "docs/js/exporters.js": [],
+    "docs/js/history.js": [],
+    "docs/js/store.js": [],
+    "docs/js/tools.js": [],
+    "docs/js/ui.js": [
+      "docs/js/agent.js",
+      "docs/js/catalog.js",
+      "docs/js/exporters.js",
+      "docs/js/history.js",
+      "docs/js/store.js",
+      "docs/js/tools.js"
+    ],
+    "research/CATALOG-STRATEGY.md": [],
+    "research/india-ott-aggregators-coverage.md": [],
+    "research/india-ott-p0-catalog-scrape-playbook.md": [],
+    "research/india-ott-p1-free-firecrawl-playbook.md": [],
+    "research/raw/aggregators/justwatch_in_probe.json": [],
+    "research/raw/aggregators/justwatch_providers_in.json": [],
+    "research/raw/aggregators/justwatch_title_search_samples_in.json": [],
+    "research/raw/aggregators/open_datasets_probe.json": [],
+    "research/raw/aggregators/reelgood_trakt_flixpatrol_probe.json": [],
+    "research/raw/aggregators/streaming_availability_countries_in.json": [],
+    "research/raw/aggregators/streaming_availability_kumkum_bhagya_sample.json": [],
+    "research/raw/aggregators/streaming_availability_search_in.json": [],
+    "research/raw/aggregators/streaming_availability_tharangam_gap_evidence.json": [],
+    "research/raw/aggregators/streaming_availability_zee5_search_sample.json": [],
+    "research/raw/aggregators/tmdb_watch_providers_in.json": [],
+    "research/raw/aggregators/unogs_probe.json": [],
+    "research/raw/aggregators/watchmode_in_probe.json": [],
+    "research/raw/p0/aggregators.json": [],
+    "research/raw/p0/aha_ott.json": [],
+    "research/raw/p0/amazon_prime.json": [],
+    "research/raw/p0/apple_tv.json": [],
+    "research/raw/p0/hoichoi.json": [],
+    "research/raw/p0/jiohotstar.json": [],
+    "research/raw/p0/netflix_india.json": [],
+    "research/raw/p0/niche_platforms.json": [],
+    "research/raw/p0/sonyliv.json": [],
+    "research/raw/p0/sun_nxt.json": [],
+    "research/raw/p0/zee5.json": [],
+    "research/raw/p1/archive_org_india.json": [],
+    "research/raw/p1/dailymotion_india.json": [],
+    "research/raw/p1/fast_channels_india.json": [],
+    "research/raw/p1/global_avod_india_availability.json": [],
+    "research/raw/p1/mx_player.json": [],
+    "research/raw/p1/regional_free_shemaroo_hungama_jio.json": [],
+    "research/raw/p1/youtube_india.json": [],
+    "scripts/build_catalog.py": [],
+    "scripts/build_catalog_tmdb.py": [],
+    "scripts/check_agent.mjs": [
+      "docs/js/agent.js"
+    ],
+    "scripts/check_catalog.mjs": [
+      "docs/js/catalog.js"
+    ],
+    "scripts/check_exporters.mjs": [
+      "docs/js/exporters.js"
+    ],
+    "scripts/check_history.mjs": [
+      "docs/js/history.js"
+    ],
+    "scripts/check_store.mjs": [
+      "docs/js/store.js"
+    ],
+    "scripts/check_tools.mjs": [
+      "docs/js/catalog.js",
+      "docs/js/tools.js"
+    ],
+    "scripts/fetch_streaming_availability.py": [],
+    "scripts/finalize_probes.py": [],
+    "scripts/probe_aggregators.py": [],
+    "scripts/probe_hoichoi.py": [],
+    "scripts/probe_p1_catalog.py": [],
+    "scripts/probe_sonyliv.py": [],
+    "scripts/probe_zee5.py": [],
+    "scripts/scan_secrets.sh": [],
+    "scripts/stress_agent_hostile.mjs": [
+      "docs/js/agent.js"
+    ],
+    "scripts/stress_agent_live.mjs": [
+      "docs/js/agent.js",
+      "docs/js/catalog.js",
+      "docs/js/store.js",
+      "docs/js/tools.js"
+    ],
+    "scripts/stress_catalog_data.mjs": [],
+    "scripts/stress_search_perf.mjs": [
+      "docs/js/catalog.js"
+    ],
+    "scripts/unogs_dump_catalog.py": [],
+    "scripts/validate_catalog.py": []
+  },
+  "contentDigest": "eefe80b5914c8da43313368c86130f749a67fdc31c5d07a414611f3d7ca8891b"
+}
