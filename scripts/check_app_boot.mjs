@@ -150,6 +150,171 @@ async function playlistsPersistAcrossReload() {
   }
 }
 
+async function customPlaylistLifecycleAndExports() {
+  const app = await bootApp();
+  try {
+    await completeOnboarding(app);
+    const savedTitle = app.text("#queue-track .card .card-title");
+    await app.click("#playlists-btn");
+
+    check("watch later cannot be renamed or deleted",
+      app.$("#playlist-rename").disabled && app.$("#playlist-delete").disabled);
+
+    await app.click("#playlist-create");
+    check("an empty playlist name is rejected",
+      /enter a name/i.test(app.text("#playlist-feedback") || ""),
+      app.text("#playlist-feedback"));
+
+    app.$("#playlist-create-name").value = "Weekend";
+    await app.click("#playlist-create");
+    const customOption = app.$$("#playlist-select option")
+      .find((option) => option.textContent === "Weekend");
+    check("a custom playlist can be created", !!customOption,
+      app.$$("#playlist-select option").map((option) => option.textContent).join(","));
+
+    app.$("#playlist-select").value = customOption.value;
+    app.$("#playlist-select").dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    await app.settle();
+    check("custom playlists expose rename and delete",
+      !app.$("#playlist-rename").disabled && !app.$("#playlist-delete").disabled);
+
+    app.$("#playlist-rename-name").value = "Friday Night";
+    await app.click("#playlist-rename");
+    check("a custom playlist can be renamed",
+      app.$$("#playlist-select option").some((option) => option.textContent === "Friday Night"));
+
+    await app.click("#playlists-close");
+    await app.click("#queue-track .card .card-save");
+    const customPicker = app.$$("#playlist-picker-list label")
+      .find((label) => /Friday Night/.test(label.textContent));
+    check("custom playlists appear in the card picker", !!customPicker);
+    customPicker.querySelector("input").click();
+    await app.settle();
+    check("a title can be saved to a custom playlist",
+      /Saved to Friday Night/.test(app.text("#playlist-feedback") || ""),
+      app.text("#playlist-feedback"));
+
+    await app.click("#playlists-close");
+    await app.click("#playlists-btn");
+    const friday = app.$$("#playlist-select option")
+      .find((option) => option.textContent === "Friday Night");
+    app.$("#playlist-select").value = friday.value;
+    app.$("#playlist-select").dispatchEvent(new app.window.Event("change", { bubbles: true }));
+    await app.settle();
+    check("the custom playlist resolves its saved title",
+      app.$$("#playlist-items > *").length === 1
+        && (app.text("#playlist-items") || "").includes(savedTitle),
+      app.text("#playlist-items"));
+
+    await app.click("#playlist-export-md");
+    await app.click("#playlist-export-json");
+    await app.click("#playlist-export-csv");
+    check("all three playlist export controls download files", app.downloads.length === 3,
+      String(app.downloads.length));
+
+    const markdown = await app.readDownload(-3);
+    const json = await app.readDownload(-2);
+    const csv = await app.readDownload(-1);
+    check("Markdown export names and describes the playlist",
+      /friday-night\.md$/.test(markdown.filename)
+        && markdown.text.includes("# Friday Night")
+        && markdown.text.includes(savedTitle),
+      markdown.filename + "\n" + markdown.text);
+    check("JSON export carries playlist metadata and title",
+      /friday-night\.json$/.test(json.filename)
+        && JSON.parse(json.text).playlist.name === "Friday Night"
+        && json.text.includes(savedTitle),
+      json.filename + "\n" + json.text);
+    check("CSV export contains the saved title",
+      /friday-night\.csv$/.test(csv.filename) && csv.text.includes(savedTitle),
+      csv.filename + "\n" + csv.text);
+
+    await app.click("#playlist-items button");
+    check("a title can be removed from a custom playlist",
+      /No saved titles/.test(app.text("#playlist-items") || ""),
+      app.text("#playlist-items"));
+
+    await app.click("#playlist-delete");
+    check("a custom playlist can be deleted",
+      !app.$$("#playlist-select option").some((option) => option.textContent === "Friday Night"));
+    check("deleting a custom playlist returns to protected Watch later",
+      app.$("#playlist-select").value === "watch-later"
+        && app.$("#playlist-delete").disabled);
+  } finally {
+    app.restore();
+  }
+}
+
+async function backupRoundTripRestoresUserState() {
+  const app = await bootApp();
+  try {
+    await completeOnboarding(app);
+
+    const savedTitle = app.text("#queue-track .card .card-title");
+    await app.click("#queue-track .card .card-save");
+    app.$("#playlist-picker-list input[type=checkbox]").click();
+    await app.settle();
+    await app.click("#playlists-close");
+
+    // Build a real conversation through the local fallback so the backup has
+    // state from each major user-owned area without making a model request.
+    app.window.localStorage.removeItem("ottbyok.llm");
+    app.$("#query-input").value = "comedy";
+    app.$("#query-input").dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.click("#send-btn");
+    const messagesBefore = app.$$("#chat-transcript .chat-msg").map((node) => node.textContent);
+    const queueBefore = app.$$("#queue-track .card-title").map((node) => node.textContent);
+
+    await app.click("#export-backup-btn");
+    const backupDownload = await app.readDownload();
+    const backup = JSON.parse(backupDownload.text);
+    check("backup export downloads the versioned memory document",
+      backupDownload.filename === "memory.json" && backup.schema === 2,
+      backupDownload.filename + " schema=" + backup.schema);
+    check("backup export includes conversation, queue, profile, and playlists",
+      backup.conversation.messages.length === messagesBefore.length
+        && backup.queue.ids.length === queueBefore.length
+        && backup.profile.providers.includes("netflix")
+        && backup.playlists.playlists[0].titleIds.length === 1);
+    check("backup export never includes the LLM key",
+      !backupDownload.text.includes("sk-test") && !("llm" in backup));
+
+    await app.click("#new-chat-btn");
+    check("new chat establishes a different state before import",
+      app.$$("#chat-transcript .chat-msg").length === 0);
+
+    await app.setFile("#import-backup-file", {
+      name: "memory.json",
+      content: backupDownload.text,
+      type: "application/json"
+    });
+    check("backup import restores the conversation",
+      app.$$("#chat-transcript .chat-msg").map((node) => node.textContent).join("\n")
+        === messagesBefore.join("\n"));
+    check("backup import restores the recommendation queue",
+      app.$$("#queue-track .card-title").map((node) => node.textContent).join("\n")
+        === queueBefore.join("\n"));
+
+    await app.click("#playlists-btn");
+    check("backup import restores playlist membership",
+      (app.text("#playlist-items") || "").includes(savedTitle),
+      app.text("#playlist-items"));
+    await app.click("#playlists-close");
+
+    await app.setFile("#import-backup-file", {
+      name: "broken.json",
+      content: "{not json",
+      type: "application/json"
+    });
+    check("a malformed backup reports an error without erasing restored state",
+      /Could not import/.test(app.text("#error-banner") || "")
+        && app.$$("#chat-transcript .chat-msg").length === messagesBefore.length,
+      app.text("#error-banner"));
+  } finally {
+    app.restore();
+  }
+}
+
 async function mobileDrawerCloses() {
   const app = await bootApp({ mobile: true });
   try {
@@ -245,6 +410,8 @@ const suites = [
   onboardingGuardsAndCompletes,
   shellRespectsSubscriptions,
   playlistsPersistAcrossReload,
+  customPlaylistLifecycleAndExports,
+  backupRoundTripRestoresUserState,
   mobileDrawerCloses,
   keywordFallbackWithoutKey,
   developerSurfaceIsHidden,

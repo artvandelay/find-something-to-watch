@@ -140,8 +140,9 @@ npm run check
 
 `scripts/check_app_boot.mjs` boots the real `docs/index.html` and the real `docs/js/ui.js` in jsdom,
 against a small catalog fixture and a fresh IndexedDB, and drives the app the way a user would:
-onboarding step by step, saving to a playlist, reloading, the mobile drawer, the developer shortcut,
-and a query with no key configured.
+onboarding step by step, creating and exporting playlists, reloading, round-tripping a memory backup,
+rejecting a malformed backup without data loss, the mobile drawer, the developer shortcut, and a query
+with no key configured.
 
 It exists because these are integration failures — a control that is never rendered, or a hidden
 `required` input that silently blocks a form — which unit tests on individual modules cannot see and

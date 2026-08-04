@@ -42,6 +42,7 @@ export async function bootApp({
   if (storage) restoreLocalStorage(window, storage.local);
   installDialogShim(window);
   const media = installMatchMediaShim(window, mobile);
+  const downloads = installDownloadCapture(window);
 
   const catalog = {
     schema: 1,
@@ -90,6 +91,7 @@ export async function bootApp({
     window,
     document: window.document,
     requested,
+    downloads,
     catalog,
     setMobile: async (value) => { media.set(value); await settle(window); },
     settle: () => settle(window),
@@ -104,6 +106,26 @@ export async function bootApp({
       if (!node) throw new Error("No element for selector " + selector);
       node.click();
       await settle(window);
+    },
+    setFile: async (selector, { name, content, type = "application/octet-stream" }) => {
+      const input = window.document.querySelector(selector);
+      if (!input) throw new Error("No file input for selector " + selector);
+      const file = new window.File([content], name, { type });
+      Object.defineProperty(input, "files", {
+        value: [file],
+        configurable: true
+      });
+      input.dispatchEvent(new window.Event("change", { bubbles: true }));
+      await settle(window, 24);
+    },
+    readDownload: async (index = -1) => {
+      const download = downloads.at(index);
+      if (!download) return null;
+      return {
+        filename: download.filename,
+        mime: download.blob.type,
+        text: await readBlob(window, download.blob)
+      };
     },
     restore: () => {
       if (storage) saveLocalStorage(window, storage.local);
@@ -139,6 +161,44 @@ function installDialogShim(window) {
     if (value !== undefined) this.returnValue = String(value);
     this.dispatchEvent(new window.Event("close"));
   };
+}
+
+/**
+ * Capture downloads in memory. This makes export flows assertable without
+ * writing files or relying on jsdom's unimplemented navigation behaviour.
+ */
+function installDownloadCapture(window) {
+  const downloads = [];
+  const blobs = new Map();
+  let nextId = 0;
+  window.URL.createObjectURL = (blob) => {
+    const url = "blob:harness/" + (++nextId);
+    blobs.set(url, blob);
+    return url;
+  };
+  window.URL.revokeObjectURL = (url) => blobs.delete(String(url));
+
+  const click = window.HTMLAnchorElement.prototype.click;
+  window.HTMLAnchorElement.prototype.click = function capturedClick() {
+    if (this.download && blobs.has(this.href)) {
+      downloads.push({
+        filename: this.download,
+        blob: blobs.get(this.href)
+      });
+      return;
+    }
+    return click.call(this);
+  };
+  return downloads;
+}
+
+function readBlob(window, blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new window.FileReader();
+    reader.onload = () => resolve(String(reader.result || ""));
+    reader.onerror = () => reject(reader.error);
+    reader.readAsText(blob);
+  });
 }
 
 function restoreLocalStorage(window, entries) {
