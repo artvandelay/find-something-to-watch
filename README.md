@@ -5,11 +5,18 @@ Live: https://artvandelay.github.io/india-ott-byok/
 ## What this is
 
 The site ships a static snapshot of what is streaming in India, plus all of the search logic that runs
-over it. The visitor brings the other two pieces: their own LLM API key, and their own taste context.
+over it. The visitor brings the other two pieces: their own LLM API key, and their own taste context. An
+onboarding flow collects the services you subscribe to, a required OpenRouter key, and an optional
+watch-history export. It has exactly three steps: subscriptions, key, and history. Afterward, a
+three-region shell — sidebar, chat, and a recommendation display — remembers your current conversation,
+recommendation queue, and saved playlists across reloads.
 
-Nothing runs on a server — no backend, no database, no analytics. The key and the watch history live in
-the browser's `localStorage`, and the only outbound request goes directly from the browser to the LLM
-endpoint the visitor configured.
+Nothing runs on a server — no backend, no database, no analytics, no accounts, no cloud sync. Your API
+key is held in `localStorage`; subscriptions, You.md, watch history, conversation, recommendation queue,
+and playlists are held in IndexedDB via `docs/js/memory.js`. Chat queries and bounded context are sent
+directly to the configured endpoint with the key for authentication. When you import history, only
+filenames, structural metadata, and deterministic bounded sample rows or records are sent directly to
+OpenRouter to infer the file layout; the complete upload stays in your browser.
 
 ## Why
 
@@ -19,13 +26,11 @@ actually are.
 
 ## Bring your own key
 
-Any OpenAI-compatible endpoint works. OpenRouter is the default, at `https://openrouter.ai/api/v1`, but
-you can point the app at any other compatible base URL. The key is entered in the in-app **Settings**
-dialog.
+Onboarding requires a nonempty OpenRouter key. It stores the app's default OpenRouter endpoint and model;
+you can change compatible endpoint and model settings later in the in-app **Settings** dialog.
 
 The key is stored only in `localStorage` on your device — it is never sent anywhere except to the
-endpoint you configured. Keyword search works with no key at all; the key only unlocks the LLM-ranked
-semantic search.
+configured endpoint. It is required to enter the normal app experience.
 
 No catalog key of any kind is needed at runtime. The catalog is a static JSON file built ahead of time
 (see below) and shipped with the site.
@@ -35,23 +40,37 @@ No catalog key of any kind is needed at runtime. The catalog is a static JSON fi
 Two optional inputs shape the ranking:
 
 - **You.md** — a free-form markdown description of your taste. Write it however you like: favorite
-  directors, moods you are in, things you never want to see again.
-- **Netflix viewing history** — import the CSV that Netflix gives you under
-  Netflix Account -> Profile -> Viewing activity -> Download all.
+  directors, moods you are in, and things you never want to see again. It is editable later in
+  **Profile & context**, not during onboarding.
+- **Watch history** — import a `.csv`, `.json`, or `.zip` export. ZIP files may contain CSV or JSON
+  candidates. The parser works locally; only a bounded structural sample is sent to OpenRouter for
+  schema inference, never the full file.
 
-Both stay on the device, and both can be exported back out at any time.
+Both stay in this browser. The app limits upload, archive, sample, and normalized-history sizes to keep
+the import bounded.
 
-## What you can filter on
+## Subscriptions are a hard boundary
 
-Results can be narrowed by kind (movie or series), release year, runtime, TMDB rating, provider,
-original language (ISO-639-1 codes), and genre. The provider facet covers 26 curated India services,
-including Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV, and MUBI.
+Onboarding (and Settings, later) asks which of the 26 curated India services you actually subscribe to.
+Every search, filter, sample, and recommendation-display card is restricted to titles available on at
+least one of those services, and every watch link shown is intersected down to just your subscriptions —
+you never see a provider or a link for a service you didn't select. A title's link is labelled to match
+what it actually is: a true per-title deep link ("Watch on ..."), a provider search page ("Find on ..."),
+or the shared TMDB watch page that lists real providers itself ("See where to watch").
+
+## Ask naturally
+
+The composer is a minimal natural-language prompt. Ask for runtime, language, genre, mood, provider, or
+anything else in ordinary words; the agent's structured catalog tools retain those filters while selected
+subscriptions remain a hard boundary.
 
 Ratings shown are TMDB `vote_average` (audience scores out of 10), not IMDb ratings.
 
 ## Export
 
-Results export as Markdown, JSON, CSV, or an updated You.md.
+Playlists have user-facing exports in Markdown, JSON, and CSV. Every visitor gets an immutable
+**Watch later** playlist, can create named playlists, and can save a synopsis-rich card with its `+`
+button.
 
 ## Run it locally
 
@@ -60,7 +79,13 @@ python3 -m http.server --directory docs
 # then open http://localhost:8000
 ```
 
-There is no build step and no `package.json` — `docs/` is the whole app, served as static files.
+`docs/` is the static app served without a build step. Development checks use npm for the vendored ZIP
+reader dependency:
+
+```bash
+npm install --ignore-scripts
+npm run check
+```
 
 ## Rebuild the catalog
 
@@ -105,15 +130,10 @@ provenance only; they are not part of the build or runtime flow.
 
 ## Checks and stress suites
 
-Module checks (development-only; the published site has no build step and no npm dependencies):
+Module checks (development-only):
 
 ```bash
-node scripts/check_catalog.mjs
-node scripts/check_history.mjs
-node scripts/check_tools.mjs
-node scripts/check_agent.mjs
-node scripts/check_store.mjs
-node scripts/check_exporters.mjs
+npm run check
 ```
 
 Stress suites:
@@ -125,6 +145,13 @@ node scripts/stress_*.mjs
 `stress_agent_live.mjs` makes real LLM calls and needs `OPENROUTER_API_KEY` in the root `.env`; it
 exits non-zero when the key is absent, so it is safe to include in CI where the key may not exist.
 
+### Local testing bypass
+
+For browser testing only, `?testMode=1` bypasses onboarding when the hostname is exactly `localhost` or
+`127.0.0.1`. Add `testProviders=netflix,prime` to select known providers; without it, the default is
+Netflix. Production hosts and localhost-like subdomains ignore this flag, and it never creates or stores
+an API key.
+
 To scan the repo for accidentally committed secrets:
 
 ```bash
@@ -134,13 +161,24 @@ bash scripts/scan_secrets.sh
 ## Repo layout
 
 - `docs/` — the entire app, served as static files (GitHub Pages)
-  - `docs/js/catalog.js` — BM25 search over the catalog
-  - `docs/js/history.js` — Netflix CSV parsing
-  - `docs/js/tools.js` — browser-local agent tools
-  - `docs/js/agent.js` — OpenAI-compatible tool-calling loop
-  - `docs/js/store.js` — localStorage
+  - `docs/js/catalog.js` — BM25 search, subscription/facet filtering, and the local
+    (no-LLM) recommendation-queue seed
+  - `docs/js/history.js`, `docs/js/archive.js`, `docs/js/history-model.js` — bounded local CSV/JSON/ZIP
+    history import and sampled schema inference
+  - `docs/js/llm-client.js` — validated OpenAI-compatible chat-completions client
+  - `docs/js/playlists.js` — immutable Watch later and named-playlist domain rules
+  - `docs/js/providers.js` — shared provider slugs/labels, language names, and
+    watch-link-kind helpers (the one module `tools.js`/`exporters.js` import)
+  - `docs/js/tools.js` — browser-local agent tools, subscription-gated
+  - `docs/js/agent.js` — OpenAI-compatible tool-calling loop with bounded multi-turn
+    history and a reply + optional queue-update response
+  - `docs/js/memory.js` — versioned IndexedDB adapter for profile, conversation, queue, You.md, watch
+    history, and playlists (see CONTRACT.md's "Browser memory" section)
+  - `docs/js/store.js` — localStorage, now scoped to just the LLM key/model/baseUrl
   - `docs/js/exporters.js` — output formats
-  - `docs/js/ui.js` — the only module that imports the others
+  - `docs/js/views/` — onboarding, sidebar, chat, Markdown, recommendation-queue, playlist, and dialog
+    UI modules, coordinated by `docs/js/ui.js`
+  - `docs/js/ui.js` — the slim coordinator; the only module that imports the views
   - `docs/assets/` — built catalog JSON, synopsis sidecar, meta, prompts
 - `catalog/` — TMDB sweep CLI (`catalog.py`) and the SQLite dump it produces (gitignored)
 - `scripts/` — catalog builder/validator, node module checks, stress suites, secret scanner,
@@ -151,7 +189,9 @@ bash scripts/scan_secrets.sh
 - `CHANGELOG.md` — v0.1.0 release notes
 - `RELEASE_CHECKLIST.md` — remaining checks before tagging and publishing
 
-Every browser module except `ui.js` is import-free and receives its dependencies as arguments.
+`docs/js/ui.js` coordinates the DOM-facing views. The history importer keeps complete files local and
+uses the shared LLM client only for its bounded schema-inference request; catalog and agent tools still
+enforce subscription gating before candidates and links reach the UI.
 
 ## Data and attribution
 

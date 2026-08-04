@@ -128,13 +128,11 @@ The builder MUST fetch both lists from the TMDB API at build time and emit the r
 id->name map; the list above is for validation only. Exactly 27 distinct ids appear in
 catalog/catalog.db, matching this union.
 
-## Storage keys
+## LLM localStorage key (compatibility)
 
 ```js
 const KEYS = {
-  llm:     "ottbyok.llm",       // { baseUrl, apiKey, model }
-  youmd:   "ottbyok.youmd",     // string
-  history: "ottbyok.history"    // { importedAt, series, movies, seen }
+  llm: "ottbyok.llm" // { baseUrl, apiKey, model }
 };
 const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
@@ -143,15 +141,233 @@ const DEFAULT_LLM = {
 };
 ```
 
+LLM configuration, including the API key, remains in `localStorage` for backward
+compatibility. It is intentionally absent from IndexedDB and `memory.json` exports.
+
+## Shared chat-completions client
+
+`docs/js/llm-client.js` is the only reusable HTTP adapter for model calls:
+
+```js
+createChatCompletionsUrl(baseUrl) // -> absolute URL string
+callChatCompletion(config, body, { fetchImpl = globalThis.fetch, signal = null } = {})
+```
+
+`createChatCompletionsUrl` appends `chat/completions` to the configured base path
+(for example, `https://openrouter.ai/api/v1` becomes
+`https://openrouter.ai/api/v1/chat/completions`). It rejects relative URLs and every
+scheme except HTTP and HTTPS before a request can be issued. `callChatCompletion`
+sends JSON with the configured `model` and `stream: false`, a
+`Content-Type: application/json` header, and `Authorization: Bearer <apiKey>`.
+Failures use the stable error codes `auth`, `credit`, `rate`, `context`, `network`,
+and `config`; abort errors from the supplied signal/fetch implementation propagate
+unchanged.
+
+## Browser memory
+
+`docs/js/memory.js` owns local user memory in IndexedDB:
+
+```js
+const MEMORY_DB_NAME = "ottbyok.memory";
+const MEMORY_DB_VERSION = 1;
+const MEMORY_SCHEMA_VERSION = 2;
+const MEMORY_STORE = "memory";
+const MEMORY_KEYS = {
+  profile: "profile",
+  conversation: "conversation",
+  queue: "queue",
+  youmd: "youmd",
+  history: "history",
+  playlists: "playlists"
+};
+```
+
+The adapter is local-only; it does not use accounts, a backend, cloud sync, or
+encryption. Browser storage can be cleared by the visitor or browser.
+
+### Profile
+
+```js
+{
+  schema: 2,
+  updatedAt: "2026-08-05T00:00:00.000Z",
+  onboardingComplete: false,
+  providers: ["netflix", "prime"] // unique, lower-case curated provider slugs; maximum 26
+}
+```
+
+### Current conversation
+
+Exactly one current conversation is stored; there is no archived-chat collection.
+
+```js
+{
+  schema: 2,
+  updatedAt: "2026-08-05T00:00:00.000Z",
+  messages: [
+    { role: "user", content: "Something funny", createdAt: "2026-08-05T00:00:00.000Z" },
+    { role: "assistant", content: "Try these.", createdAt: "2026-08-05T00:00:01.000Z" }
+  ]
+}
+```
+
+`role` is exactly `"user"` or `"assistant"`. The adapter keeps the newest 24 valid
+messages and truncates each `content` string to 6,000 characters.
+For model requests, `agent.js` applies a second transport budget: at most 18,000
+characters of the newest complete prior turns and 8,000 characters of You.md.
+
+### Recommendation queue
+
+```js
+{
+  schema: 2,
+  updatedAt: "2026-08-05T00:00:00.000Z",
+  ids: ["tmdb:m1013577", "tmdb:t240983"]
+}
+```
+
+`ids` are unique, non-empty catalog IDs in display order. The adapter keeps at most
+20 items. `saveConversationAndQueue(conversation, queue)` writes both records in one
+IndexedDB transaction for completed agent turns.
+
+### User context
+
+`youmd` is a string, capped at 50,000 characters. `history` is either `null` when no
+file has been imported or uses the parsed-history shape below, with a serialized size
+limit of 1 MiB.
+
+### Playlists
+
+The `playlists` memory record has its own domain schema:
+
+```js
+{
+  schema: 1,
+  updatedAt: "2026-08-05T00:00:00.000Z",
+  playlists: [
+    {
+      id: "watch-later",
+      name: "Watch later",
+      titleIds: ["tmdb:m1013577"],
+      createdAt: "2026-08-05T00:00:00.000Z",
+      updatedAt: "2026-08-05T00:00:00.000Z"
+    }
+  ]
+}
+```
+
+The `watch-later` playlist is always first and cannot be renamed or deleted. Names
+are trimmed, 1–80 characters, and unique case-insensitively. A browser may store at
+most 50 playlists and 500 unique, non-empty catalog title IDs in each playlist.
+Recommendation queue and playlist state are independent: New chat may replace only
+conversation and queue and must never clear or rewrite playlists.
+
+### Migration, failure handling, and backups
+
+On `initialize()`, the adapter imports legacy `localStorage` values only when their
+IndexedDB records do not already exist:
+
+```js
+"ottbyok.youmd"    // string
+"ottbyok.history"  // parsed-history JSON
+```
+
+It removes each old key only after the IndexedDB write is read back and verified. A
+malformed legacy history value remains untouched and is surfaced as a `corrupt` issue.
+Malformed IndexedDB records read as safe defaults and are surfaced through
+`getIssues()` / the optional `onIssue` callback. Write, clear, and availability
+failures reject with `BrowserMemoryError`, whose `code` is one of `quota`, `storage`,
+`unavailable`, `blocked`, `aborted`, or `invalid`.
+
+Existing databases remain at IndexedDB version 1. Initialization adds a default,
+empty Watch later record when `playlists` is absent; it does not discard any other
+record. Logical record schemas are upgraded to `MEMORY_SCHEMA_VERSION` 2.
+
+`exportBackup()` returns the versioned, key-free `memory.json` shape:
+
+```js
+{
+  schema: 2,
+  exportedAt: "2026-08-05T00:00:00.000Z",
+  profile,
+  conversation,
+  queue,
+  youmd,
+  history,
+  playlists
+}
+```
+
+`importBackup(memoryJson)` accepts schema 1 and schema 2. A valid schema-1 backup is
+upgraded without data loss by preserving profile, conversation, queue, You.md, and
+history, converting logical records to schema 2, and synthesizing an empty Watch
+later playlist. A schema-2 backup must contain a valid playlists record. The complete
+upgraded snapshot is validated before any write, then replaces memory atomically in
+one transaction; invalid input cannot cause a partial import. Backup exports do not
+contain LLM configuration or the adapter's diagnostic `issues` list.
+
+`clear()` deletes all six IndexedDB memory records, including playlists. Callers that
+offer “clear local data” must additionally clear the compatible LLM localStorage key.
+
+## Provider/language module — docs/js/providers.js
+
+Single source of truth for the 26 curated provider slugs/labels and the 30 language
+codes shown in the UI; `docs/js/catalog.js` stays import-free, but `docs/js/tools.js`,
+`docs/js/exporters.js`, and `docs/js/ui.js` all import from here instead of duplicating
+these maps (they used to each keep their own copy).
+
+```js
+export const PROVIDER_LABELS       // { netflix: "Netflix", ... } — 26 entries
+export const PROVIDER_SLUGS        // Object.keys(PROVIDER_LABELS)
+export const DEFAULT_PROVIDER_ORDER // India display_priority fallback order, used
+                                     // only until docs/assets/catalog.meta.json's own
+                                     // provider_order has loaded
+export const LANGUAGE_NAMES        // { en: "English", hi: "Hindi", ... } — 30 entries
+export function providerLabel(slug)
+export function languageLabel(code)
+export function linkKind(slug, url)   // "direct" | "search" | "fallback" | null
+export function watchCta(slug, url)   // CTA text matching the link kind, e.g.
+                                       // "Watch on Netflix" / "Find on ZEE5" /
+                                       // "See where to watch (TMDB)"
+export function intersectProviders(rec, allowed) // returns rec with p/u restricted
+                                                  // to the given Set/array of slugs
+```
+
+`linkKind`/`watchCta` distinguish the three link kinds from the Provider registry
+table above instead of implying every link starts playback directly: a true per-title
+deep link (currently only `u.netflix` values shaped like `.../title/{id}`) is
+`"direct"`; any other provider-templated URL is `"search"`; a
+`themoviedb.org/{movie|tv}/{id}/watch` URL is `"fallback"`.
+
 ## Search filters object
 
 ```js
 // every field optional
-{ k, yearFrom, yearTo, runtimeMin, runtimeMax, minRating, provider, lang, genre, excludeKeys }
+{ k, yearFrom, yearTo, runtimeMin, runtimeMax, minRating, provider, lang, genre, excludeKeys, providers }
 // lang: ISO-639-1 string, matched against rec.l exactly
 // genre: genre name string, matched with rec.g.includes(genre)
 // excludeKeys: string[] of normalizeTitle() outputs to drop
+// provider: single slug, matched with rec.p.includes(provider) — a caller-requested
+//           facet narrowing (e.g. "only Netflix")
+// providers: Set<string> | string[], the visitor's subscription gate — a record
+//            survives only if rec.p includes at least one member. AND-ed on top of
+//            every other filter, including `provider`. An empty set excludes
+//            everything. docs/js/tools.js's createTools({ subscriptions }) injects
+//            this into every tool call automatically; callers that build filters by
+//            hand (e.g. the local queue seed) pass it explicitly.
 ```
+
+## Local recommendation queue seed — catalog.js seedQueue()
+
+```js
+seedQueue(records, { providers, excludeKeys, limit = 20 }) // -> string[] of catalog ids
+```
+
+Used before the first message in a chat to populate the recommendation display with
+no LLM call: `filterIndices(records, { providers, excludeKeys })`, then ranked by
+`rating * (1 + 0.12 * Math.log10(1 + votes))` — the same popularity-prior shape as
+`search()`'s bm25 boost, with `rec.r` (defaulting to 0) standing in for bm25 — and
+capped at `limit`.
 
 ## Search index shape
 
@@ -169,22 +385,158 @@ In search(), the final score for document d is:
 where votes = index.votes ? index.votes[d] : 0. A record with v=0 therefore scores
 exactly bm25 (boost is exactly 1.0), so existing tests are unaffected.
 
-## Parsed history shape
+## Watch-history import contract
+
+Accepted uploads are CSV, JSON, and ZIP. A ZIP may contribute only CSV/JSON
+candidates. Full uploaded files remain in the browser. The one schema-inference
+request may contain only candidate filenames, structural metadata, and deterministic
+bounded sample rows/records.
+
+Frozen limits:
 
 ```js
 {
+  uploadBytes: 10 * 1024 * 1024,
+  extractedTextBytes: 25 * 1024 * 1024,
+  archiveEntries: 100,
+  candidateFileBytes: 5 * 1024 * 1024,
+  records: 50000,
+  fields: 64,
+  fieldCharacters: 2000,
+  inferenceInputCharacters: 12000,
+  inferenceOutputCharacters: 4000,
+  normalizedHistoryBytes: 1024 * 1024
+}
+```
+
+The bounded inference input is JSON with schema 1:
+
+```js
+{
+  schema: 1,
+  files: [
+    {
+      name: "ViewingActivity.csv",
+      format: "csv", // "csv" | "json"
+      structure: { rows: 120, columns: 3, headers: ["Title", "Date", "Type"] },
+      sample: [["Example title", "2026-08-04", "movie"]]
+    }
+  ]
+}
+```
+
+For JSON candidates, `structure` contains `recordsPath` candidates and observed key
+paths, and `sample` contains bounded JSON records. Strings in both fields respect the
+field cap and the serialized request respects the inference-input cap. Counts and
+metadata may describe the full local candidate, but no unsampled row/record value is
+included.
+
+`HistoryImportPlan` is declarative JSON with schema 1:
+
+```js
+{
+  schema: 1,
+  files: [
+    {
+      name: "ViewingActivity.csv",
+      format: "csv",
+      headerRow: 0,
+      dataStartRow: 1,
+      titleColumn: 0,
+      dateColumn: 1,
+      typeColumn: 2,
+      seriesColumn: null,
+      episodeColumn: null,
+      dateFormat: "ymd", // "ymd" | "dmy" | "mdy" | "iso" | "none"
+      typeMap: {
+        movie: ["movie", "film"],
+        series: ["series", "show", "episode"]
+      }
+    },
+    {
+      name: "history.json",
+      format: "json",
+      recordsPath: ["data", "items"],
+      titlePath: ["title"],
+      datePath: ["watchedAt"],
+      typePath: ["type"],
+      seriesPath: null,
+      episodePath: null,
+      dateFormat: "iso",
+      typeMap: {
+        movie: ["movie"],
+        series: ["series"]
+      }
+    }
+  ]
+}
+```
+
+CSV row/column indices are non-negative integers within inspected bounds. JSON paths
+are arrays of plain string property names; `null` is allowed only for optional
+date/type/series/episode selectors. `format`, `dateFormat`, and output type are closed
+enums. `typeMap` values are bounded arrays of literal strings matched
+case-insensitively. Plans with unknown files, properties, formats, enums, invalid
+indices/paths, regexes, expressions, or executable content fail closed. Model output
+must contain one JSON object within the 4,000-character cap.
+
+Applying a valid plan locally returns normalized history:
+
+```js
+{
+  schema: 2,
   importedAt: "2026-08-04T00:00:00.000Z",
+  sources: [
+    { name: "ViewingActivity.csv", format: "csv", records: 80 }
+  ],
   series: [{ name: "Seinfeld", episodes: 79, lastWatched: "2026-02-12" }],
   movies: [{ title: "Dhurandhar", lastWatched: "2025-12-25" }],
+  other:  [{ title: "Unknown item", lastWatched: null }],
   seen:   ["seinfeld", "dhurandhar"]
 }
 ```
 
-## Pick shape
+Dates must be real calendar dates normalized to `YYYY-MM-DD`; invalid dates are
+discarded rather than rolled over. At most 50,000 local rows/records are processed,
+all strings and field counts are capped, and the serialized normalized result must
+not exceed 1 MiB. `parseNetflixCsv` remains a backward-compatible wrapper over the
+provider-agnostic local parser.
+
+## Pick / hydrated-card shape
 
 ```js
-{ id, t, y, k, rt, r, p, u, img, reason }
+{ id, t, y, k, rt, r, p, u, img, s, reason }
 ```
+
+`p` and `u` are already restricted to the visitor's subscribed providers (see
+`intersectProviders` above). `reason` is `""` when nothing supplied one — the agent's
+rerank step no longer returns per-title reasons (see the response schema below), so
+`reason` is populated only when a caller has one to attach; hydrating a persisted
+queue id back into a display card after reload always yields `reason: ""`.
+`s` is always present and contains the synopsis or `""`; cards render a three-line
+clamped description and use a local fallback sentence when it is empty.
+
+## docs/js/agent.js runAgent() call shape
+
+```js
+runAgent({
+  config,               // { baseUrl, apiKey, model }
+  prompts,               // docs/assets/prompts.json
+  tools,                 // createTools(...) result
+  context: { youmd, history, mood },
+  query,                 // this turn's new user message (string)
+  conversation,          // prior turns only, [{ role: "user"|"assistant", content }],
+                         // i.e. memory's conversation.messages BEFORE this turn is
+                         // appended — included as real chat messages ahead of the
+                         // planner prompt so multi-turn context reaches the model
+  onEvent, signal, fetchImpl, budget // unchanged
+})
+// -> { ok: boolean, reply: string, queue: string[] | null, usage }
+```
+
+`ok` is `true` only for a successfully parsed final response. Authentication,
+configuration, network, abort, budget, and parse failures return `ok: false`; callers
+must not persist those failures as assistant replies.
 
 ## Agent event shapes
 
@@ -192,22 +544,110 @@ exactly bm25 (boost is exactly 1.0), so existing tests are unaffected.
 { type: "status",      text: string }
 { type: "tool_call",   name: string, args: object }
 { type: "tool_result", name: string, count: number }
-{ type: "delta",       text: string }
-{ type: "done",        picks: Pick[], usage: { prompt_tokens, completion_tokens } | null }
-{ type: "error",       code: "auth"|"credit"|"rate"|"context"|"network"|"aborted"|"budget"|"parse", message: string }
+{ type: "done",        reply: string, queue: string[] | null, usage: { prompt_tokens, completion_tokens } | null }
+{ type: "error",       code: "auth"|"config"|"credit"|"rate"|"context"|"network"|"aborted"|"budget"|"parse", message: string }
 ```
+
+Changed in this overhaul: `"done"` now carries `reply` (always shown verbatim as the
+assistant's chat message for this turn) and `queue` instead of `picks`. `queue` is
+`null` when the model's turn did not include a queue update — "leave the display
+unchanged" — and an array (0 to 20 catalog ids, already validated against
+`get_titles`) when it did, including an explicit empty array to clear the display.
+The `"delta"` event was removed; nothing emits it now that the note/reason text lives
+in `reply` and is only available once, at `"done"`.
+
+## Rerank prompt response schema (docs/assets/prompts.json, version 2)
+
+The final (no-more-tool-calls) LLM response, after `prompts.rerank`, must be exactly:
+
+```json
+{ "reply": "<1-4 sentences shown verbatim in the chat transcript>", "queue": ["<catalog id>", "..."] }
+```
+
+`reply` is required and may use only paragraphs, unordered/ordered lists,
+`**strong**`, `*emphasis*`, and inline backticks. It must not contain raw HTML,
+headings, tables, images, arbitrary links, or fenced code blocks. The UI parses this
+subset into DOM nodes and text nodes only; it never uses `innerHTML`. User messages
+remain literal text. `queue` is OPTIONAL: 0-20 catalog ids, verbatim from tool
+results, best first, duplicates
+dropped. Omitting the `queue` key means "leave the current recommendation display
+untouched" (a purely clarifying turn); an explicit `"queue": []` means "clear it".
+`docs/js/agent.js` re-validates every id via `get_titles` before emitting it, so ids
+that fail subscription/filter gating are silently dropped from the returned queue.
 
 ## Tool names
 
-Exactly four: `search_titles`, `filter_titles`, `get_titles`, `sample_titles`.
+Exactly four: `search_titles`, `filter_titles`, `get_titles`, `sample_titles`. All four
+accept the visitor's subscription gate automatically via `createTools({ subscriptions })`
+(see the Provider/language module section above) — no tool parameter needs to carry
+it explicitly.
 
 ## Frozen DOM IDs
 
-app, catalog-status, catalog-detail, query-form, query-input, send-btn, stop-btn,
-mood-select, language-select, genre-select, provider-select, results, trace,
-settings-btn, settings-dialog, llm-base-url, llm-api-key, llm-model, settings-save,
-settings-close, context-btn, context-dialog, youmd-input, history-file,
-history-summary, context-save, context-close, export-md, export-json, export-csv,
-export-youmd, error-banner, attribution
+This list changed substantially for the sidebar/chat/recommendation-display shell
+overhaul (onboarding screen + sidebar + chat + queue, replacing the single-form
+layout); the data shapes elsewhere in this document did not change because of it.
 
-New in schema 2: catalog-detail, language-select, genre-select, provider-select.
+Always present:
+app, error-banner, attribution
+
+Onboarding (shown once, gated by `profile.onboardingComplete`):
+onboarding-screen, onboarding-title, onboarding-form, onboarding-progress,
+onboarding-provider-list, onboarding-llm-api-key, onboarding-history-file,
+onboarding-history-summary, onboarding-history-status, onboarding-history-remove,
+onboarding-back, onboarding-next
+
+The form contains exactly three panels, each carrying `data-onboarding-step` with one
+of `subscriptions`, `openrouter-key`, or `watch-history`. The key panel asks only for
+a nonempty OpenRouter key; base URL and model come from `DEFAULT_LLM`. You.md is not
+part of onboarding and remains editable in Profile & context. History is optional,
+but after an import failure the user must explicitly continue without history. The
+view stores the key with `DEFAULT_LLM.baseUrl` and `DEFAULT_LLM.model` before history
+import or finalization; it makes no model request unless a history file is supplied.
+
+Shell:
+shell, sidebar-toggle, sidebar, backdrop, new-chat-btn, conversation-indicator,
+subscriptions-summary, playlists-btn, context-btn, settings-btn, export-backup-btn,
+import-backup-btn, import-backup-file, clear-data-btn, catalog-status, workspace
+
+Chat region:
+chat-region, chat-transcript, chat-note, query-form, query-input, send-btn, stop-btn
+
+Recommendation display:
+queue-region, queue-status, queue-viewport, queue-track, queue-prev, queue-next,
+queue-empty
+
+Dialogs:
+settings-dialog, settings-provider-list, llm-base-url, llm-api-key, llm-model,
+settings-feedback, settings-save, settings-close, context-dialog, youmd-input,
+history-file, history-summary, history-remove, context-feedback, context-save,
+context-close, disclosure-dialog, catalog-detail, trace, export-md, export-json,
+export-csv, export-youmd, disclosure-feedback, disclosure-close,
+playlists-dialog, playlists-dialog-title, playlists-close, playlist-picker,
+playlist-picker-title, playlist-picker-list, playlist-manager, playlist-select,
+playlist-items, playlist-create-name, playlist-create, playlist-rename-name,
+playlist-rename, playlist-delete, playlist-export-md, playlist-export-json,
+playlist-export-csv, playlist-feedback
+
+Removed from the markup: `results`, `onboarding-llm-base-url`,
+`onboarding-llm-model`, `onboarding-youmd-input`, `onboarding-continue`,
+`mood-select`, `language-select`, `genre-select`, `provider-select`, and
+`disclosure-btn`. The disclosure/developer dialog remains in the DOM but has no
+visible opener. It opens only with `Ctrl+Alt+Shift+D`
+(`Control+Option+Shift+D` on macOS); this shortcut is discoverability only, not an
+authentication or security boundary.
+
+The developer dialog retains trace, current recommendation exports, and catalog
+provenance. Playlist exports remain user-facing through the playlist manager.
+
+Every recommendation card includes a visible `+` save button with
+`aria-haspopup="dialog"` that opens the playlist picker.
+
+## Localhost-only test mode
+
+`?testMode=1` bypasses onboarding only when `location.hostname` is exactly
+`localhost` or `127.0.0.1`. It persists an onboarding-complete test profile on that
+local origin, with providers read from comma-separated `testProviders`, normalized
+against `PROVIDER_SLUGS`, and defaulting to `netflix`. It never reads, creates, or
+persists an API key. Production hosts, localhost-like subdomains, malformed URLs,
+and requests without the exact flag ignore test mode.
