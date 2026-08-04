@@ -19,8 +19,7 @@ catalog/*.db
 catalog/*.db-wal
 catalog/*.db-shm
 catalog/*.lock
-catalog/sweep.log
-catalog/enrich.log
+catalog/*.log
 catalog/__pycache__/
 
 # os

@@ -35,7 +35,9 @@ export function buildIndex(records) {
       p.push(i, n);
     }
   }
-  return { N: records.length, avgLen: records.length ? total / records.length : 0, len, df, postings };
+  const votes = new Int32Array(records.length);
+  for (let i = 0; i < records.length; i++) votes[i] = records[i].v || 0;
+  return { N: records.length, avgLen: records.length ? total / records.length : 0, len, df, postings, votes };
 }
 
 export function search(index, query, options = {}) {
@@ -57,7 +59,10 @@ export function search(index, query, options = {}) {
       scores.set(d, (scores.get(d) || 0) + idf * norm);
     }
   }
-  return [...scores.entries()].map(([i, score]) => ({ i, score }))
+  return [...scores.entries()].map(([i, score]) => {
+    const votes = index.votes ? index.votes[i] : 0;
+    return { i, score: score * (1 + 0.12 * Math.log10(1 + votes)) };
+  })
     .sort((a, b) => b.score - a.score || a.i - b.i)
     .slice(0, limit);
 }
@@ -78,6 +83,8 @@ export function filterIndices(records, filters) {
     if (isSet(f.runtimeMax) && (rec.rt === null || rec.rt > f.runtimeMax)) continue;
     if (isSet(f.minRating) && (rec.r === null || rec.r < f.minRating)) continue;
     if (isSet(f.provider) && !rec.p.includes(f.provider)) continue;
+    if (isSet(f.lang) && rec.l !== f.lang) continue;
+    if (isSet(f.genre) && !(rec.g || []).includes(f.genre)) continue;
     if (excluded && excluded.has(normalizeTitle(rec.t))) continue;
     out.push(i);
   }

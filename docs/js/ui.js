@@ -36,11 +36,77 @@ const DOM_IDS = [
   "export-csv",
   "export-youmd",
   "error-banner",
-  "attribution"
+  "attribution",
+  "catalog-detail",
+  "language-select",
+  "genre-select",
+  "provider-select"
 ];
 
 const KEYWORD_NOTE = "Keyword search — add an API key in Settings for ranked recommendations.";
 const NO_PICKS_NOTE = "Run a search first — there is nothing to export yet.";
+
+const PROVIDER_LABELS = {
+  netflix: "Netflix",
+  prime: "Prime Video",
+  hotstar: "JioHotstar",
+  zee5: "ZEE5",
+  sonyliv: "SonyLIV",
+  mubi: "MUBI",
+  crunchyroll: "Crunchyroll",
+  sunnxt: "Sun NXT",
+  mxplayer: "MX Player",
+  discovery: "Discovery+",
+  shemaroo: "ShemarooMe",
+  lionsgate: "Lionsgate Play",
+  manoramamax: "ManoramaMAX",
+  hungama: "Hungama Play",
+  hoichoi: "Hoichoi",
+  aha: "aha",
+  curiosity: "CuriosityStream",
+  appletv: "Apple TV+",
+  epicon: "EPIC ON",
+  tataplay: "Tata Play",
+  plex: "Plex",
+  tubi: "Tubi",
+  docubay: "DocuBay",
+  bbcplayer: "BBC Player",
+  chaupal: "Chaupal",
+  erosnow: "Eros Now"
+};
+
+const LANGUAGE_NAMES = {
+  en: "English",
+  hi: "Hindi",
+  ta: "Tamil",
+  te: "Telugu",
+  ml: "Malayalam",
+  kn: "Kannada",
+  bn: "Bengali",
+  mr: "Marathi",
+  pa: "Punjabi",
+  gu: "Gujarati",
+  ur: "Urdu",
+  as: "Assamese",
+  or: "Odia",
+  sa: "Sanskrit",
+  ne: "Nepali",
+  si: "Sinhala",
+  bh: "Bhojpuri",
+  ja: "Japanese",
+  ko: "Korean",
+  zh: "Chinese",
+  fr: "French",
+  de: "German",
+  es: "Spanish",
+  it: "Italian",
+  pt: "Portuguese",
+  ru: "Russian",
+  ar: "Arabic",
+  th: "Thai",
+  id: "Indonesian",
+  tr: "Turkish"
+};
 
 let el = null;
 let traceBody = null;
@@ -49,6 +115,7 @@ let noteEl = null;
 let prompts = null;
 let records = [];
 let recordsById = new Map();
+let catalogMeta = null;
 let index = null;
 
 let parsedHistory = null;
@@ -114,7 +181,20 @@ function compactArgs(args) {
 function providerLabel(slug) {
   const s = String(slug || "");
   if (!s) return "Watch";
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return PROVIDER_LABELS[s] || s;
+}
+
+function languageLabel(code) {
+  const c = String(code || "");
+  return LANGUAGE_NAMES[c] || c;
+}
+
+function titleInitials(title) {
+  const words = String(title || "").trim().split(/\s+/).filter(Boolean);
+  if (words.length === 0) return "?";
+  const first = words[0].charAt(0);
+  const second = words.length > 1 ? words[1].charAt(0) : "";
+  return (first + second).toUpperCase();
 }
 
 function buildPoster(pick) {
@@ -126,9 +206,10 @@ function buildPoster(pick) {
     img.alt = "";
     return img;
   }
-  const placeholder = document.createElement("div");
-  placeholder.className = "card-poster";
-  return placeholder;
+  const fallback = document.createElement("div");
+  fallback.className = "poster-fallback";
+  fallback.textContent = titleInitials(pick.t || pick.id);
+  return fallback;
 }
 
 function metaLine(pick) {
@@ -136,7 +217,7 @@ function metaLine(pick) {
   if (pick.y !== null && pick.y !== undefined) parts.push(String(pick.y));
   if (pick.k) parts.push(pick.k);
   if (pick.rt !== null && pick.rt !== undefined) parts.push(pick.rt + " min");
-  if (pick.r !== null && pick.r !== undefined) parts.push("IMDb " + pick.r);
+  if (pick.r !== null && pick.r !== undefined) parts.push("TMDB " + pick.r);
   if (parts.length === 0) return null;
   const p = document.createElement("p");
   p.className = "card-meta";
@@ -251,12 +332,48 @@ function scheduleIndex() {
   }
 }
 
+function scheduleSidecar() {
+  const file = catalogMeta && catalogMeta.text_file ? String(catalogMeta.text_file) : "catalog.text.json";
+  const run = async () => {
+    try {
+      const doc = await fetchJson("./assets/" + file);
+      const map = doc && typeof doc === "object" ? doc.s : null;
+      if (!map || typeof map !== "object") return;
+      let merged = 0;
+      for (const rec of records) {
+        const s = map[rec.id];
+        if (typeof s === "string" && s !== "") {
+          rec.s = s;
+          merged += 1;
+        }
+      }
+      if (merged > 0) scheduleIndex();
+    } catch (err) {
+      console.warn("ui: synopsis sidecar unavailable, continuing without synopses.", err && err.message ? err.message : err);
+    }
+  };
+  if (typeof window.requestIdleCallback === "function") {
+    window.requestIdleCallback(() => { run(); });
+  } else {
+    setTimeout(() => { run(); }, 0);
+  }
+}
+
+function facetFilters() {
+  const f = {};
+  if (el.providerSelect.value) f.provider = el.providerSelect.value;
+  if (el.languageSelect.value) f.lang = el.languageSelect.value;
+  if (el.genreSelect.value) f.genre = el.genreSelect.value;
+  return f;
+}
+
 function makeTools(seenKeys) {
+  const facets = facetFilters();
   return createTools({
     records,
     index,
     search,
-    filterIndices,
+    filterIndices: (recs, filters) => filterIndices(recs, { ...(filters || {}), ...facets }),
     normalizeTitle,
     seenKeys
   });
@@ -273,6 +390,8 @@ function hydrate(row) {
     rt: full.rt,
     r: full.r,
     p: full.p,
+    l: full.l,
+    g: full.g,
     u: full.u,
     img: full.img,
     reason: ""
@@ -320,6 +439,7 @@ function makeEventHandler() {
 
 async function onSubmit(event) {
   event.preventDefault();
+  if (controller) return;
   const query = String(el.queryInput.value || "").trim();
   if (!query) return;
   if (!index) {
@@ -334,10 +454,15 @@ async function onSubmit(event) {
   const tools = makeTools(seenKeys);
 
   if (!store.hasKey()) {
+    el.sendBtn.disabled = true;
+    el.queryInput.disabled = true;
     try {
       await runKeywordFallback(query, tools, seenKeys);
     } catch (err) {
       showError(err && err.message ? err.message : "Keyword search failed.");
+    } finally {
+      el.sendBtn.disabled = false;
+      el.queryInput.disabled = false;
     }
     return;
   }
@@ -345,6 +470,8 @@ async function onSubmit(event) {
   controller = new AbortController();
   el.stopBtn.hidden = false;
   el.sendBtn.hidden = true;
+  el.sendBtn.disabled = true;
+  el.queryInput.disabled = true;
   el.results.textContent = "";
   clearTrace();
   setNote("");
@@ -368,6 +495,8 @@ async function onSubmit(event) {
   } finally {
     el.stopBtn.hidden = true;
     el.sendBtn.hidden = false;
+    el.sendBtn.disabled = false;
+    el.queryInput.disabled = false;
     controller = null;
   }
 }
@@ -442,6 +571,54 @@ function wireContext() {
   });
 }
 
+function fillSelect(select, values, labelFor, placeholderText) {
+  if (select.options.length === 0) {
+    const placeholder = document.createElement("option");
+    placeholder.value = "";
+    placeholder.textContent = placeholderText;
+    select.appendChild(placeholder);
+  }
+  while (select.options.length > 1) select.remove(1);
+  for (const value of values) {
+    const option = document.createElement("option");
+    option.value = String(value);
+    option.textContent = labelFor(value);
+    select.appendChild(option);
+  }
+}
+
+function populateFacets(meta) {
+  const m = meta || {};
+  const providerOrder = Array.isArray(m.provider_order) ? m.provider_order : [];
+  fillSelect(el.providerSelect, providerOrder, providerLabel, "All providers");
+  const languages = Array.isArray(m.languages) ? m.languages : [];
+  fillSelect(el.languageSelect, languages, languageLabel, "All languages");
+  const genres = Array.isArray(m.genres) ? m.genres : [];
+  fillSelect(el.genreSelect, genres, (name) => String(name), "All genres");
+}
+
+function fillCatalogDetail(meta) {
+  const m = meta || {};
+  const parts = [];
+  if (m.source) parts.push("Source: " + m.source);
+  if (m.region) parts.push("Region: " + String(m.region).toUpperCase());
+  const builtAt = String(m.built_at || "").slice(0, 10);
+  if (builtAt) parts.push("Built " + builtAt);
+  el.catalogDetail.textContent = parts.join(" · ");
+  el.catalogDetail.hidden = parts.length === 0;
+}
+
+function wireFacets() {
+  const rerun = () => {
+    if (!index || !lastQuery || controller) return;
+    el.queryInput.value = lastQuery;
+    el.queryForm.requestSubmit();
+  };
+  el.providerSelect.addEventListener("change", rerun);
+  el.languageSelect.addEventListener("change", rerun);
+  el.genreSelect.addEventListener("change", rerun);
+}
+
 function wireExports() {
   el.exportMd.addEventListener("click", () => {
     if (!hasPicks()) return;
@@ -476,9 +653,12 @@ async function loadData() {
   for (const rec of records) recordsById.set(rec.id, rec);
 
   const meta = catalogDoc.meta || {};
+  catalogMeta = meta;
   const count = typeof meta.count === "number" ? meta.count : records.length;
   const builtAt = String(meta.built_at || "").slice(0, 10);
   el.catalogStatus.textContent = count.toLocaleString("en-IN") + " titles · snapshot " + builtAt;
+  populateFacets(meta);
+  fillCatalogDetail(meta);
 }
 
 async function init() {
@@ -504,6 +684,7 @@ async function init() {
     wireSettings();
     wireContext();
     wireExports();
+    wireFacets();
     el.queryForm.addEventListener("submit", onSubmit);
     el.stopBtn.addEventListener("click", () => {
       if (controller) controller.abort();
@@ -518,6 +699,7 @@ async function init() {
     }
 
     scheduleIndex();
+    scheduleSidecar();
   } catch (err) {
     showError(err && err.message ? err.message : String(err));
   }

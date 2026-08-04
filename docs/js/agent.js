@@ -168,7 +168,7 @@ export async function runAgent(opts) {
     messages.push({ role: "user", content: prompts.rerank });
     const finalData = await callLlm(
       config,
-      { messages, response_format: { type: "json_object" } },
+      { messages },
       fetchImpl,
       signal
     );
@@ -200,6 +200,8 @@ export async function runAgent(opts) {
         rt: row.rt,
         r: row.r,
         p: row.p,
+        l: row.l,
+        g: row.g,
         u: row.u,
         img: row.img,
         reason: pick.reason

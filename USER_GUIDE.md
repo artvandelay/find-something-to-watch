@@ -1,130 +1,115 @@
-# Netflix uNoGS Search — User Guide
+# India OTT Search — User Guide
 
-This project includes a **personal Cursor Skill** plus a **Python CLI** that queries Netflix catalog availability via **uNoGSNG on RapidAPI**.
+Find something to watch by describing it. This app searches the streaming catalogs available in
+India — Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV, MUBI, and twenty more services — using
+plain language instead of exact titles.
 
-## What you get
+## Opening the app
 
-- **Cursor Skill**: `~/.cursor/skills/netflix-unogs-search/`
-- **CLI script**: `~/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py`
-- **Netflix links**: results include `https://www.netflix.com/title/<netflixid>`
+Open the live site: https://artvandelay.github.io/india-ott-byok/
 
-## Prerequisites
+Everything runs in your browser. There is no account, no sign-up, and nothing is uploaded to a
+server.
 
-- `python3` available on your machine
-- RapidAPI key in **this repo’s root** `.env`:
+(Running a local copy instead? From the project folder run
+`python3 -m http.server --directory docs` and open http://localhost:8000.)
 
-```bash
-RAPIDAPI="your_rapidapi_key_here"
-```
+## Setting up your LLM key (one time)
 
-## Quick start
+The app thinks with an AI model, and you bring your own key for that — like bringing your own SIM
+card to a phone.
 
-Run these commands **from this repo root** (so the script can find `.env`).
+1. Click **Settings** (top right).
+2. **Base URL** is pre-filled with OpenRouter (`https://openrouter.ai/api/v1`), which works well and
+   lets you pick from many models. If you use a different compatible provider, paste its URL instead.
+3. Paste your **API key**. If you don't have one, create it at your provider's site (for OpenRouter,
+   that's openrouter.ai/keys).
+4. Pick a **model** (the default is a good balance of cost and quality).
+5. Click **Save**.
 
-### 1) Sanity check (lists a few countries)
+Your key is stored only in this browser and is sent only to the endpoint you configured — never
+anywhere else. That's the whole point of the app: the catalog is free and built in; the only thing
+you pay for is your own model usage.
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" countries | head
-```
+No key? You can still search — the app falls back to plain keyword matching. It just won't understand
+nuance as well.
 
-### 2) “Fantasy movies on Netflix India”
+## Asking questions
 
-This does a “browse by filters” query (country + genre + type).
+Type what you're in the mood for, the way you'd say it to a friend:
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" search \
-  --country India \
-  --genre Fantasy \
-  --type movie \
-  --limit 10
-```
+- "Something short and funny for tonight — nothing I've already seen"
+- "A feel-good Malayalam movie under two hours"
+- "A slow-burn thriller like the ones I loved last year"
+- "A documentary I can half-watch while cooking"
 
-### 3) “Which countries have Seinfeld?”
+The more you say about mood, time available, language, and what to avoid, the better the picks.
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" where "Seinfeld"
-```
+## Narrowing things down with the dropdowns
 
-## CLI commands
+Under the question box you'll find four optional filters:
 
-### List reference data
+- **Mood** — comfort, intense, funny, thoughtful, background, or surprise.
+- **Language** — the original language of the title (Hindi, Malayalam, Tamil, English, and so on).
+- **Genre** — drama, comedy, thriller, documentary, and more.
+- **Provider** — only show things on a service you actually subscribe to.
 
-- **Countries** (uNoGS country IDs + codes):
+These combine with your question, so "a mystery, in Malayalam, on Netflix" works exactly as you'd
+expect.
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" countries
-```
+## Adding your taste context (optional)
 
-- **Genres** (Netflix genre IDs):
+Click **Your context** to make the picks personal:
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" genres
-```
+- **You.md** — a free-form note about your taste: directors you love, moods you're in, things you
+  never want to see again. Write it however you like.
+- **Netflix viewing history** — the CSV Netflix gives you under
+  Netflix Account → Profile → Viewing activity → Download all. The app uses it to skip things you've
+  already seen and to learn what you actually finish.
 
-### Search titles
+Both are parsed and stored in your browser only. Nothing is uploaded.
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" search \
-  --country India \
-  --type movie \
-  --query "fantasy" \
-  --limit 10
-```
+## Understanding the results
 
-Notes:
-- If you provide filters like `--country/--genre/--type`, `--query` is optional (the CLI will browse using filters).
-- Use `--orderby` if you want ordering (e.g. `rating`, `dateDesc`, `title`).
-- Use `--json` to print the raw API response.
+Each pick shows the title, year, runtime, a rating, and which services carry it — with links to open
+it there.
 
-### Find availability by country (“where”)
+Two things worth knowing:
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" where "Some Title"
-```
+- **Ratings are TMDB audience scores** (out of 10), not IMDb ratings.
+- **Availability is a snapshot.** Streaming lineups change constantly, so a title may have moved
+  services since the catalog was last built. Click through to confirm before movie night.
 
-What it does:
-- Searches by the given title text
-- Picks the best match
-- Calls the title availability endpoint
-- Prints the country list + country code (e.g. `India (IN)`)
+## Exporting your results
 
-### Title details (optional)
+Use the **Export** buttons to take your picks with you:
 
-```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" details --netflixid 70153373
-```
+- **Markdown** — a readable list, good for notes apps and sharing.
+- **JSON** — structured data, good for other tools.
+- **CSV** — opens in any spreadsheet.
+- **You.md** — an updated version of your taste profile.
 
-## Using it inside Cursor (as a Skill)
+## The TMDB note in the footer
 
-The personal skill is named **`netflix-unogs-search`** and lives at:
+The footer says: *"This product uses the TMDB API but is not endorsed or certified by TMDB."*
 
-- `~/.cursor/skills/netflix-unogs-search/SKILL.md`
+The catalog's titles, ratings, posters, and availability information come from TMDB (The Movie
+Database), and their terms require that line wherever their data is shown. It simply means the data
+is theirs while the app itself is independent — TMDB didn't make it and doesn't vouch for it.
 
-When you ask Cursor questions like:
-- “fantasy movie on netflix india”
-- “which country netflix has seinfeld”
+## Privacy in one paragraph
 
-…the skill instructs the agent to run the CLI commands above and format results with Netflix links.
+Your LLM key, your taste note, and your viewing history live in your browser's local storage. The
+only network request the app makes with your information is the search request sent directly from
+your browser to the model endpoint you chose in Settings. Clearing your browser's site data removes
+everything, completely.
 
 ## Troubleshooting
 
-### “Could not find a `.env` …”
-
-You’re not running the command from inside the repo (or any subfolder of it). Re-run from the project root:
-
-```bash
-cd "/Users/jigar/projects/messing-around/llm-search-netflix"
-```
-
-### “Missing RAPIDAPI key…”
-
-Ensure the repo root `.env` contains:
-
-```bash
-RAPIDAPI="..."
-```
-
-### “HTTP 4xx/5xx …”
-
-This usually means RapidAPI subscription/limits, a temporary outage, or a bad key. Try again, then check your RapidAPI plan/usage for uNoGSNG.
-
+- **"auth" error** — your key is wrong, revoked, or pasted with extra spaces. Re-enter it in
+  Settings.
+- **"credit" error** — your model provider account is out of credit. Top it up or switch models.
+- **"rate" error** — you're sending requests too quickly for your plan. Wait a moment and retry.
+- **Picks feel generic** — add a You.md and your viewing history under **Your context**.
+- **The catalog line says it failed to load** — check your connection and reload; the catalog is a
+  static file and should always be reachable.

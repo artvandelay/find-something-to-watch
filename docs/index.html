@@ -24,6 +24,7 @@
       </p>
 
       <p id="catalog-status" aria-live="polite">Loading catalog…</p>
+      <p id="catalog-detail" aria-live="polite"></p>
 
       <div id="error-banner" role="alert" aria-live="polite" hidden></div>
 
@@ -42,6 +43,24 @@
               <option value="thoughtful">Thoughtful</option>
               <option value="background">Background</option>
               <option value="surprise">Surprise</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="language-select">Language</label>
+            <select id="language-select" name="language-select">
+              <option value="">All languages</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="genre-select">Genre</label>
+            <select id="genre-select" name="genre-select">
+              <option value="">All genres</option>
+            </select>
+          </div>
+          <div class="field">
+            <label for="provider-select">Provider</label>
+            <select id="provider-select" name="provider-select">
+              <option value="">All providers</option>
             </select>
           </div>
           <div class="form-actions">
@@ -69,6 +88,7 @@
       <footer id="attribution">
         Catalog data is a static snapshot — availability changes. Your API key and watch history stay in
         this browser; nothing is uploaded to any server.
+        This product uses the TMDB API but is not endorsed or certified by TMDB.
         <a href="https://github.com/artvandelay/india-ott-byok">Source on GitHub</a>.
       </footer>
     </main>

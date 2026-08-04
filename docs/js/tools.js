@@ -1,3 +1,17 @@
+const PROVIDER_SLUGS = ["netflix", "prime", "hotstar", "zee5", "sonyliv", "mubi", "crunchyroll",
+  "sunnxt", "mxplayer", "discovery", "shemaroo", "lionsgate", "manoramamax", "hungama", "hoichoi",
+  "aha", "curiosity", "appletv", "epicon", "tataplay", "plex", "tubi", "docubay", "bbcplayer",
+  "chaupal", "erosnow"];
+
+const GENRE_NAMES = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama",
+  "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction",
+  "TV Movie", "Thriller", "War", "Western", "Action & Adventure", "Kids", "News", "Reality",
+  "Sci-Fi & Fantasy", "Soap", "Talk", "War & Politics"];
+
+const LANGUAGE_PARAM = { type: "string", description: "ISO-639-1 language code, e.g. \"hi\"." };
+const GENRE_PARAM = { type: "string", enum: GENRE_NAMES, description: "Genre name." };
+const PROVIDER_PARAM = { type: "string", enum: PROVIDER_SLUGS, description: "Streaming provider slug." };
+
 export function createTools(deps) {
   function shape(rec) {
     return {
@@ -8,6 +22,8 @@ export function createTools(deps) {
       rt: rec.rt,
       r: rec.r,
       p: rec.p,
+      l: rec.l,
+      g: rec.g,
       s: (rec.s || "").slice(0, 220)
     };
   }
@@ -24,6 +40,9 @@ export function createTools(deps) {
     set("runtimeMin", a.runtime_min);
     set("runtimeMax", a.runtime_max);
     set("minRating", a.min_rating);
+    set("lang", a.language);
+    set("genre", a.genre);
+    set("provider", a.provider);
     if (a.exclude_seen === true && deps.seenKeys.length > 0) f.excludeKeys = deps.seenKeys;
     return f;
   }
@@ -60,7 +79,10 @@ export function createTools(deps) {
     async get_titles(args) {
       const a = args || {};
       const want = new Set(Array.isArray(a.ids) ? a.ids : []);
-      const found = deps.records.filter((r) => want.has(r.id));
+      const allowed = new Set(
+        deps.filterIndices(deps.records, toFilters(a)).map((i) => deps.records[i].id)
+      );
+      const found = deps.records.filter((r) => want.has(r.id) && allowed.has(r.id));
       return { count: found.length, results: found };
     },
 
@@ -99,7 +121,10 @@ export function createTools(deps) {
             year_to: { type: "integer" },
             runtime_min: { type: "integer", description: "Minutes." },
             runtime_max: { type: "integer", description: "Minutes." },
-            min_rating: { type: "number", description: "IMDb rating floor, 0-10." },
+            min_rating: { type: "number", description: "TMDB rating floor, 0-10." },
+            language: LANGUAGE_PARAM,
+            genre: GENRE_PARAM,
+            provider: PROVIDER_PARAM,
             exclude_seen: { type: "boolean", description: "Drop titles the user has already watched." },
             limit: { type: "integer", description: "1-50, default 20." }
           },
@@ -120,7 +145,10 @@ export function createTools(deps) {
             year_to: { type: "integer" },
             runtime_min: { type: "integer" },
             runtime_max: { type: "integer" },
-            min_rating: { type: "number" },
+            min_rating: { type: "number", description: "TMDB rating floor, 0-10." },
+            language: LANGUAGE_PARAM,
+            genre: GENRE_PARAM,
+            provider: PROVIDER_PARAM,
             exclude_seen: { type: "boolean" },
             sort: { type: "string", enum: ["rating", "year", "runtime"] },
             limit: { type: "integer", description: "1-50, default 20." }
@@ -140,8 +168,11 @@ export function createTools(deps) {
             ids: {
               type: "array",
               items: { type: "string" },
-              description: "Catalog ids such as netflix:81644889."
-            }
+              description: "Catalog ids such as tmdb:m27205."
+            },
+            language: LANGUAGE_PARAM,
+            genre: GENRE_PARAM,
+            provider: PROVIDER_PARAM
           },
           required: ["ids"]
         }
@@ -158,7 +189,10 @@ export function createTools(deps) {
             n: { type: "integer", description: "1-50, default 5." },
             type: { type: "string", enum: ["movie", "series"] },
             year_from: { type: "integer" },
-            min_rating: { type: "number" },
+            min_rating: { type: "number", description: "TMDB rating floor, 0-10." },
+            language: LANGUAGE_PARAM,
+            genre: GENRE_PARAM,
+            provider: PROVIDER_PARAM,
             exclude_seen: { type: "boolean" },
             seed: { type: "integer" }
           },

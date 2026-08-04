@@ -27,15 +27,8 @@ deepStrictEqual(s.getHistory(), { seen: ["a"] });
 s.setHistory(null);
 strictEqual(s.getHistory(), null);
 
-deepStrictEqual(s.getChats(), []);
-s.setChats([{ id: 1 }]);
-deepStrictEqual(s.getChats(), [{ id: 1 }]);
-
 storage.setItem(KEYS.llm, "{not json");
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);
-
-storage.setItem(KEYS.chats, "{not json");
-deepStrictEqual(s.getChats(), []);
 
 s.clearAll();
 strictEqual(mem.size, 0);

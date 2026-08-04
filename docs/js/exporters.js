@@ -2,10 +2,39 @@
 
 const MAX_RECENT = 25;
 
+const PROVIDER_LABELS = {
+  netflix: "Netflix",
+  prime: "Prime Video",
+  hotstar: "JioHotstar",
+  zee5: "ZEE5",
+  sonyliv: "SonyLIV",
+  mubi: "MUBI",
+  crunchyroll: "Crunchyroll",
+  sunnxt: "Sun NXT",
+  mxplayer: "MX Player",
+  discovery: "Discovery+",
+  shemaroo: "ShemarooMe",
+  lionsgate: "Lionsgate Play",
+  manoramamax: "ManoramaMAX",
+  hungama: "Hungama Play",
+  hoichoi: "Hoichoi",
+  aha: "aha",
+  curiosity: "CuriosityStream",
+  appletv: "Apple TV+",
+  epicon: "EPIC ON",
+  tataplay: "Tata Play",
+  plex: "Plex",
+  tubi: "Tubi",
+  docubay: "DocuBay",
+  bbcplayer: "BBC Player",
+  chaupal: "Chaupal",
+  erosnow: "Eros Now"
+};
+
 function providerLabel(slug) {
   const s = String(slug || "");
   if (!s) return "";
-  return s.charAt(0).toUpperCase() + s.slice(1);
+  return PROVIDER_LABELS[s] || s;
 }
 
 function providerLinks(u) {
@@ -34,7 +63,7 @@ export function toMarkdown(picks, meta) {
     const title = p.y == null ? `${p.t}` : `${p.t} (${p.y})`;
     const facts = [p.k];
     if (p.rt != null) facts.push(`${p.rt} min`);
-    if (p.r != null) facts.push(`IMDb ${p.r}`);
+    if (p.r != null) facts.push(`TMDB ${p.r}`);
     const lines = [`## ${i + 1}. ${title}`, `- Kind: ${facts.join(" · ")}`, `- Why: ${p.reason}`];
     const links = providerLinks(p.u);
     if (links) lines.push(`- Watch: ${links}`);
@@ -57,13 +86,15 @@ function csvField(value) {
   return s;
 }
 
-export function toCsv(picks) {
-  const header = "id,title,year,kind,runtime_min,rating,providers,url,reason";
+export function toCsv(picks, meta) {
+  const header = "id,title,year,kind,runtime_min,rating,language,genre,providers,url,reason";
   const list = Array.isArray(picks) ? picks : [];
   const rows = list.map((pick) => {
     const p = pick || {};
-    const providers = Array.isArray(p.p) ? p.p.join("|") : "";
-    return [p.id, p.t, p.y, p.k, p.rt, p.r, providers, firstUrl(p.u), p.reason]
+    const providers = Array.isArray(p.p) ? p.p.map(providerLabel).join("|") : "";
+    const language = p.l || "";
+    const genre = (p.g || []).join("; ");
+    return [p.id, p.t, p.y, p.k, p.rt, p.r, language, genre, providers, firstUrl(p.u), p.reason]
       .map(csvField)
       .join(",");
   });

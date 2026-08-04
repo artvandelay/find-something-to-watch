@@ -20,11 +20,15 @@ actually are.
 ## Bring your own key
 
 Any OpenAI-compatible endpoint works. OpenRouter is the default, at `https://openrouter.ai/api/v1`, but
-you can point the app at any other compatible base URL.
+you can point the app at any other compatible base URL. The key is entered in the in-app **Settings**
+dialog.
 
 The key is stored only in `localStorage` on your device — it is never sent anywhere except to the
 endpoint you configured. Keyword search works with no key at all; the key only unlocks the LLM-ranked
 semantic search.
+
+No catalog key of any kind is needed at runtime. The catalog is a static JSON file built ahead of time
+(see below) and shipped with the site.
 
 ## Bring your own context
 
@@ -37,6 +41,14 @@ Two optional inputs shape the ranking:
 
 Both stay on the device, and both can be exported back out at any time.
 
+## What you can filter on
+
+Results can be narrowed by kind (movie or series), release year, runtime, TMDB rating, provider,
+original language (ISO-639-1 codes), and genre. The provider facet covers 26 curated India services,
+including Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV, and MUBI.
+
+Ratings shown are TMDB `vote_average` (audience scores out of 10), not IMDb ratings.
+
 ## Export
 
 Results export as Markdown, JSON, CSV, or an updated You.md.
@@ -44,32 +56,56 @@ Results export as Markdown, JSON, CSV, or an updated You.md.
 ## Run it locally
 
 ```bash
-python3 -m http.server 8000 --directory docs
+python3 -m http.server --directory docs
 # then open http://localhost:8000
 ```
 
+There is no build step and no `package.json` — `docs/` is the whole app, served as static files.
+
 ## Rebuild the catalog
 
-The shipped catalog merges two sources: a uNoGS-derived Netflix dump, and the movieofthenight Streaming
-Availability API for eight more India services (Prime Video, JioHotstar, Zee5, SonyLIV, Apple TV, Mubi,
-Crunchyroll, Curiosity Stream).
+The catalog is built at **build time** from TMDB. You need a TMDB v4 read access token in the root
+`.env` (gitignored, never committed):
 
-```bash
-python3 scripts/build_catalog.py --source unogs
-python3 scripts/fetch_streaming_availability.py
-python3 scripts/build_catalog.py --source streaming_availability \
-  --out docs/assets/catalog.sa.json --meta-out docs/assets/catalog.sa.meta.json
-python3 scripts/validate_catalog.py docs/assets/catalog.json
+```
+TMDB_TOKEN=<v4 read access token>
 ```
 
-Both inputs (`data/unogs_catalog/*.jsonl.gz` and `data/streaming_availability/`) are fetched from
-RapidAPI-gated sources and are not committed to this repo. Merging the two builds into the single shipped
-`docs/assets/catalog.json` is currently a manual step (see `research/CATALOG-STRATEGY.md`); the merge
-drops the smaller, redundant Netflix rows from the Streaming Availability source (uNoGS's Netflix data is
-deeper) and drops poster images from that source, since its CDN URLs are signed and expire after a few
-months.
+(`TMDB_READ_ACCESS_TOKEN` is also accepted.) Then, from the repo root:
 
-## Development checks
+```bash
+# 1. Sweep TMDB discover + watch/providers (region IN) into catalog/catalog.db
+python3 catalog/catalog.py
+
+# 2. Enrich: backfill imdb_id and runtime (only touches rows missing them)
+python3 catalog/catalog.py --enrich
+
+# 3. Build the shipped assets: unions catalog.db with the legacy uNoGS /
+#    StreamingAvailability dumps under data/ (read from disk only, never
+#    re-fetched) and emits:
+#      docs/assets/catalog.json       — lean records, synopses blanked
+#      docs/assets/catalog.text.json  — synopsis sidecar, lazy-loaded by the app
+#      docs/assets/catalog.meta.json  — the meta object alone
+python3 scripts/build_catalog_tmdb.py
+
+# 4. Validate
+python3 scripts/validate_catalog.py
+python3 scripts/validate_catalog.py docs/assets/catalog.json --text docs/assets/catalog.text.json
+```
+
+The `--text` flag validates the synopsis sidecar (schema, counts, and that every sidecar key is an id
+present in the catalog when the catalog is also given).
+
+See `catalog/README.md` for sweep tuning (sharding, concurrency, change tracking, cron) and
+`CONTRACT.md` for the frozen record and file shapes every consumer relies on.
+
+**No RapidAPI anywhere** — not at build time, not at runtime. The old scripts
+`scripts/fetch_streaming_availability.py` and `scripts/unogs_dump_catalog.py` remain on disk for
+provenance only; they are not part of the build or runtime flow.
+
+## Checks and stress suites
+
+Module checks (development-only; the published site has no build step and no npm dependencies):
 
 ```bash
 node scripts/check_catalog.mjs
@@ -80,36 +116,53 @@ node scripts/check_store.mjs
 node scripts/check_exporters.mjs
 ```
 
-These are development-only. The published site has no build step and no npm dependencies.
+Stress suites:
 
-## Architecture
+```bash
+node scripts/stress_*.mjs
+```
 
-- `docs/js/catalog.js` — BM25 search
-- `docs/js/history.js` — Netflix CSV parsing
-- `docs/js/tools.js` — browser-local agent tools
-- `docs/js/agent.js` — OpenAI-compatible tool-calling loop
-- `docs/js/store.js` — localStorage
-- `docs/js/exporters.js` — output formats
-- `docs/js/ui.js` — the only module that imports the others
+`stress_agent_live.mjs` makes real LLM calls and needs `OPENROUTER_API_KEY` in the root `.env`; it
+exits non-zero when the key is absent, so it is safe to include in CI where the key may not exist.
 
-Every other module is import-free and receives its dependencies as arguments.
+To scan the repo for accidentally committed secrets:
+
+```bash
+bash scripts/scan_secrets.sh
+```
+
+## Repo layout
+
+- `docs/` — the entire app, served as static files (GitHub Pages)
+  - `docs/js/catalog.js` — BM25 search over the catalog
+  - `docs/js/history.js` — Netflix CSV parsing
+  - `docs/js/tools.js` — browser-local agent tools
+  - `docs/js/agent.js` — OpenAI-compatible tool-calling loop
+  - `docs/js/store.js` — localStorage
+  - `docs/js/exporters.js` — output formats
+  - `docs/js/ui.js` — the only module that imports the others
+  - `docs/assets/` — built catalog JSON, synopsis sidecar, meta, prompts
+- `catalog/` — TMDB sweep CLI (`catalog.py`) and the SQLite dump it produces (gitignored)
+- `scripts/` — catalog builder/validator, node module checks, stress suites, secret scanner,
+  and the retired RapidAPI fetchers kept for provenance
+- `data/` — legacy uNoGS / StreamingAvailability dumps (gitignored; read-only builder inputs)
+- `research/` — sourcing analysis notes
+- `CONTRACT.md` — frozen data shapes every module conforms to
+- `CHANGELOG.md` — v0.1.0 release notes
+- `RELEASE_CHECKLIST.md` — remaining checks before tagging and publishing
+
+Every browser module except `ui.js` is import-free and receives its dependencies as arguments.
 
 ## Data and attribution
 
-The catalog is a point-in-time snapshot spanning nine India OTT providers: Netflix, Prime Video,
-JioHotstar, Zee5, SonyLIV, Apple TV, Mubi, Crunchyroll, and Curiosity Stream. Availability changes
-constantly, so treat anything here as a starting point rather than the truth right now. Poster art is
-only available for Netflix titles — the other providers' CDN image URLs are signed and expire, so they
-are intentionally omitted rather than shipped as a time bomb. No affiliation with any streaming service
-is implied or claimed.
+The catalog is a point-in-time snapshot built from TMDB (discover + watch/providers, region IN),
+unioned with legacy dumps. Availability changes constantly, so treat anything here as a starting
+point rather than the truth right now. Ratings are TMDB audience scores. No affiliation with any
+streaming service is implied or claimed.
 
-See `research/CATALOG-STRATEGY.md` for the full sourcing analysis, including which aggregators were
-evaluated and why, and what still needs a paid key (TMDB enrichment, Watchmode for the regional long
-tail) to go further.
-
-> TODO before making this repo public: confirm redistribution terms for both catalog sources (uNoGS via
-> RapidAPI, and the Streaming Availability API via RapidAPI/movieofthenight), and add the required
-> attribution line for whichever sources ship.
+The footer of the app shows TMDB attribution — "This product uses the TMDB API but is not endorsed or
+certified by TMDB" — as required by TMDB's API terms. The underlying availability data is JustWatch
+data served through TMDB; see `catalog/README.md` for that attribution requirement.
 
 ## License
 

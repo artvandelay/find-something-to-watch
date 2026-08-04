@@ -8,10 +8,24 @@ import sys
 from pathlib import Path
 
 DOC_KEYS = {"schema", "meta", "records"}
-META_KEYS = {"region", "source", "built_at", "count", "providers", "filters"}
+META_KEYS = {
+    "region",
+    "source",
+    "built_at",
+    "count",
+    "providers",
+    "provider_order",
+    "languages",
+    "genres",
+    "text_file",
+    "filters",
+}
 FILTER_KEYS = {"min_year", "min_rating", "limit"}
-RECORD_KEYS = ["id", "t", "y", "k", "rt", "s", "im", "r", "p", "u", "img"]
-ID_RE = re.compile(r"[a-z0-9]+:[A-Za-z0-9_-]+")
+RECORD_KEYS = ["id", "t", "y", "k", "rt", "s", "im", "r", "p", "u", "img", "l", "g", "v"]
+TEXT_KEYS = {"schema", "count", "s"}
+ID_RE = re.compile(r"(?:tmdb:[mt]|netflix:)\d+")
+
+DEFAULT_CATALOG = "docs/assets/catalog.json"
 
 
 def _is_int(value):
@@ -33,7 +47,7 @@ def _validate_record(rec, i):
 
     rid = rec.get("id")
     if not isinstance(rid, str) or not ID_RE.fullmatch(rid):
-        errors.append(prefix + "id must match 'provider:key', got %r" % (rid,))
+        errors.append(prefix + "id must match 'tmdb:m<n>', 'tmdb:t<n>' or 'netflix:<n>', got %r" % (rid,))
 
     title = rec.get("t")
     if not isinstance(title, str) or not title:
@@ -52,8 +66,8 @@ def _validate_record(rec, i):
         errors.append(prefix + "rt must be null or int in 1..600, got %r" % (runtime,))
 
     synopsis = rec.get("s")
-    if not isinstance(synopsis, str):
-        errors.append(prefix + "s must be a string, got %r" % (synopsis,))
+    if synopsis != "":
+        errors.append(prefix + "s must be exactly '' in catalog.json, got %r" % (synopsis,))
 
     imdb = rec.get("im")
     if imdb is not None and not (isinstance(imdb, str) and imdb.startswith("tt")):
@@ -79,8 +93,22 @@ def _validate_record(rec, i):
                 errors.append(prefix + "u[%r] must be a URL starting with 'http', got %r" % (key, value))
 
     img = rec.get("img")
-    if img is not None and not (isinstance(img, str) and img.startswith("http")):
-        errors.append(prefix + "img must be null or a string starting with 'http', got %r" % (img,))
+    if img is not None and not (isinstance(img, str) and img.startswith("https://image.tmdb.org/t/p/w185")):
+        errors.append(prefix + "img must be null or a w185 TMDB https URL, got %r" % (img,))
+
+    language = rec.get("l")
+    if language is not None and not isinstance(language, str):
+        errors.append(prefix + "l must be null or a string, got %r" % (language,))
+
+    genres = rec.get("g")
+    if not isinstance(genres, list) or not all(isinstance(g, str) for g in genres):
+        errors.append(prefix + "g must be a list of strings, got %r" % (genres,))
+
+    votes = rec.get("v")
+    if not (_is_int(votes) and votes >= 0):
+        errors.append(prefix + "v must be an integer >= 0, got %r" % (votes,))
+    elif img is not None and votes < 10:
+        errors.append(prefix + "img must be null when v < 10")
 
     return errors
 
@@ -93,8 +121,8 @@ def validate(doc) -> list[str]:
     if set(doc.keys()) != DOC_KEYS:
         errors.append("top-level keys must be %r, got %r" % (sorted(DOC_KEYS), sorted(doc.keys())))
 
-    if doc.get("schema") != 1:
-        errors.append("schema must be 1, got %r" % (doc.get("schema"),))
+    if doc.get("schema") != 2:
+        errors.append("schema must be 2, got %r" % (doc.get("schema"),))
 
     meta = doc.get("meta")
     if not isinstance(meta, dict):
@@ -102,6 +130,10 @@ def validate(doc) -> list[str]:
 
     if set(meta.keys()) != META_KEYS:
         errors.append("meta keys must be %r, got %r" % (sorted(META_KEYS), sorted(meta.keys())))
+
+    for key in ("region", "source", "built_at", "text_file"):
+        if not isinstance(meta.get(key), str) or not meta.get(key):
+            errors.append("meta.%s must be a non-empty string, got %r" % (key, meta.get(key)))
 
     filters = meta.get("filters")
     if not isinstance(filters, dict):
@@ -120,6 +152,17 @@ def validate(doc) -> list[str]:
     providers = meta.get("providers")
     if not isinstance(providers, list) or not providers or not all(isinstance(p, str) for p in providers):
         errors.append("meta.providers must be a non-empty list of strings, got %r" % (providers,))
+
+    provider_order = meta.get("provider_order")
+    if not isinstance(provider_order, list) or not all(isinstance(p, str) for p in provider_order):
+        errors.append("meta.provider_order must be a list of strings, got %r" % (provider_order,))
+    elif isinstance(providers, list) and set(provider_order) != set(providers):
+        errors.append("meta.provider_order must contain the same slugs as meta.providers")
+
+    for key in ("languages", "genres"):
+        value = meta.get(key)
+        if not isinstance(value, list) or not all(isinstance(item, str) for item in value):
+            errors.append("meta.%s must be a list of strings, got %r" % (key, value))
 
     for i, rec in enumerate(records):
         errors.extend(_validate_record(rec, i))
@@ -141,36 +184,103 @@ def validate(doc) -> list[str]:
     return errors
 
 
+def validate_text(doc, catalog_ids=None) -> list[str]:
+    if not isinstance(doc, dict):
+        return ["top level must be an object, got %s" % type(doc).__name__]
+
+    errors = []
+    if set(doc.keys()) != TEXT_KEYS:
+        errors.append("top-level keys must be %r, got %r" % (sorted(TEXT_KEYS), sorted(doc.keys())))
+
+    if doc.get("schema") != 2:
+        errors.append("schema must be 2, got %r" % (doc.get("schema"),))
+
+    texts = doc.get("s")
+    if not isinstance(texts, dict):
+        return errors + ["s must be an object, got %s" % type(texts).__name__]
+
+    count = doc.get("count")
+    if count != len(texts):
+        errors.append("count %r does not match len(s) %d" % (count, len(texts)))
+
+    for key, value in texts.items():
+        if not ID_RE.fullmatch(key):
+            errors.append("s key %r must match 'tmdb:m<n>', 'tmdb:t<n>' or 'netflix:<n>'" % (key,))
+        if not isinstance(value, str) or not value:
+            errors.append("s[%r] must be a non-empty string, got %r" % (key, value))
+        if catalog_ids is not None and key not in catalog_ids:
+            errors.append("s key %r is not an id present in the catalog" % (key,))
+
+    return errors
+
+
+def _load_json(path):
+    try:
+        return json.loads(path.read_text(encoding="utf-8")), None
+    except FileNotFoundError:
+        return None, "file not found: %s" % path
+    except OSError as exc:
+        return None, "cannot read %s: %s" % (path, exc)
+    except json.JSONDecodeError as exc:
+        return None, "invalid JSON in %s: %s" % (path, exc)
+
+
 def main(argv):
     parser = argparse.ArgumentParser(description="Validate a built OTT catalog JSON file.")
-    parser.add_argument("path", nargs="?", default="docs/assets/catalog.json")
+    parser.add_argument("path", nargs="?", help="catalog JSON path (default: %s)" % DEFAULT_CATALOG)
+    parser.add_argument("--text", help="synopsis sidecar JSON path (e.g. docs/assets/catalog.text.json)")
     parser.add_argument("--max-errors", type=int, default=20)
     args = parser.parse_args(argv)
 
-    path = Path(args.path)
-    try:
-        doc = json.loads(path.read_text(encoding="utf-8"))
-    except FileNotFoundError:
-        print("FAIL: file not found: %s" % path, file=sys.stderr)
-        return 1
-    except OSError as exc:
-        print("FAIL: cannot read %s: %s" % (path, exc), file=sys.stderr)
-        return 1
-    except json.JSONDecodeError as exc:
-        print("FAIL: invalid JSON in %s: %s" % (path, exc), file=sys.stderr)
-        return 1
+    if args.path is None and args.text is None:
+        args.path = DEFAULT_CATALOG
 
-    errors = validate(doc)
-    if not errors:
-        records = doc["records"]
-        providers = doc["meta"]["providers"]
-        print("OK: %d records, schema 1, providers=%s" % (len(records), providers))
-        return 0
+    failed = False
+    catalog_ids = None
 
-    print("FAIL: %d error(s)" % len(errors), file=sys.stderr)
-    for error in errors[: args.max_errors]:
-        print(error, file=sys.stderr)
-    return 1
+    if args.path is not None:
+        path = Path(args.path)
+        doc, error = _load_json(path)
+        if error:
+            print("FAIL: %s" % error, file=sys.stderr)
+            return 1
+
+        errors = validate(doc)
+        if errors:
+            print("FAIL: %d error(s)" % len(errors), file=sys.stderr)
+            for error in errors[: args.max_errors]:
+                print(error, file=sys.stderr)
+            failed = True
+        else:
+            records = doc["records"]
+            providers = doc["meta"]["providers"]
+            print("OK: %d records, schema 2, providers=%s" % (len(records), providers))
+
+        records = doc.get("records") if isinstance(doc, dict) else None
+        if isinstance(records, list):
+            catalog_ids = {
+                rec.get("id")
+                for rec in records
+                if isinstance(rec, dict) and isinstance(rec.get("id"), str)
+            }
+
+    if args.text is not None:
+        path = Path(args.text)
+        doc, error = _load_json(path)
+        if error:
+            print("FAIL: %s" % error, file=sys.stderr)
+            return 1
+
+        errors = validate_text(doc, catalog_ids)
+        if errors:
+            print("FAIL: %d error(s) in %s" % (len(errors), path), file=sys.stderr)
+            for error in errors[: args.max_errors]:
+                print(error, file=sys.stderr)
+            failed = True
+        else:
+            print("OK: %d synopsis entries, schema 2, sidecar=%s" % (len(doc["s"]), path))
+
+    return 1 if failed else 0
 
 
 if __name__ == "__main__":

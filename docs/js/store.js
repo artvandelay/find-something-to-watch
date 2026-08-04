@@ -1,8 +1,7 @@
 export const KEYS = {
   llm: "ottbyok.llm",
   youmd: "ottbyok.youmd",
-  history: "ottbyok.history",
-  chats: "ottbyok.chats"
+  history: "ottbyok.history"
 };
 
 export const DEFAULT_LLM = {
@@ -120,26 +119,6 @@ export function createStore(storage) {
     }
   }
 
-  function getChats() {
-    try {
-      const raw = read(KEYS.chats);
-      if (!raw) return [];
-      const parsed = JSON.parse(raw);
-      if (!Array.isArray(parsed)) return [];
-      return parsed;
-    } catch (err) {
-      return [];
-    }
-  }
-
-  function setChats(arr) {
-    try {
-      return write(KEYS.chats, JSON.stringify(arr));
-    } catch (err) {
-      return false;
-    }
-  }
-
   function clearAll() {
     let ok = true;
     for (const key of Object.values(KEYS)) {
@@ -160,8 +139,6 @@ export function createStore(storage) {
     setYouMd,
     getHistory,
     setHistory,
-    getChats,
-    setChats,
     clearAll,
     hasKey
   };

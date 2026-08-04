@@ -5,6 +5,7 @@
   --accent: #7cc4ff;
   --card: #14171c;
   --border: #232830;
+  --control-border: #6b7482;
   --radius: 10px;
 }
 
@@ -16,6 +17,7 @@
     --accent: #0366d6;
     --card: #fff;
     --border: #e5e7eb;
+    --control-border: #8a8f98;
   }
 }
 
@@ -82,7 +84,7 @@ a {
 
 #error-banner {
   border: 1px solid var(--border);
-  border-left: 3px solid #ff7b72;
+  border-left: 3px solid #e5484d;
   background: var(--card);
   border-radius: var(--radius);
   padding: 12px 14px;
@@ -113,7 +115,7 @@ textarea,
 select {
   width: 100%;
   background: var(--card);
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: var(--radius);
   padding: 10px 12px;
 }
@@ -142,6 +144,22 @@ button {
 
 button:hover {
   border-color: var(--accent);
+}
+
+button:active {
+  transform: translateY(1px);
+}
+
+input:disabled,
+textarea:disabled,
+select:disabled,
+button:disabled {
+  opacity: 0.55;
+  cursor: not-allowed;
+}
+
+button:disabled:active {
+  transform: none;
 }
 
 button[hidden] {
@@ -204,6 +222,24 @@ button[hidden] {
   border: 1px solid var(--border);
   border-radius: 6px;
   object-fit: cover;
+  overflow: hidden;
+}
+
+.poster-fallback {
+  flex: 0 0 92px;
+  width: 92px;
+  aspect-ratio: 2 / 3;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: var(--bg);
+  color: var(--accent);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 1.25rem;
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
   overflow: hidden;
 }
 
@@ -341,5 +377,14 @@ dialog h2 {
   .card {
     gap: 10px;
     padding: 12px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    transition: none !important;
+    animation: none !important;
   }
 }

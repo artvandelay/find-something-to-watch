@@ -22,6 +22,8 @@ const tools = {
         rt: 90,
         r: 7,
         p: ["netflix"],
+        l: "en",
+        g: ["Comedy"],
         u: { netflix: "https://x/1" },
         img: null
       }]
@@ -89,7 +91,7 @@ function ok(payload) {
   assert.equal(result.picks[0].reason, "fits");
   assert.deepStrictEqual(
     Object.keys(result.picks[0]).sort(),
-    ["id", "img", "k", "p", "r", "reason", "rt", "t", "u", "y"]
+    ["g", "id", "img", "k", "l", "p", "r", "reason", "rt", "t", "u", "y"]
   );
   assert.equal(events.at(-1).type, "done");
 }
