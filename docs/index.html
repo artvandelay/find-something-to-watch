@@ -3,111 +3,231 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>India OTT Search — bring your own key</title>
-    <meta name="description" content="Search India's streaming catalogs in plain language. Your key and your watch history never leave your browser.">
+    <title>India OTT Home — bring your own key</title>
+    <meta name="description" content="An agentic home for what to watch across your India streaming subscriptions. Your key, taste notes, and watch history stay in this browser; the query and that context are sent directly to the model endpoint you configure.">
     <link rel="stylesheet" href="./css/app.css">
   </head>
   <body>
-    <main id="app">
-      <header class="app-header">
-        <h1>India OTT Search</h1>
-        <div class="toolbar">
-          <button id="settings-btn" type="button">Settings</button>
-          <button id="context-btn" type="button">Your context</button>
-        </div>
-      </header>
-
-      <p class="intro">
-        This site ships the catalog and the search logic; you bring your own model key and your own
-        taste context, both of which stay in your browser. Search still works without a key — it just
-        falls back to plain keyword matching.
-      </p>
-
-      <p id="catalog-status" aria-live="polite">Loading catalog…</p>
-      <p id="catalog-detail" aria-live="polite"></p>
-
+    <div id="app">
       <div id="error-banner" role="alert" aria-live="polite" hidden></div>
 
-      <form id="query-form">
-        <label for="query-input">What are you in the mood for?</label>
-        <textarea id="query-input" name="query-input" rows="3" placeholder="Something short and funny for tonight — nothing I've already seen"></textarea>
+      <!-- ============================ Onboarding ============================ -->
+      <section id="onboarding-screen" aria-labelledby="onboarding-title" hidden>
+        <div class="onboarding-card">
+          <h1 id="onboarding-title">India OTT Home</h1>
+          <p class="intro">
+            A local-first agentic home for what to watch. Pick the services you actually subscribe to,
+            bring your own model key, and optionally tell it about your taste — everything below stays
+            in this browser except the two things noted in “How this works”.
+          </p>
 
-        <div class="form-row">
-          <div class="field">
-            <label for="mood-select">Mood</label>
-            <select id="mood-select" name="mood-select">
-              <option value="">Any mood</option>
-              <option value="comfort">Comfort</option>
-              <option value="intense">Intense</option>
-              <option value="funny">Funny</option>
-              <option value="thoughtful">Thoughtful</option>
-              <option value="background">Background</option>
-              <option value="surprise">Surprise</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="language-select">Language</label>
-            <select id="language-select" name="language-select">
-              <option value="">All languages</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="genre-select">Genre</label>
-            <select id="genre-select" name="genre-select">
-              <option value="">All genres</option>
-            </select>
-          </div>
-          <div class="field">
-            <label for="provider-select">Provider</label>
-            <select id="provider-select" name="provider-select">
-              <option value="">All providers</option>
-            </select>
-          </div>
-          <div class="form-actions">
-            <button id="send-btn" type="submit">Find something</button>
-            <button id="stop-btn" type="button" hidden>Stop</button>
-          </div>
+          <form id="onboarding-form">
+            <fieldset class="field-group">
+              <legend>Your subscriptions</legend>
+              <p class="note">Select every service you currently pay for. Results are restricted to these.</p>
+              <div id="onboarding-provider-list" class="provider-grid"></div>
+            </fieldset>
+
+            <fieldset class="field-group">
+              <legend>Your model (optional, but unlocks the agent)</legend>
+              <div class="field">
+                <label for="onboarding-llm-base-url">Base URL</label>
+                <input id="onboarding-llm-base-url" type="url" placeholder="https://openrouter.ai/api/v1">
+              </div>
+              <div class="field">
+                <label for="onboarding-llm-api-key">API key</label>
+                <input id="onboarding-llm-api-key" type="password" autocomplete="off">
+              </div>
+              <div class="field">
+                <label for="onboarding-llm-model">Model</label>
+                <input id="onboarding-llm-model" type="text" placeholder="openai/gpt-4o-mini">
+              </div>
+              <div class="field">
+                <input id="onboarding-web-search" type="checkbox">
+                <label for="onboarding-web-search">Allow web search with OpenRouter (may add cost)</label>
+              </div>
+              <p class="note">
+                Without a key you can still browse with plain keyword search; the conversational agent
+                needs one.
+              </p>
+            </fieldset>
+
+            <fieldset class="field-group">
+              <legend>Your taste (optional)</legend>
+              <div class="field">
+                <label for="onboarding-youmd-input">You.md — what you like, what you avoid</label>
+                <textarea id="onboarding-youmd-input" rows="10"></textarea>
+              </div>
+              <div class="field">
+                <label for="onboarding-history-file">Netflix viewing history (CSV)</label>
+                <input id="onboarding-history-file" type="file" accept=".csv,text/csv">
+              </div>
+              <p id="onboarding-history-summary" class="note" aria-live="polite"></p>
+            </fieldset>
+
+            <div id="onboarding-privacy" class="privacy-copy">
+              <h2>How this works</h2>
+              <ul>
+                <li>No account or cloud sync. Your settings, profile, and history are written to this
+                  browser's local storage and IndexedDB.</li>
+                <li>A disposable Worker executes model-generated catalog code over bundled analytical
+                  data. Bounded tool results, your search message, and relevant context go to the model
+                  endpoint you configure. Your API key is sent only to that endpoint to authenticate
+                  the request.</li>
+                <li>Enabling web search allows OpenRouter/search providers to process relevant queries
+                  and results and may add cost.</li>
+                <li>The catalog is a point-in-time snapshot — streaming availability changes constantly,
+                  so confirm a title is still where it says before committing to watch it.</li>
+                <li>Clearing this browser's site data removes everything, with no way to recover it. This
+                  is not encrypted storage and is not a backup — use “Export backup” in the sidebar for
+                  that.</li>
+              </ul>
+            </div>
+
+            <div class="onboarding-actions">
+              <button id="onboarding-continue" type="submit">Continue</button>
+            </div>
+          </form>
         </div>
-      </form>
-
-      <section id="results"></section>
-
-      <details id="trace">
-        <summary>Agent trace</summary>
-        <div></div>
-      </details>
-
-      <section class="exports">
-        <h2>Export</h2>
-        <button id="export-md" type="button">Markdown</button>
-        <button id="export-json" type="button">JSON</button>
-        <button id="export-csv" type="button">CSV</button>
-        <button id="export-youmd" type="button">You.md</button>
       </section>
 
+      <!-- =============================== Shell =============================== -->
+      <div id="shell" hidden>
+        <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false">
+          <span aria-hidden="true">☰</span> Menu
+        </button>
+
+        <aside id="sidebar" aria-label="Conversation and settings">
+          <div class="sidebar-brand">India OTT Home</div>
+
+          <button id="new-chat-btn" type="button">+ New chat</button>
+
+          <div id="conversation-indicator" class="sidebar-block" aria-live="polite"></div>
+
+          <div class="sidebar-block">
+            <h2>Subscriptions</h2>
+            <p id="subscriptions-summary" aria-live="polite"></p>
+          </div>
+
+          <nav class="sidebar-nav" aria-label="Settings and data">
+            <button id="context-btn" type="button">Profile &amp; context</button>
+            <button id="settings-btn" type="button">Settings</button>
+            <button id="disclosure-btn" type="button">Trace, exports &amp; catalog info</button>
+          </nav>
+
+          <div class="sidebar-block sidebar-data-actions">
+            <h2>Local data</h2>
+            <button id="export-backup-btn" type="button">Export backup</button>
+            <button id="import-backup-btn" type="button">Import backup</button>
+            <input id="import-backup-file" type="file" accept="application/json" hidden>
+            <button id="clear-data-btn" class="danger-action" type="button">Clear local data</button>
+          </div>
+
+          <p id="catalog-status" class="sidebar-block note" aria-live="polite">Loading catalog…</p>
+        </aside>
+
+        <div id="backdrop" hidden></div>
+
+        <main id="workspace">
+          <section id="chat-region" aria-label="Conversation">
+            <div id="chat-transcript" role="log" aria-live="polite" aria-relevant="additions text"></div>
+            <p id="chat-note" class="note" hidden aria-live="polite"></p>
+
+            <form id="query-form">
+              <label for="query-input">What are you in the mood for?</label>
+              <textarea id="query-input" rows="2" maxlength="6000" placeholder="Something short and funny for tonight — nothing I've already seen"></textarea>
+
+              <div class="form-row">
+                <div class="field">
+                  <label for="mood-select">Mood</label>
+                  <select id="mood-select">
+                    <option value="">Any mood</option>
+                    <option value="comfort">Comfort</option>
+                    <option value="intense">Intense</option>
+                    <option value="funny">Funny</option>
+                    <option value="thoughtful">Thoughtful</option>
+                    <option value="background">Background</option>
+                    <option value="surprise">Surprise</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="language-select">Language</label>
+                  <select id="language-select">
+                    <option value="">All languages</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="genre-select">Genre</label>
+                  <select id="genre-select">
+                    <option value="">All genres</option>
+                  </select>
+                </div>
+                <div class="field">
+                  <label for="provider-select">Provider</label>
+                  <select id="provider-select">
+                    <option value="">All subscriptions</option>
+                  </select>
+                </div>
+                <div class="form-actions">
+                  <button id="send-btn" type="submit">Send</button>
+                  <button id="stop-btn" type="button" hidden>Stop</button>
+                </div>
+              </div>
+            </form>
+          </section>
+
+          <section id="queue-region" aria-label="Recommendations">
+            <div id="queue-header">
+              <h2>For you</h2>
+              <p id="queue-status" aria-live="polite"></p>
+              <div class="queue-controls">
+                <button id="queue-prev" type="button" aria-label="Previous recommendations">‹</button>
+                <button id="queue-next" type="button" aria-label="More recommendations">›</button>
+              </div>
+            </div>
+            <div id="queue-viewport">
+              <div id="queue-track" role="list"></div>
+            </div>
+            <p id="queue-empty" class="note" hidden></p>
+          </section>
+        </main>
+      </div>
+
       <footer id="attribution">
-        Catalog data is a static snapshot — availability changes. Your API key and watch history stay in
-        this browser; nothing is uploaded to any server.
         This product uses the TMDB API but is not endorsed or certified by TMDB.
         <a href="https://github.com/artvandelay/india-ott-byok">Source on GitHub</a>.
       </footer>
-    </main>
+    </div>
 
     <dialog id="settings-dialog">
       <h2>Settings</h2>
-      <div class="field">
-        <label for="llm-base-url">Base URL</label>
-        <input id="llm-base-url" name="llm-base-url" type="url" placeholder="https://openrouter.ai/api/v1">
-      </div>
-      <div class="field">
-        <label for="llm-api-key">API key</label>
-        <input id="llm-api-key" name="llm-api-key" type="password" autocomplete="off">
-      </div>
-      <div class="field">
-        <label for="llm-model">Model</label>
-        <input id="llm-model" name="llm-model" type="text" placeholder="openai/gpt-4o-mini">
-      </div>
-      <p class="note">Your key is stored only in this browser and sent directly to the endpoint above.</p>
+      <fieldset class="field-group">
+        <legend>Your subscriptions</legend>
+        <div id="settings-provider-list" class="provider-grid"></div>
+      </fieldset>
+      <fieldset class="field-group">
+        <legend>Your model</legend>
+        <div class="field">
+          <label for="llm-base-url">Base URL</label>
+          <input id="llm-base-url" name="llm-base-url" type="url" placeholder="https://openrouter.ai/api/v1">
+        </div>
+        <div class="field">
+          <label for="llm-api-key">API key</label>
+          <input id="llm-api-key" name="llm-api-key" type="password" autocomplete="off">
+        </div>
+        <div class="field">
+          <label for="llm-model">Model</label>
+          <input id="llm-model" name="llm-model" type="text" placeholder="openai/gpt-4o-mini">
+        </div>
+        <div class="field">
+          <input id="llm-web-search" name="llm-web-search" type="checkbox">
+          <label for="llm-web-search">Allow web search with OpenRouter (may add cost)</label>
+        </div>
+      </fieldset>
+      <p class="note">A disposable Worker executes model-generated catalog code over bundled analytical
+        data, and bounded tool results go to the model endpoint above. Enabling web search allows
+        OpenRouter/search providers to process relevant queries and results and may add cost.</p>
+      <p id="settings-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">
         <button id="settings-save" type="button">Save</button>
         <button id="settings-close" type="button">Close</button>
@@ -115,20 +235,50 @@
     </dialog>
 
     <dialog id="context-dialog">
-      <h2>Your context</h2>
+      <h2>Profile &amp; context</h2>
       <div class="field">
         <label for="youmd-input">You.md — what you like, what you avoid</label>
-        <textarea id="youmd-input" name="youmd-input" rows="16"></textarea>
+        <textarea id="youmd-input" name="youmd-input" rows="14"></textarea>
       </div>
       <div class="field">
         <label for="history-file">Netflix viewing history (CSV)</label>
         <input id="history-file" name="history-file" type="file" accept=".csv,text/csv">
       </div>
-      <p id="history-summary"></p>
-      <p class="note">Nothing here is uploaded. It is parsed in your browser and stored locally.</p>
+      <p id="history-summary" aria-live="polite"></p>
+      <button id="history-remove" type="button">Remove imported history</button>
+      <p class="note">Parsed in your browser and stored locally. A bounded summary of this is sent to the
+        model endpoint along with each message you send.</p>
+      <p id="context-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">
         <button id="context-save" type="button">Save</button>
         <button id="context-close" type="button">Close</button>
+      </div>
+    </dialog>
+
+    <dialog id="disclosure-dialog">
+      <h2>Trace, exports &amp; catalog info</h2>
+
+      <section>
+        <h3>Catalog snapshot</h3>
+        <p id="catalog-detail" aria-live="polite"></p>
+      </section>
+
+      <details id="trace">
+        <summary>Agent trace (this turn)</summary>
+        <div></div>
+      </details>
+
+      <section class="exports">
+        <h3>Export current recommendations</h3>
+        <button id="export-md" type="button">Markdown</button>
+        <button id="export-json" type="button">JSON</button>
+        <button id="export-csv" type="button">CSV</button>
+        <button id="export-youmd" type="button">You.md</button>
+      </section>
+      <p id="disclosure-feedback" class="dialog-feedback" role="status" aria-live="polite" hidden></p>
+
+      <div class="dialog-actions">
+        <button id="disclosure-close" type="button">Close</button>
       </div>
     </dialog>
 

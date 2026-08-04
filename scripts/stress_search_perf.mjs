@@ -1,16 +1,24 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
-import { buildIndex, search } from "../docs/js/catalog.js";
+import { performance } from "node:perf_hooks";
+import { buildIndex, filterIndices, search } from "../docs/js/catalog.js";
 
 const here = dirname(fileURLToPath(import.meta.url));
 const raw = JSON.parse(readFileSync(join(here, "..", "docs", "assets", "catalog.json"), "utf8"));
-const records = Array.isArray(raw) ? raw : raw.records;
+const sidecar = JSON.parse(readFileSync(join(here, "..", "docs", "assets", "catalog.text.json"), "utf8"));
+const leanRecords = Array.isArray(raw) ? raw : raw.records;
+const synopses = sidecar && sidecar.s && typeof sidecar.s === "object" ? sidecar.s : {};
+const records = leanRecords.map((record) => ({
+  ...record,
+  s: typeof synopses[record.id] === "string" ? synopses[record.id] : (record.s || "")
+}));
 
 const INDEX_BUILD_MS = 4000;
 const HEAP_GROWTH_BYTES = 256 * 1024 * 1024;
 const P50_MS = 30;
 const P95_MS = 60;
+const ANALYTICAL_SUBSCRIPTIONS = new Set(["netflix", "prime", "hotstar"]);
 
 const QUERIES = [
   "heist", "love", "war", "space", "murder", "dragon", "wedding", "school",
@@ -66,7 +74,61 @@ function fail(msg) {
 
 const maybeGc = () => { if (typeof globalThis.gc === "function") globalThis.gc(); };
 
+function scopedAnalyticalProjection(source, subscriptions) {
+  const allowed = new Set(subscriptions);
+  return filterIndices(source, { providers: allowed }).map((i) => {
+    const record = source[i];
+    const p = record.p.filter((slug) => allowed.has(slug));
+    const u = {};
+    for (const slug of Object.keys(record.u || {})) {
+      if (allowed.has(slug)) u[slug] = record.u[slug];
+    }
+    return {
+      id: record.id,
+      t: record.t,
+      y: record.y,
+      k: record.k,
+      rt: record.rt,
+      r: record.r,
+      v: record.v,
+      p,
+      u,
+      l: record.l,
+      g: record.g,
+      s: record.s
+    };
+  });
+}
+
+// Node-only equivalent of the browser execution setup: it keeps raw records
+// for direct scans while passing a hard provider allow-list to helper search.
+function prepareExecutionEnvironment(source, index, subscriptions) {
+  const allowedIndices = filterIndices(source, { providers: subscriptions });
+  return {
+    records: source,
+    index,
+    subscriptions: new Set(subscriptions),
+    allowed: new Set(allowedIndices),
+    recordsById: new Map(source.map((record) => [record.id, record]))
+  };
+}
+
+function directFullScanAndSort(environment) {
+  const results = [];
+  for (const record of environment.records) {
+    if (!record.p.some((slug) => environment.subscriptions.has(slug))) continue;
+    results.push(record);
+  }
+  results.sort((a, b) => (b.r ?? -1) - (a.r ?? -1) || a.id.localeCompare(b.id));
+  return results.slice(0, 20);
+}
+
+function helperSearch(environment, query) {
+  return search(environment.index, query, { limit: 20, allow: environment.allowed });
+}
+
 console.log("records: " + records.length);
+console.log("sidecar synopses: " + Object.keys(synopses).length);
 
 maybeGc();
 const heapBefore = process.memoryUsage().heapUsed;
@@ -75,7 +137,7 @@ let idx = buildIndex(records);
 const buildMs = performance.now() - t0;
 maybeGc();
 const heapAfterFirst = process.memoryUsage().heapUsed;
-console.log("index build ms: " + buildMs.toFixed(1));
+console.log("rich index build ms: " + buildMs.toFixed(1));
 if (buildMs >= INDEX_BUILD_MS) {
   fail("index build " + buildMs.toFixed(1) + " ms >= threshold " + INDEX_BUILD_MS + " ms");
 }
@@ -96,6 +158,25 @@ if (retainedGrowth >= HEAP_GROWTH_BYTES) {
 }
 idx = idx2;
 
+const projectionStart = performance.now();
+const projection = scopedAnalyticalProjection(records, ANALYTICAL_SUBSCRIPTIONS);
+const projectionMs = performance.now() - projectionStart;
+const projectionJsonBytes = Buffer.byteLength(JSON.stringify(projection));
+console.log("scoped analytical projection: " + projection.length + " records in "
+  + projectionMs.toFixed(1) + " ms, JSON " + projectionJsonBytes + " bytes");
+
+const environmentStart = performance.now();
+const environment = prepareExecutionEnvironment(records, idx, ANALYTICAL_SUBSCRIPTIONS);
+const environmentMs = performance.now() - environmentStart;
+console.log("prepareExecutionEnvironment ms: " + environmentMs.toFixed(1)
+  + " (allowed " + environment.allowed.size + ")");
+
+const directStart = performance.now();
+const directResults = directFullScanAndSort(environment);
+const directMs = performance.now() - directStart;
+console.log("direct full scan/sort ms: " + directMs.toFixed(3)
+  + " (top " + directResults.length + ")");
+
 if (QUERIES.length !== 200) {
   fail("query list must contain exactly 200 entries, found " + QUERIES.length);
 }
@@ -103,15 +184,15 @@ if (QUERIES.length !== 200) {
 const latencies = [];
 for (const q of QUERIES) {
   const s = performance.now();
-  search(idx, q);
+  helperSearch(environment, q);
   latencies.push(performance.now() - s);
 }
 latencies.sort((a, b) => a - b);
 const p50 = percentile(latencies, 50);
 const p95 = percentile(latencies, 95);
 console.log("queries: " + QUERIES.length);
-console.log("p50 ms: " + p50.toFixed(3));
-console.log("p95 ms: " + p95.toFixed(3));
+console.log("helper search p50 ms: " + p50.toFixed(3));
+console.log("helper search p95 ms: " + p95.toFixed(3));
 if (p50 >= P50_MS) {
   fail("query p50 " + p50.toFixed(3) + " ms >= threshold " + P50_MS + " ms");
 }

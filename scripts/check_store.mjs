@@ -1,5 +1,5 @@
 import { deepStrictEqual, strictEqual } from "node:assert/strict";
-import { createStore, KEYS, DEFAULT_LLM, YOUMD_TEMPLATE } from "../docs/js/store.js";
+import { createStore, KEYS, DEFAULT_LLM } from "../docs/js/store.js";
 
 const mem = new Map();
 const storage = {
@@ -13,19 +13,23 @@ const s = createStore(storage);
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);
 strictEqual(s.hasKey(), false);
 
-s.setLlm({ baseUrl: "https://x/v1", apiKey: "sk-1", model: "m", junk: 1 });
-deepStrictEqual(s.getLlm(), { baseUrl: "https://x/v1", apiKey: "sk-1", model: "m" });
+s.setLlm({ baseUrl: "https://x/v1", apiKey: "sk-1", model: "m", webSearch: true, junk: 1 });
+deepStrictEqual(s.getLlm(), {
+  baseUrl: "https://x/v1",
+  apiKey: "sk-1",
+  model: "m",
+  webSearch: true
+});
+deepStrictEqual(JSON.parse(storage.getItem(KEYS.llm)), {
+  baseUrl: "https://x/v1",
+  apiKey: "sk-1",
+  model: "m",
+  webSearch: true
+});
 strictEqual(s.hasKey(), true);
 
-strictEqual(s.getYouMd(), YOUMD_TEMPLATE);
-s.setYouMd("hello");
-strictEqual(s.getYouMd(), "hello");
-
-strictEqual(s.getHistory(), null);
-s.setHistory({ seen: ["a"] });
-deepStrictEqual(s.getHistory(), { seen: ["a"] });
-s.setHistory(null);
-strictEqual(s.getHistory(), null);
+storage.setItem(KEYS.llm, JSON.stringify({ webSearch: "true" }));
+deepStrictEqual(s.getLlm(), { ...DEFAULT_LLM, webSearch: false });
 
 storage.setItem(KEYS.llm, "{not json");
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);

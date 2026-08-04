@@ -37,7 +37,7 @@ const md = toMarkdown(picks, meta);
 ok(md.startsWith("# Watch picks"));
 ok(md.includes("## 1. Space Heist (2020)"));
 ok(md.includes("TMDB 7.2"));
-ok(md.includes("[Netflix](https://x/1)"));
+ok(md.includes("[Find on Netflix](https://x/1)"));
 ok(!md.includes("(null)"));
 ok(!md.includes("null min"));
 

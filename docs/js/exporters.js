@@ -1,46 +1,13 @@
-// Pure export formatters: data in, string out. No DOM, no imports.
+// Pure export formatters: data in, string out. providers.js is the one
+// import allowed here since it is itself import-free and DOM-free.
+import { providerLabel, watchCta } from "./providers.js";
 
 const MAX_RECENT = 25;
-
-const PROVIDER_LABELS = {
-  netflix: "Netflix",
-  prime: "Prime Video",
-  hotstar: "JioHotstar",
-  zee5: "ZEE5",
-  sonyliv: "SonyLIV",
-  mubi: "MUBI",
-  crunchyroll: "Crunchyroll",
-  sunnxt: "Sun NXT",
-  mxplayer: "MX Player",
-  discovery: "Discovery+",
-  shemaroo: "ShemarooMe",
-  lionsgate: "Lionsgate Play",
-  manoramamax: "ManoramaMAX",
-  hungama: "Hungama Play",
-  hoichoi: "Hoichoi",
-  aha: "aha",
-  curiosity: "CuriosityStream",
-  appletv: "Apple TV+",
-  epicon: "EPIC ON",
-  tataplay: "Tata Play",
-  plex: "Plex",
-  tubi: "Tubi",
-  docubay: "DocuBay",
-  bbcplayer: "BBC Player",
-  chaupal: "Chaupal",
-  erosnow: "Eros Now"
-};
-
-function providerLabel(slug) {
-  const s = String(slug || "");
-  if (!s) return "";
-  return PROVIDER_LABELS[s] || s;
-}
 
 function providerLinks(u) {
   if (!u || typeof u !== "object") return "";
   return Object.keys(u)
-    .map((slug) => `[${providerLabel(slug)}](${u[slug]})`)
+    .map((slug) => `[${watchCta(slug, u[slug])}](${u[slug]})`)
     .join(" · ");
 }
 

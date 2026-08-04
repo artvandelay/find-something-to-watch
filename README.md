@@ -5,11 +5,17 @@ Live: https://artvandelay.github.io/india-ott-byok/
 ## What this is
 
 The site ships a static snapshot of what is streaming in India, plus all of the search logic that runs
-over it. The visitor brings the other two pieces: their own LLM API key, and their own taste context.
+over it. The visitor brings the other two pieces: their own LLM API key, and their own taste context. An
+onboarding screen collects the services you subscribe to, your key, and (optionally) a taste note and
+Netflix viewing history CSV; after that, a three-region shell — sidebar, chat, and a recommendation
+display — remembers your one current conversation and up to 20 queued titles across reloads.
 
-Nothing runs on a server — no backend, no database, no analytics. The key and the watch history live in
-the browser's `localStorage`, and the only outbound request goes directly from the browser to the LLM
-endpoint the visitor configured.
+Nothing runs on our server — no backend, no database, no analytics, no accounts, no cloud sync. Your API
+key, subscriptions, You.md, watch history, and conversation live only in this browser (the key in
+`localStorage`, everything else in IndexedDB via `docs/js/memory.js`). When you send a message, the
+message and a bounded slice of your mood/You.md/recent-watch context go directly from your browser to
+the LLM endpoint you configured, together with your API key for authentication. Catalog analysis itself
+runs locally in browser Workers; the model receives tool results, not direct access to watch URLs.
 
 ## Why
 
@@ -27,6 +33,11 @@ The key is stored only in `localStorage` on your device — it is never sent any
 endpoint you configured. Keyword search works with no key at all; the key only unlocks the LLM-ranked
 semantic search.
 
+**Web search is off by default.** Settings can enable it only for an OpenRouter endpoint. With the
+opt-in enabled, OpenRouter may send the applicable prompt/context to its search providers, retrieve
+current web pages, and bill for the extra search/model work. It is separate from the static India OTT
+catalog and is not available for a custom OpenAI-compatible endpoint.
+
 No catalog key of any kind is needed at runtime. The catalog is a static JSON file built ahead of time
 (see below) and shipped with the site.
 
@@ -41,11 +52,19 @@ Two optional inputs shape the ranking:
 
 Both stay on the device, and both can be exported back out at any time.
 
+## Subscriptions are a hard boundary
+
+Onboarding (and Settings, later) asks which of the 26 curated India services you actually subscribe to.
+Every search, filter, sample, and recommendation-display card is restricted to titles available on at
+least one of those services, and every watch link shown is intersected down to just your subscriptions —
+you never see a provider or a link for a service you didn't select. A title's link is labelled to match
+what it actually is: a true per-title deep link ("Watch on ..."), a provider search page ("Find on ..."),
+or the shared TMDB watch page that lists real providers itself ("See where to watch").
+
 ## What you can filter on
 
-Results can be narrowed by kind (movie or series), release year, runtime, TMDB rating, provider,
-original language (ISO-639-1 codes), and genre. The provider facet covers 26 curated India services,
-including Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV, and MUBI.
+Results can be narrowed by kind (movie or series), release year, runtime, TMDB rating, provider (limited
+to your subscriptions), original language (ISO-639-1 codes), and genre.
 
 Ratings shown are TMDB `vote_average` (audience scores out of 10), not IMDb ratings.
 
@@ -56,11 +75,13 @@ Results export as Markdown, JSON, CSV, or an updated You.md.
 ## Run it locally
 
 ```bash
+npm install
 python3 -m http.server --directory docs
 # then open http://localhost:8000
 ```
 
-There is no build step and no `package.json` — `docs/` is the whole app, served as static files.
+There is no production build step — `docs/` is the static app served by GitHub Pages. `package.json`
+only supplies the development check command and the browser-side ZIP dependency.
 
 ## Rebuild the catalog
 
@@ -105,15 +126,20 @@ provenance only; they are not part of the build or runtime flow.
 
 ## Checks and stress suites
 
-Module checks (development-only; the published site has no build step and no npm dependencies):
+Module checks (development-only; the published site has no build step):
 
 ```bash
 node scripts/check_catalog.mjs
 node scripts/check_history.mjs
 node scripts/check_tools.mjs
+node scripts/check_catalog_runtime.mjs
+node scripts/check_llm_client.mjs
 node scripts/check_agent.mjs
 node scripts/check_store.mjs
 node scripts/check_exporters.mjs
+node scripts/check_memory.mjs
+# or run all nine:
+npm test
 ```
 
 Stress suites:
@@ -134,13 +160,26 @@ bash scripts/scan_secrets.sh
 ## Repo layout
 
 - `docs/` — the entire app, served as static files (GitHub Pages)
-  - `docs/js/catalog.js` — BM25 search over the catalog
+  - `docs/js/catalog.js` — local catalog indexing, filtering, and the no-LLM
+    recommendation-queue seed
   - `docs/js/history.js` — Netflix CSV parsing
-  - `docs/js/tools.js` — browser-local agent tools
-  - `docs/js/agent.js` — OpenAI-compatible tool-calling loop
-  - `docs/js/store.js` — localStorage
+  - `docs/js/providers.js` — shared provider slugs/labels, language names, and
+    watch-link-kind helpers used by the catalog runtime and exporters
+  - `docs/js/catalog-worker.js` — trusted catalog Worker: scoped analytical data,
+    readiness, and final title resolution
+  - `docs/js/catalog-runtime.js` — generic `run_catalog_js` bridge and disposable
+    executor-Worker lifecycle
+  - `docs/js/agent.js` — bounded tool-calling loop using the one generic catalog
+    tool; its first no-tool answer is the required JSON final response
+  - `docs/js/llm-client.js` — shared OpenAI-compatible HTTP adapter, including the
+    explicit OpenRouter-only web-search option
+  - `docs/js/memory.js` — versioned IndexedDB adapter for profile, conversation,
+    queue, You.md, and watch history (see CONTRACT.md's "Browser memory" section)
+  - `docs/js/store.js` — localStorage, now scoped to just the LLM key/model/baseUrl
   - `docs/js/exporters.js` — output formats
-  - `docs/js/ui.js` — the only module that imports the others
+  - `docs/js/views/` — onboarding, sidebar, chat, recommendation-queue, and dialog UI
+    modules, coordinated by `docs/js/ui.js`
+  - `docs/js/ui.js` — the slim coordinator; the only module that imports the views
   - `docs/assets/` — built catalog JSON, synopsis sidecar, meta, prompts
 - `catalog/` — TMDB sweep CLI (`catalog.py`) and the SQLite dump it produces (gitignored)
 - `scripts/` — catalog builder/validator, node module checks, stress suites, secret scanner,
@@ -151,7 +190,11 @@ bash scripts/scan_secrets.sh
 - `CHANGELOG.md` — v0.1.0 release notes
 - `RELEASE_CHECKLIST.md` — remaining checks before tagging and publishing
 
-Every browser module except `ui.js` is import-free and receives its dependencies as arguments.
+`docs/js/catalog.js`, `docs/js/history.js`, and `docs/js/store.js` stay import-free. The catalog runtime
+owns Worker messages: a long-lived trusted Worker has the subscription-scoped catalog, while each
+`run_catalog_js` evaluation has a disposable executor Worker. This is fault containment for malformed
+or runaway analysis, not a hostile-code security sandbox. The DOM-facing `docs/js/views/*` modules and
+`docs/js/ui.js` import from the runtime and presentation modules as needed.
 
 ## Data and attribution
 

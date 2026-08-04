@@ -1,206 +1,97 @@
-const PROVIDER_SLUGS = ["netflix", "prime", "hotstar", "zee5", "sonyliv", "mubi", "crunchyroll",
-  "sunnxt", "mxplayer", "discovery", "shemaroo", "lionsgate", "manoramamax", "hungama", "hoichoi",
-  "aha", "curiosity", "appletv", "epicon", "tataplay", "plex", "tubi", "docubay", "bbcplayer",
-  "chaupal", "erosnow"];
+const MAX_CODE_LENGTH = 12000;
+const MAX_RESOLVE_IDS = 20;
 
-const GENRE_NAMES = ["Action", "Adventure", "Animation", "Comedy", "Crime", "Documentary", "Drama",
-  "Family", "Fantasy", "History", "Horror", "Music", "Mystery", "Romance", "Science Fiction",
-  "TV Movie", "Thriller", "War", "Western", "Action & Adventure", "Kids", "News", "Reality",
-  "Sci-Fi & Fantasy", "Soap", "Talk", "War & Politics"];
+const DESCRIPTION = `Run JavaScript analysis against the complete catalog inside the visitor's hard subscription and facet scope. The code receives:
+- catalog.records: every scoped analytical record; catalog.meta, catalog.fields, catalog.sample, and catalog.context describe it.
+- helpers.search(query, options), helpers.where(filters), helpers.get(ids), helpers.sample(n), and helpers.normalizeTitle(value): optional convenience APIs.
 
-const LANGUAGE_PARAM = { type: "string", description: "ISO-639-1 language code, e.g. \"hi\"." };
-const GENRE_PARAM = { type: "string", enum: GENRE_NAMES, description: "Genre name." };
-const PROVIDER_PARAM = { type: "string", enum: PROVIDER_SLUGS, description: "Streaming provider slug." };
+You may ignore helpers and use ordinary JavaScript directly on catalog.records: filter, map, sort, regex, grouping, and custom scoring all work. Explicitly return a JSON-serializable value. Keep the analysis focused: code is limited to ${MAX_CODE_LENGTH} characters, output is bounded, and only IDs observed in the returned data (or already in the current queue) can be resolved into full records later.
 
-export function createTools(deps) {
-  function shape(rec) {
-    return {
-      id: rec.id,
-      t: rec.t,
-      y: rec.y,
-      k: rec.k,
-      rt: rec.rt,
-      r: rec.r,
-      p: rec.p,
-      l: rec.l,
-      g: rec.g,
-      s: (rec.s || "").slice(0, 220)
-    };
+Example:
+const matches = helpers.search("gentle comedy", { limit: 8 });
+return matches.map(({ id, t, y, r }) => ({ id, t, y, r }));`;
+
+function failure(error, code) {
+  return { error: String(error || "Catalog runtime failed."), code: code || "runtime", count: 0 };
+}
+
+function validId(id) {
+  return typeof id === "string" && id.trim() !== "";
+}
+
+function uniqueIds(ids, limit = Infinity) {
+  const unique = [];
+  const seen = new Set();
+  for (const id of Array.isArray(ids) ? ids : []) {
+    if (!validId(id) || seen.has(id)) continue;
+    seen.add(id);
+    unique.push(id);
+    if (unique.length === limit) break;
   }
+  return unique;
+}
 
-  function toFilters(args) {
-    const a = args || {};
-    const f = {};
-    const set = (key, value) => {
-      if (value !== undefined && value !== null) f[key] = value;
-    };
-    set("k", a.type);
-    set("yearFrom", a.year_from);
-    set("yearTo", a.year_to);
-    set("runtimeMin", a.runtime_min);
-    set("runtimeMax", a.runtime_max);
-    set("minRating", a.min_rating);
-    set("lang", a.language);
-    set("genre", a.genre);
-    set("provider", a.provider);
-    if (a.exclude_seen === true && deps.seenKeys.length > 0) f.excludeKeys = deps.seenKeys;
-    return f;
-  }
+export function createTools({ runtime, scope, currentQueueIds = [] } = {}) {
+  const observedIds = new Set(uniqueIds(currentQueueIds));
 
-  function clampLimit(n, dflt) {
-    return Math.min(50, Math.max(1, Number(n) || dflt));
-  }
-
-  const handlers = {
-    async search_titles(args) {
-      const allowed = deps.filterIndices(deps.records, toFilters(args));
-      const hits = deps.search(deps.index, String((args || {}).query || ""), {
-        limit: clampLimit((args || {}).limit, 20),
-        allow: new Set(allowed)
-      });
-      return { count: hits.length, results: hits.map((h) => shape(deps.records[h.i])) };
-    },
-
-    async filter_titles(args) {
-      const a = args || {};
-      const idxs = deps.filterIndices(deps.records, toFilters(a)).slice();
-      const recs = deps.records;
-      if (a.sort === "rating") {
-        idxs.sort((x, y) => (recs[y].r ?? -1) - (recs[x].r ?? -1));
-      } else if (a.sort === "year") {
-        idxs.sort((x, y) => (recs[y].y ?? -1) - (recs[x].y ?? -1));
-      } else if (a.sort === "runtime") {
-        idxs.sort((x, y) => (recs[x].rt ?? 99999) - (recs[y].rt ?? 99999));
-      }
-      const picked = idxs.slice(0, clampLimit(a.limit, 20));
-      return { count: picked.length, results: picked.map((i) => shape(recs[i])) };
-    },
-
-    async get_titles(args) {
-      const a = args || {};
-      const want = new Set(Array.isArray(a.ids) ? a.ids : []);
-      const allowed = new Set(
-        deps.filterIndices(deps.records, toFilters(a)).map((i) => deps.records[i].id)
-      );
-      const found = deps.records.filter((r) => want.has(r.id) && allowed.has(r.id));
-      return { count: found.length, results: found };
-    },
-
-    async sample_titles(args) {
-      const a = args || {};
-      const idxs = deps.filterIndices(deps.records, toFilters(a)).slice();
-      const n = clampLimit(a.n, 5);
-      let next = Math.random;
-      if (typeof a.seed === "number") {
-        let x = a.seed >>> 0;
-        next = () => (x = (Math.imul(x, 1664525) + 1013904223) >>> 0) / 4294967296;
-      }
-      for (let i = idxs.length - 1; i > 0; i--) {
-        const j = Math.floor(next() * (i + 1));
-        const tmp = idxs[i];
-        idxs[i] = idxs[j];
-        idxs[j] = tmp;
-      }
-      const picked = idxs.slice(0, n);
-      return { count: picked.length, results: picked.map((i) => shape(deps.records[i])) };
+  async function runCatalogJs(args) {
+    if (!args || typeof args !== "object" || Array.isArray(args) || Object.keys(args).length !== 1
+      || typeof args.code !== "string" || args.code.trim() === "" || args.code.length > MAX_CODE_LENGTH) {
+      return failure("Expected a non-empty code string no longer than 12000 characters.", "invalid_args");
     }
-  };
+    if (!runtime || typeof runtime.runCode !== "function") {
+      return failure("Catalog runtime is unavailable.", "runtime");
+    }
 
-  const schemas = [
-    {
-      type: "function",
-      function: {
-        name: "search_titles",
-        description: "Full-text search the India OTT catalog by meaning. The query is matched against title and synopsis, so describe the plot, mood, or theme rather than guessing an exact title.",
-        parameters: {
-          type: "object",
-          properties: {
-            query: { type: "string", description: "Free-text description of what to look for." },
-            type: { type: "string", enum: ["movie", "series"] },
-            year_from: { type: "integer" },
-            year_to: { type: "integer" },
-            runtime_min: { type: "integer", description: "Minutes." },
-            runtime_max: { type: "integer", description: "Minutes." },
-            min_rating: { type: "number", description: "TMDB rating floor, 0-10." },
-            language: LANGUAGE_PARAM,
-            genre: GENRE_PARAM,
-            provider: PROVIDER_PARAM,
-            exclude_seen: { type: "boolean", description: "Drop titles the user has already watched." },
-            limit: { type: "integer", description: "1-50, default 20." }
-          },
-          required: ["query"]
-        }
+    try {
+      const response = await runtime.runCode({ code: args.code, scope });
+      for (const id of uniqueIds(response && response.observedIds)) observedIds.add(id);
+      if (!response || typeof response.result !== "string") {
+        return failure("Catalog runtime returned no serialized result.", "runtime");
       }
-    },
-    {
-      type: "function",
-      function: {
-        name: "filter_titles",
-        description: "List catalog titles by structured filters only, with no text query. Use for browsing, e.g. highly rated short series from the last five years.",
-        parameters: {
-          type: "object",
-          properties: {
-            type: { type: "string", enum: ["movie", "series"] },
-            year_from: { type: "integer" },
-            year_to: { type: "integer" },
-            runtime_min: { type: "integer" },
-            runtime_max: { type: "integer" },
-            min_rating: { type: "number", description: "TMDB rating floor, 0-10." },
-            language: LANGUAGE_PARAM,
-            genre: GENRE_PARAM,
-            provider: PROVIDER_PARAM,
-            exclude_seen: { type: "boolean" },
-            sort: { type: "string", enum: ["rating", "year", "runtime"] },
-            limit: { type: "integer", description: "1-50, default 20." }
-          },
-          required: []
-        }
+
+      let result;
+      try {
+        result = JSON.parse(response.result);
+      } catch {
+        return failure("Catalog runtime returned an invalid serialized result.", "runtime");
       }
-    },
-    {
-      type: "function",
-      function: {
-        name: "get_titles",
-        description: "Fetch the complete record, including the full synopsis and watch URL, for specific catalog ids. Call this once with all the ids you shortlisted.",
-        parameters: {
-          type: "object",
-          properties: {
-            ids: {
-              type: "array",
-              items: { type: "string" },
-              description: "Catalog ids such as tmdb:m27205."
+      return { result, count: uniqueIds(response.observedIds).length };
+    } catch (err) {
+      return failure(err && err.message, (err && err.code) || "runtime");
+    }
+  }
+
+  async function resolve(ids) {
+    const requested = uniqueIds(ids).filter((id) => observedIds.has(id)).slice(0, MAX_RESOLVE_IDS);
+    if (requested.length === 0) return [];
+    if (!runtime || typeof runtime.resolve !== "function") return [];
+    return await runtime.resolve({ ids: requested, scope });
+  }
+
+  return {
+    schemas: [
+      {
+        type: "function",
+        function: {
+          name: "run_catalog_js",
+          description: DESCRIPTION,
+          parameters: {
+            type: "object",
+            properties: {
+              code: {
+                type: "string",
+                maxLength: MAX_CODE_LENGTH,
+                description: "Scoped catalog analysis JavaScript with an explicit JSON-serializable return value."
+              }
             },
-            language: LANGUAGE_PARAM,
-            genre: GENRE_PARAM,
-            provider: PROVIDER_PARAM
-          },
-          required: ["ids"]
+            required: ["code"],
+            additionalProperties: false
+          }
         }
       }
-    },
-    {
-      type: "function",
-      function: {
-        name: "sample_titles",
-        description: "Return a random sample of titles matching optional filters. Use when the user wants a surprise or when search returns too few results.",
-        parameters: {
-          type: "object",
-          properties: {
-            n: { type: "integer", description: "1-50, default 5." },
-            type: { type: "string", enum: ["movie", "series"] },
-            year_from: { type: "integer" },
-            min_rating: { type: "number", description: "TMDB rating floor, 0-10." },
-            language: LANGUAGE_PARAM,
-            genre: GENRE_PARAM,
-            provider: PROVIDER_PARAM,
-            exclude_seen: { type: "boolean" },
-            seed: { type: "integer" }
-          },
-          required: []
-        }
-      }
-    }
-  ];
-
-  return { schemas, handlers };
+    ],
+    handlers: { run_catalog_js: runCatalogJs },
+    resolve
+  };
 }

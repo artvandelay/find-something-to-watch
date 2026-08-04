@@ -1,169 +1,234 @@
 import assert from "node:assert/strict";
 import { runAgent } from "../docs/js/agent.js";
 
-const tools = {
-  schemas: [{
-    type: "function",
-    function: {
-      name: "search_titles",
-      description: "d",
-      parameters: { type: "object", properties: {}, required: [] }
-    }
-  }],
-  handlers: {
-    search_titles: async () => ({ count: 1, results: [{ id: "netflix:1", t: "A" }] }),
-    get_titles: async () => ({
-      count: 1,
-      results: [{
-        id: "netflix:1",
-        t: "A",
-        y: 2020,
-        k: "movie",
-        rt: 90,
-        r: 7,
-        p: ["netflix"],
-        l: "en",
-        g: ["Comedy"],
-        u: { netflix: "https://x/1" },
-        img: null
-      }]
-    })
-  }
+const config = { baseUrl: "https://model.example/v1", apiKey: "sk-test", model: "m" };
+const prompts = {
+  system: "system instructions",
+  planner: "latest: {{QUERY}}",
+  output: "return final JSON",
+  no_results: "none"
 };
-
-const prompts = { system: "sys", planner: "plan {{QUERY}}", rerank: "rerank", no_results: "none" };
-const config = { baseUrl: "https://fake/v1", apiKey: "sk-test", model: "m" };
-
-function sequenceFetch(responses) {
-  let i = 0;
-  return async () => {
-    const next = responses[i++];
-    if (!next) throw new Error("unexpected extra fetch call");
-    return next;
-  };
-}
 
 function ok(payload) {
   return { ok: true, status: 200, json: async () => payload };
 }
 
-// Test 1 - happy path.
-{
-  const fetchImpl = sequenceFetch([
-    ok({
-      choices: [{
-        message: {
-          role: "assistant",
-          tool_calls: [{
-            id: "c1",
-            type: "function",
-            function: { name: "search_titles", arguments: "{}" }
-          }]
-        }
-      }]
-    }),
-    ok({ choices: [{ message: { role: "assistant", content: "done thinking" } }] }),
-    ok({
-      choices: [{
-        message: {
-          role: "assistant",
-          content: "{\"picks\":[{\"id\":\"netflix:1\",\"reason\":\"fits\"}],\"note\":\"here\"}"
-        }
-      }]
-    })
-  ]);
+function sequenceFetch(responses, seen = []) {
+  let index = 0;
+  return async (url, init) => {
+    seen.push({ url, init });
+    const response = responses[index++];
+    if (!response) throw new Error("unexpected extra request");
+    return response;
+  };
+}
 
+function makeTools() {
+  const calls = [];
+  const resolutions = [];
+  return {
+    calls,
+    resolutions,
+    schemas: [{
+      type: "function",
+      function: {
+        name: "lookup",
+        description: "generic local lookup",
+        parameters: { type: "object", properties: { id: { type: "string" } }, required: ["id"] }
+      }
+    }, {
+      type: "function",
+      function: { name: "not_local", description: "must not be exposed", parameters: { type: "object" } }
+    }],
+    handlers: {
+      lookup: async (args, signal) => {
+        calls.push({ args, signal });
+        return { count: 1, results: [{ id: "observed:1", t: "Observed" }] };
+      }
+    },
+    resolve: async (ids, signal) => {
+      resolutions.push({ ids, signal });
+      return ids.filter((id) => id === "observed:1").map((id) => ({ id }));
+    }
+  };
+}
+
+function requestBody(request) {
+  return JSON.parse(request.init.body);
+}
+
+// A direct JSON answer is final immediately: one model request, no rerank, no done event.
+{
+  const seen = [];
   const events = [];
+  const tools = makeTools();
   const result = await runAgent({
     config,
     prompts,
     tools,
-    context: { youmd: "about me", history: null, mood: "chill" },
-    query: "something fun",
-    onEvent: (e) => events.push(e),
-    signal: null,
-    fetchImpl
+    context: { mood: "calm", youmd: "viewer", history: null, catalogManifest: { region: "IN", count: 1 } },
+    query: "just explain the queue",
+    conversation: [],
+    onEvent: (event) => events.push(event),
+    fetchImpl: sequenceFetch([
+      ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"The queue keeps your current picks.\"}" } }] })
+    ], seen)
   });
-
-  assert.ok(events.some((e) => e.type === "tool_call" && e.name === "search_titles"));
-  assert.ok(events.some((e) => e.type === "tool_result" && e.count === 1));
-  assert.equal(result.picks.length, 1);
-  assert.equal(result.picks[0].reason, "fits");
-  assert.deepStrictEqual(
-    Object.keys(result.picks[0]).sort(),
-    ["g", "id", "img", "k", "l", "p", "r", "reason", "rt", "t", "u", "y"]
-  );
-  assert.equal(events.at(-1).type, "done");
+  assert.equal(seen.length, 1, "direct answer must use exactly one request");
+  assert.equal(result.ok, true);
+  assert.equal(result.reply, "The queue keeps your current picks.");
+  assert.equal(result.queue, null);
+  assert.equal(tools.resolutions.length, 0);
+  assert.equal(events.some((event) => event.type === "done"), false, "done events were removed");
+  const messages = requestBody(seen[0]).messages;
+  assert.ok(messages.some((message) => message.content === prompts.output), "output prompt is sent with first request");
+  assert.ok(messages.some((message) => message.content.includes("Catalog manifest")), "manifest is a bounded system message");
 }
 
-// Test 2 - error mapping.
+// A generic local tool path makes two requests (tool call + final JSON), and
+// queue IDs are grounded by one ordered resolver call.
 {
-  const cases = [
-    [401, "auth"],
-    [402, "credit"],
-    [429, "rate"],
-    [400, "context"],
-    [500, "network"]
-  ];
-  for (const [status, code] of cases) {
-    const events = [];
-    const result = await runAgent({
-      config,
-      prompts,
-      tools,
-      context: { youmd: "", history: null, mood: "" },
-      query: "q",
-      onEvent: (e) => events.push(e),
-      signal: null,
-      fetchImpl: async () => ({ ok: false, status, text: async () => "boom" })
-    });
-    const errors = events.filter((e) => e.type === "error");
-    assert.equal(errors.length, 1, "expected one error for status " + status);
-    assert.equal(errors[0].code, code, "wrong code for status " + status);
-    assert.equal(result.picks.length, 0);
-  }
-}
-
-// Test 3 - missing key.
-{
+  const seen = [];
   const events = [];
-  const result = await runAgent({
-    config: { ...config, apiKey: "" },
-    prompts,
-    tools,
-    context: { youmd: "", history: null, mood: "" },
-    query: "q",
-    onEvent: (e) => events.push(e),
-    signal: null,
-    fetchImpl: async () => {
-      throw new Error("should not fetch without an api key");
-    }
-  });
-  assert.equal(events.length, 1);
-  assert.equal(events[0].type, "error");
-  assert.equal(events[0].code, "auth");
-  assert.equal(result.picks.length, 0);
-}
-
-// Test 4 - abort.
-{
-  const events = [];
+  const tools = makeTools();
+  const external = new AbortController();
   const result = await runAgent({
     config,
     prompts,
     tools,
     context: { youmd: "", history: null, mood: "" },
+    query: "find one",
+    conversation: [],
+    onEvent: (event) => events.push(event),
+    signal: external.signal,
+    fetchImpl: sequenceFetch([
+      ok({
+        choices: [{
+          message: {
+            role: "assistant",
+            tool_calls: [{
+              id: "lookup-1",
+              type: "function",
+              function: { name: "lookup", arguments: "{\"id\":\"observed:1\"}" }
+            }]
+          }
+        }]
+      }),
+      ok({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: "{\"reply\":\"Observed is a good match.\",\"queue\":[\"observed:1\",\"missing:2\",\"observed:1\"]}"
+          }
+        }]
+      })
+    ], seen)
+  });
+  assert.equal(seen.length, 2, "tool answer must use exactly two requests, with no rerank request");
+  assert.equal(result.ok, true);
+  assert.deepStrictEqual(result.queue, ["observed:1"]);
+  assert.deepStrictEqual(tools.resolutions.map((entry) => entry.ids), [["observed:1", "missing:2"]]);
+  assert.equal(tools.calls.length, 1);
+  assert.notEqual(tools.calls[0].signal, external.signal, "handlers receive the run signal");
+  assert.equal(tools.calls[0].signal.aborted, false);
+  assert.ok(events.some((event) => event.type === "tool_call" && event.name === "lookup"));
+  assert.ok(events.some((event) => event.type === "tool_result" && event.count === 1));
+  const firstTools = requestBody(seen[0]).tools;
+  assert.deepStrictEqual(firstTools.map((tool) => tool.function && tool.function.name), ["lookup"]);
+}
+
+// Bad final payloads remain parse failures, including an empty reply.
+for (const content of ["not json", "{\"reply\":\"   \"}"]) {
+  const events = [];
+  const result = await runAgent({
+    config,
+    prompts,
+    tools: makeTools(),
+    context: {},
     query: "q",
-    onEvent: (e) => events.push(e),
-    signal: AbortSignal.abort(),
+    conversation: [],
+    onEvent: (event) => events.push(event),
+    fetchImpl: sequenceFetch([ok({ choices: [{ message: { role: "assistant", content } }] })])
+  });
+  assert.equal(result.ok, false);
+  assert.equal(result.reply, "");
+  assert.equal(result.queue, null);
+  assert.equal(events.at(-1).code, "parse");
+}
+
+// Partial budgets merge with defaults: one allowed tool step ends with budget,
+// rather than treating maxMs as absent.
+{
+  const events = [];
+  const result = await runAgent({
+    config,
+    prompts,
+    tools: makeTools(),
+    context: {},
+    query: "q",
+    conversation: [],
+    onEvent: (event) => events.push(event),
+    budget: { maxSteps: 1 },
+    fetchImpl: sequenceFetch([ok({
+      choices: [{
+        message: {
+          role: "assistant",
+          tool_calls: [{ id: "one", type: "function", function: { name: "lookup", arguments: "{}" } }]
+        }
+      }]
+    })])
+  });
+  assert.equal(result.ok, false);
+  assert.equal(events.at(-1).code, "budget");
+}
+
+// OpenRouter's web-search plugin is an advertised provider capability, never
+// a local handler. Exact hostname matching excludes lookalikes and subdomains.
+for (const [baseUrl, webSearch, shouldInclude] of [
+  ["https://openrouter.ai/api/v1", true, true],
+  ["https://api.openrouter.ai/v1", true, false],
+  ["https://openrouter.ai/api/v1", false, false]
+]) {
+  const seen = [];
+  const tools = makeTools();
+  const result = await runAgent({
+    config: { ...config, baseUrl, webSearch },
+    prompts,
+    tools,
+    context: {},
+    query: "q",
+    conversation: [],
+    onEvent: () => {},
+    fetchImpl: sequenceFetch([
+      ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Done.\"}" } }] })
+    ], seen)
+  });
+  assert.equal(result.ok, true);
+  const hasPlugin = requestBody(seen[0]).tools.some((tool) => tool.type === "openrouter:web_search");
+  assert.equal(hasPlugin, shouldInclude);
+  assert.equal(tools.calls.length, 0);
+}
+
+// Preserve invalid-base handling before any key-bearing request.
+{
+  let fetched = false;
+  const events = [];
+  const result = await runAgent({
+    config: { ...config, baseUrl: "/relative" },
+    prompts,
+    tools: makeTools(),
+    context: {},
+    query: "q",
+    conversation: [],
+    onEvent: (event) => events.push(event),
     fetchImpl: async () => {
-      throw new Error("should not fetch after abort");
+      fetched = true;
+      throw new Error("must not fetch");
     }
   });
-  const errors = events.filter((e) => e.type === "error");
-  assert.equal(errors.length, 1);
-  assert.equal(errors[0].code, "aborted");
-  assert.equal(result.picks.length, 0);
+  assert.equal(fetched, false);
+  assert.equal(result.ok, false);
+  assert.equal(events.at(-1).code, "config");
 }
 
 console.log("check_agent OK");
