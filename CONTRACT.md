@@ -67,6 +67,42 @@ docs/assets/catalog.meta.json is byte-identical to the meta object alone (no wra
 
 Keys of "s" are a subset of the catalog record ids. Records with no synopsis are omitted.
 
+## Shared title-details model
+
+The main thread resolves title details directly from the full shipped record and
+synopsis sidecar; it must never hydrate a Worker-projected card to create this model.
+
+```js
+{
+  status: "available" | "missing",
+  id: string,
+  title: null | { t, y, k, rt, s, im, r, img, l, g, v },
+  availability: [{
+    slug: string,
+    label: string,
+    subscribed: boolean,
+    url: string | null,
+    cta: string | null
+  }],
+  catalog: {
+    region: string | null,
+    source: string | null,
+    builtAt: string | null
+  }
+}
+```
+
+`availability` preserves the record's `p` order and includes every curated provider
+slug known for that title. The title-details overlay is the sole display exception to
+the subscription boundary: it groups availability into “On your subscriptions” and
+“Other known platforms.” Recommendations, search, Worker analysis, normal cards, and
+normal provider links remain subscription-scoped.
+
+The UI may display only catalog fields above. It must not manufacture cast, directors,
+trailers, certification, pricing, provider logos, or playback certainty. “All
+platforms” means all curated provider slugs recorded in `p`, not exhaustive or
+real-time availability.
+
 ## Provider registry (curated, 26 slugs, region IN only)
 
 TMDB provider lists are per-region. watch_region=IN returns 85 providers, US returns 330,
@@ -132,7 +168,8 @@ catalog/catalog.db, matching this union.
 
 ```js
 const KEYS = {
-  llm: "ottbyok.llm" // { baseUrl, apiKey, model, webSearch }
+  llm: "ottbyok.llm",      // { baseUrl, apiKey, model, webSearch }
+  sidebar: "ottbyok.sidebar" // "1" collapsed | "0" expanded — presentation only
 };
 const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
@@ -141,6 +178,11 @@ const DEFAULT_LLM = {
   webSearch: false
 };
 ```
+
+`ottbyok.sidebar` holds only the sidebar collapse preference so the icon rail survives
+a reload; it carries no user data and is cleared by "Clear local data" along with the
+other keys. Below 1280px the sidebar auto-collapses regardless of the stored value, and
+below 900px the drawer replaces the rail entirely.
 
 LLM configuration, including the API key, remains in `localStorage` for backward
 compatibility. It is intentionally absent from IndexedDB and `memory.json` exports.
@@ -157,6 +199,11 @@ search and model cost. Catalog search remains local.
 ```js
 createChatCompletionsUrl(baseUrl) // -> absolute URL string
 callChatCompletion(config, body, { fetchImpl = globalThis.fetch, signal = null } = {})
+streamChatCompletion(config, body, {
+  fetchImpl = globalThis.fetch,
+  signal = null,
+  onEvent
+})
 ```
 
 `createChatCompletionsUrl` appends `chat/completions` to the configured base path
@@ -169,6 +216,24 @@ Failures use the stable error codes `auth`, `credit`, `rate`, `context`, `networ
 and `config`; abort errors from the supplied signal/fetch implementation propagate
 unchanged.
 
+`streamChatCompletion()` is used for agent requests; non-streaming
+`callChatCompletion()` remains the history-import inference client. The streaming
+client parses complete SSE events across arbitrary chunks, CRLF, multiline data,
+comments, `[DONE]`, terminal usage, and fragmented tool calls. It resolves to:
+
+```js
+{
+  id: string | null,
+  model: string | null,
+  message: { role: "assistant", content: string, tool_calls?: [] },
+  usage: object | null
+}
+```
+
+`onEvent` receives only `{ type: "content", text }` and `{ type: "heartbeat" }`.
+Its parser bounds retained buffers and tool arguments, and cancels the stream reader
+when the supplied signal aborts or when processing fails.
+
 ## Catalog execution runtime
 
 The model has exactly one catalog-analysis function, `run_catalog_js`. It accepts an
@@ -179,10 +244,11 @@ runs in Workers.
 
 `createCatalogRuntime({ workerFactory, onState, requestTimeoutMs })` exposes
 `initialize`, `describe`, `runCode`, `keywordSearch`, `resolve`, `seedQueue`,
-`dispose`, `state`, and `epoch`. Its outer Worker protocol is version 1:
+`dispose`, `state`, and `epoch`. Its outer Worker protocol is version 2:
 
 ```js
-{ v: 1, type: "request", epoch, id, op, payload }
+{ v: 2, type: "request", epoch, id, op, payload }
+{ v: 2, type: "cancel", epoch, id }
 ```
 
 The runtime states are `BOOTING`, `READY_BASIC`, `READY_RICH`, and `RESTARTING`.
@@ -191,6 +257,10 @@ The supported operations are `initialize`, `describe`, `keywordSearch`, `resolve
 and normal requests default to 30 seconds, catalog code has a 15-second host timeout,
 and a disposable executor has 10 seconds to initialize and 3 seconds to run. A rich
 synopsis-sidecar failure is non-fatal: `READY_BASIC` remains usable.
+
+Aborting a request removes its pending host entry, posts one matching `cancel`, rejects
+with a named `AbortError`, and suppresses late responses. Cancellation terminates only
+the matching disposable executor; it never restarts the trusted catalog host.
 
 The trusted catalog Worker applies `{ subscriptions: string[] }` to every operation.
 For each tool call it creates a fresh disposable executor Worker. The executor receives
@@ -232,12 +302,14 @@ data.
 ```js
 const MEMORY_DB_NAME = "ottbyok.memory";
 const MEMORY_DB_VERSION = 1;
-const MEMORY_SCHEMA_VERSION = 2;
+const MEMORY_SCHEMA_VERSION = 3;
 const MEMORY_STORE = "memory";
 const MEMORY_KEYS = {
   profile: "profile",
   conversation: "conversation",
   queue: "queue",
+  threads: "threads",
+  learned: "learned",
   youmd: "youmd",
   history: "history",
   playlists: "playlists"
@@ -251,30 +323,50 @@ encryption. Browser storage can be cleared by the visitor or browser.
 
 ```js
 {
-  schema: 2,
+  schema: 3,
   updatedAt: "2026-08-05T00:00:00.000Z",
   onboardingComplete: false,
-  providers: ["netflix", "prime"] // unique, lower-case curated provider slugs; maximum 26
+  providers: ["netflix", "prime"], // unique, lower-case curated provider slugs; maximum 26
+  memoryEnabled: true
 }
 ```
 
 ### Current conversation
 
-Exactly one current conversation is stored; there is no archived-chat collection.
-
 ```js
 {
-  schema: 2,
+  schema: 3,
+  id: "conversation-id",
+  title: "Something funny",
+  createdAt: "2026-08-05T00:00:00.000Z",
   updatedAt: "2026-08-05T00:00:00.000Z",
   messages: [
     { role: "user", content: "Something funny", createdAt: "2026-08-05T00:00:00.000Z" },
-    { role: "assistant", content: "Try these.", createdAt: "2026-08-05T00:00:01.000Z" }
+    {
+      role: "assistant",
+      content: "Try these.",
+      createdAt: "2026-08-05T00:00:01.000Z",
+      meta: {
+        status: "complete",
+        timing: { totalMs: 18400, firstTokenMs: 320 },
+        usage: { promptTokens: 320, completionTokens: 98, totalTokens: 418, requestCount: 2 },
+        billing: {
+          basis: "provider_reported",
+          amountUsd: 0.0042,
+          complete: true,
+          requestCount: 2,
+          pricedRequestCount: 2
+        }
+      }
+    }
   ]
 }
 ```
 
 `role` is exactly `"user"` or `"assistant"`. The adapter keeps the newest 24 valid
-messages and truncates each `content` string to 6,000 characters.
+messages and truncates each `content` string to 6,000 characters. `title` is the first
+user query with collapsed whitespace, capped at 72 characters. Assistant `meta` exists
+only for a complete streamed turn and contains only the shapes above.
 For model requests, `agent.js` applies a second transport budget: at most 18,000
 characters of the newest complete prior turns and 8,000 characters of You.md.
 
@@ -282,15 +374,84 @@ characters of the newest complete prior turns and 8,000 characters of You.md.
 
 ```js
 {
-  schema: 2,
+  schema: 3,
   updatedAt: "2026-08-05T00:00:00.000Z",
-  ids: ["tmdb:m1013577", "tmdb:t240983"]
+  source: {
+    conversationId: "conversation-id",
+    turnId: "turn-id",
+    query: "something short, no horror"
+  },
+  items: [
+    { id: "tmdb:m1013577", reason: "A catalog-grounded fit explanation." },
+    { id: "tmdb:t240983", reason: "A second catalog-grounded fit explanation." }
+  ]
 }
 ```
 
-`ids` are unique, non-empty catalog IDs in display order. The adapter keeps at most
-20 items. `saveConversationAndQueue(conversation, queue)` writes both records in one
-IndexedDB transaction for completed agent turns.
+`source` is `null` or contains a current conversation and turn ID plus a collapsed,
+120-character maximum query. `items` contains at most 20 unique, non-empty catalog
+IDs in rank order, each with a catalog-grounded `reason` capped at 180 characters.
+The first item is the Top pick, items two and three are Alternatives, and later items
+are initially collapsed. Invalid or missing reasons fall back to “Selected from your
+catalog for this request.” An omitted queue update preserves the current decision; an
+explicit empty queue clears it. Every persisted ID must have passed current
+tool-grounding rules.
+
+Schema-2 `{ ids }` queues migrate to schema 3 in the same order, with `source: null`
+and fallback reasons.
+
+### Conversation archive
+
+```js
+{
+  schema: 3,
+  updatedAt: "2026-08-05T00:00:00.000Z",
+  items: [{ ...conversation, queue }]
+}
+```
+
+`threads.items` stores up to 20 non-empty inactive conversations, newest first, each
+with its full ranked queue. A current conversation is never duplicated in its archive.
+`appendUserMessage`, `completeTurn`, `startNewConversation`,
+`activateArchivedConversation`, and `getConversationList` are atomic memory APIs.
+They reject stale conversation IDs and retain playlists, history, subscriptions, and
+LLM configuration when starting or activating a conversation.
+
+`completeTurn(conversationId, { content, queue, meta, learned })` writes the completed
+assistant message, ranked queue, and an optional validated learned-preference record in
+one atomic browser-memory write. The caller persists the user message before starting
+model work and only supplies `meta` for a complete streamed turn.
+
+### Learned preferences
+
+```js
+{
+  schema: 1,
+  updatedAt: "2026-08-05T00:00:00.000Z",
+  revision: 1,
+  items: [{
+    id: "learned-id",
+    kind: "genre" | "language" | "theme" | "pace" |
+          "creator" | "format" | "content",
+    polarity: "like" | "avoid",
+    value: "documentaries",
+    createdAt: "2026-08-05T00:00:00.000Z",
+    lastConfirmedAt: "2026-08-05T00:00:00.000Z"
+  }]
+}
+```
+
+The adapter stores at most 100 facts with values capped at 80 characters and renders
+at most 4,000 characters into model context. A turn considers at most eight candidates.
+It learns only explicit, durable entertainment preferences where the evidence is an
+exact case-insensitive substring of the latest user query. Each model-produced candidate
+must include `explicit: true` and `durable: true`; candidates with missing or false flags,
+missing or mismatched evidence, or malformed fields are rejected. The model owns the
+semantic judgment and must omit ordinary requests (for example, “horror recommendations”),
+temporary requests, and sensitive inferences. Local validation performs no keyword-based
+semantic inference. Evidence itself is never persisted.
+Manually authored You.md remains separate. The generated “Learned from chats” context
+is inspectable, editable, disableable, and clearable by the user.
 
 ### User context
 
@@ -343,32 +504,30 @@ failures reject with `BrowserMemoryError`, whose `code` is one of `quota`, `stor
 
 Existing databases remain at IndexedDB version 1. Initialization adds a default,
 empty Watch later record when `playlists` is absent; it does not discard any other
-record. Logical record schemas are upgraded to `MEMORY_SCHEMA_VERSION` 2.
+record. Logical record schemas are upgraded to `MEMORY_SCHEMA_VERSION` 3.
 
 `exportBackup()` returns the versioned, key-free `memory.json` shape:
 
 ```js
 {
-  schema: 2,
+  schema: 3,
   exportedAt: "2026-08-05T00:00:00.000Z",
   profile,
   conversation,
   queue,
+  threads,
+  learned,
   youmd,
   history,
   playlists
 }
 ```
 
-`importBackup(memoryJson)` accepts schema 1 and schema 2. A valid schema-1 backup is
-upgraded without data loss by preserving profile, conversation, queue, You.md, and
-history, converting logical records to schema 2, and synthesizing an empty Watch
-later playlist. A schema-2 backup must contain a valid playlists record. The complete
-upgraded snapshot is validated before any write, then replaces memory atomically in
-one transaction; invalid input cannot cause a partial import. Backup exports do not
-contain LLM configuration or the adapter's diagnostic `issues` list.
+Backups are export-only in this version. The browser-memory adapter and user interface
+do not expose backup import. Backup exports do not contain LLM configuration or the
+adapter's diagnostic `issues` list.
 
-`clear()` deletes all six IndexedDB memory records, including playlists. Callers that
+`clear()` deletes all eight IndexedDB memory records, including playlists. Callers that
 offer “clear local data” must additionally clear the compatible LLM localStorage key.
 
 ## Provider/language module — docs/js/providers.js
@@ -571,10 +730,10 @@ provider-agnostic local parser.
 ```
 
 `p` and `u` are already restricted to the visitor's subscribed providers (see
-`intersectProviders` above). `reason` is `""` when nothing supplied one — the agent's
-rerank step no longer returns per-title reasons (see the response schema below), so
-`reason` is populated only when a caller has one to attach; hydrating a persisted
-queue id back into a display card after reload always yields `reason: ""`.
+`intersectProviders` above). `reason` comes from the validated ranked queue and falls
+back to the frozen generic reason when it is invalid or missing. Hydrated cards retain
+subscription-scoped `p` and `u`; the shared title-details model is the only
+all-known-platform presentation.
 `s` is always present and contains the synopsis or `""`; cards render a three-line
 clamped description and use a local fallback sentence when it is empty.
 
@@ -593,55 +752,69 @@ runAgent({
                          // planner prompt so multi-turn context reaches the model
   onEvent, signal, fetchImpl, budget // unchanged
 })
-// -> { ok: boolean, reply: string, queue: string[] | null, usage }
+// -> { ok: boolean, reply: string, queue: RankedQueue | null, memoryCandidates, usage, billing, timing }
 ```
 
-`runAgent` uses the shared `callChatCompletion` client. It first runs a bounded tool
-loop with the catalog-manifest system message before prior turns, then appends
-`prompts.rerank` and makes a final no-tools request. `ok` is `true` only for a
-successfully parsed final response. Authentication, configuration, catalog-runtime,
-network, abort, budget, and parse failures return `ok: false`; callers must not
-persist those failures as assistant replies.
+`runAgent` uses `streamChatCompletion` for agent requests. It first runs a bounded
+tool loop with the catalog-manifest system message before prior turns, then appends
+`prompts.rerank` and streams the final no-tools presentation response. Planning emits
+strict internal JSON containing optional ranked queue items and optional learned-memory
+candidates. Final presentation emits direct safe Markdown, not JSON. `ok` is `true`
+only for a successfully parsed final response. Authentication, configuration,
+catalog-runtime, network, abort, budget, and parse failures return `ok: false`;
+callers must not persist those failures as assistant replies.
 
 ## Agent event shapes
 
 ```js
-{ type: "status",      text: string }
-{ type: "tool_call",   name: string, args: object }
-{ type: "tool_result", name: string, count: number }
-{ type: "done",        reply: string, queue: string[] | null, usage: { prompt_tokens, completion_tokens } | null }
-{ type: "error",       code: string, message: string }
+{ type: "status", turnId, phase, text, step }
+{ type: "tool_call", turnId, id, name, args, step }
+{ type: "tool_result", turnId, id, name, count, ok, durationMs, step }
+{ type: "delta", turnId, text }
+{ type: "done", turnId, reply, queue, memoryCandidates, usage, billing, timing }
+{ type: "error", turnId, code, message, retryable, partialReply, timing }
 ```
 
-`"done"` carries `reply` (always shown verbatim as the assistant's chat message for
-this turn) and `queue` instead of `picks`. `queue` is `null` when the model's turn did
-not include a queue update — "leave the display unchanged" — and an array of 0–20
-catalog IDs when it did, including an explicit empty array to clear the display. The
-agent validates nonempty queue IDs through `tools.resolve`. The `"delta"` event was
-removed; nothing emits it now that the note/reason text lives in `reply` and is only
-available once, at `"done"`.
+Visible phases progress in order through `PLANNING`, `SEARCHING CATALOG`,
+`ANALYZING MATCHES`, and `WRITING`, then streamed answer text. `"done"` carries the
+complete safe-Markdown `reply`, a `null`/ranked/empty queue update, validated memory
+candidates, timing, usage, and billing. The agent validates queue IDs through
+`tools.resolve` and validates memory candidates against the latest query. `"delta"`
+contains presentation text only; user text remains literal.
+
+Timing is `{ totalMs: number, firstTokenMs: number | null }`. Usage aggregates prompt,
+completion, total token counts, and request count. Billing is:
+
+```js
+{
+  basis: "provider_reported" | "unavailable",
+  amountUsd: number | null,
+  complete: boolean,
+  requestCount: number,
+  pricedRequestCount: number
+}
+```
+
+`amountUsd` is the aggregate of `usage.cost` only if every successful request reports a
+valid nonnegative provider cost. The UI says `$0.0042 reported` only for complete
+provider-reported billing; otherwise it says `Cost unavailable`. It never estimates
+cost from text or token counts.
 
 ## Rerank prompt response schema (docs/assets/prompts.json, version 4)
 
 `prompts.json` contains exactly `version`, `system`, `planner`, `rerank`,
-`history_plan`, and `no_results`; it has no `output` key. The final no-tools response,
-after `prompts.rerank`, must be exactly:
+`history_plan`, and `no_results`; it has no `output` key. The internal planning
+response may contain optional ranked queue items and optional learned-memory candidates.
+The final no-tools response after `prompts.rerank` is direct safe Markdown, not JSON.
 
-```json
-{ "reply": "<1-4 sentences shown verbatim in the chat transcript>", "queue": ["<catalog id>", "..."] }
-```
-
-`reply` is required and may use only paragraphs, unordered/ordered lists,
+The final reply may use only paragraphs, unordered/ordered lists,
 `**strong**`, `*emphasis*`, and inline backticks. It must not contain raw HTML,
 headings, tables, images, arbitrary links, or fenced code blocks. The UI parses this
 subset into DOM nodes and text nodes only; it never uses `innerHTML`. User messages
-remain literal text. `queue` is OPTIONAL: 0-20 catalog ids, verbatim from tool
-results, best first, duplicates
-dropped. Omitting the `queue` key means "leave the current recommendation display
-untouched" (a purely clarifying turn); an explicit `"queue": []` means "clear it".
-Queue IDs must come from observed `run_catalog_js` output. `docs/js/agent.js`
-re-validates them through `tools.resolve`, so IDs that fail observation,
-subscription, or availability gating are silently dropped from the returned queue.
+remain literal text. Queue IDs must come from observed `run_catalog_js` output.
+`docs/js/agent.js` re-validates them through `tools.resolve`, so IDs that fail
+observation, subscription, or availability gating are silently dropped from the
+returned queue.
 
 ## Tool names
 
@@ -654,7 +827,11 @@ its catalog scope.
 
 This list changed substantially for the sidebar/chat/recommendation-display shell
 overhaul (onboarding screen + sidebar + chat + queue, replacing the single-form
-layout); the data shapes elsewhere in this document did not change because of it.
+layout), and again for the three-panel layout (collapsible sidebar, chat column with a
+pinned composer, vertical picks rail), the move of local-data controls into Settings,
+and the progressive playlists dialog. The current visible wordmark is a temporary
+placeholder; it is not a final product name. The India provider scope described above
+is unrelated to branding.
 
 Always present:
 app, error-banner, attribution
@@ -673,34 +850,88 @@ but after an import failure the user must explicitly continue without history. T
 view stores the key with `DEFAULT_LLM.baseUrl` and `DEFAULT_LLM.model` before history
 import or finalization; it makes no model request unless a history file is supplied.
 
-Shell:
-shell, sidebar-toggle, sidebar, backdrop, new-chat-btn, conversation-indicator,
-subscriptions-summary, playlists-btn, context-btn, settings-btn, export-backup-btn,
-import-backup-btn, import-backup-file, clear-data-btn, catalog-status, workspace
+Shell (three vertical panels: sidebar, chat column, picks rail):
+shell, sidebar-toggle, sidebar, sidebar-collapse, backdrop, new-chat-btn,
+conversation-list, conversation-list-items, subscriptions-summary, playlists-btn, context-btn, settings-btn,
+catalog-status, workspace
 
-Chat region:
+`#catalog-status` is the quiet footer line under the picks rail, not a sidebar block.
+`#conversation-list` contains the active conversation and up to 20 archived
+conversations as keyboard-accessible controls in newest-first order.
+
+Chat column:
 chat-region, chat-transcript, chat-note, query-form, query-input, send-btn, stop-btn
 
-Recommendation display:
-queue-region, queue-status, queue-viewport, queue-track, queue-prev, queue-next,
-queue-empty
+`#query-form` is pinned to the bottom of the chat column inside `.composer-dock`;
+message content is capped at `--chat-measure` (about 70ch) and centered.
+Each active assistant turn renders an attached placeholder/activity row directly under
+its triggering user message. The row exposes phase changes through a polite status
+announcement, exposes Stop while active, displays elapsed time only after one second,
+and says `TAKING LONGER THAN USUAL` after 20 seconds without meaningful progress. It
+collapses successful activity to a compact catalog/match/time summary. It must not
+announce every elapsed-second tick.
+
+The attached activity exposes streamed text as literal text while a reply is in
+progress; it renders the completed reply through the safe Markdown converter only
+after success. Stop and failure messages remain inline with the attached activity.
+The final metrics footer contains total latency, total tokens, and either
+`$0.0042 reported` for complete provider-reported billing or `Cost unavailable`.
+
+Picks rail:
+queue-region, queue-status, queue-viewport, queue-track, queue-empty,
+queue-source, queue-top-pick, queue-alternatives, queue-more
+
+The rail scrolls vertically. `#queue-source` renders the bounded source query for the
+latest queue update. `#queue-top-pick` contains rank one, `#queue-alternatives`
+contains ranks two and three, and `#queue-more` is a collapsed control/container for
+ranks four through 20. Recommendation cards retain poster, title, metadata, synopsis,
+provider links, and a `+` save button; the title is a real details trigger. Save and
+provider actions are independent interactive descendants and never open details.
+
+Title details:
+title-details-dialog, title-details-close, title-details-title, title-details-content
+
+`#title-details-dialog` is one top-level native `<dialog>`. It renders the shared
+details model with text nodes, captures and restores the trigger's focus, closes on
+Escape, and refreshes in place after sidecar or subscription changes without moving
+focus. A missing ID renders a tombstone. Playlist title buttons and recommendation
+titles open this same dialog.
 
 Dialogs:
 settings-dialog, settings-provider-list, llm-base-url, llm-api-key, llm-model, llm-web-search,
+export-backup-btn, clear-data-btn,
 settings-feedback, settings-save, settings-close, context-dialog, youmd-input,
 history-file, history-summary, history-remove, context-feedback, context-save,
+memory-enabled, learned-facts, learned-clear,
 context-close, disclosure-dialog, catalog-detail, trace, export-md, export-json,
 export-csv, export-youmd, disclosure-feedback, disclosure-close,
-playlists-dialog, playlists-dialog-title, playlists-close, playlist-picker,
-playlist-picker-title, playlist-picker-list, playlist-manager, playlist-select,
-playlist-items, playlist-create-name, playlist-create, playlist-rename-name,
-playlist-rename, playlist-delete, playlist-export-md, playlist-export-json,
-playlist-export-csv, playlist-feedback
+playlists-dialog, playlists-dialog-title, playlist-back, playlists-close,
+playlist-picker, playlist-picker-title, playlist-picker-list,
+playlist-library, playlist-library-list, playlist-library-empty, playlist-new,
+playlist-detail, playlist-detail-count, playlist-items, playlist-more,
+playlist-actions, playlist-rename, playlist-delete, playlist-export,
+playlist-export-formats, playlist-export-md, playlist-export-json, playlist-export-csv,
+playlist-rename-form, playlist-rename-name, playlist-rename-save, playlist-rename-cancel,
+playlist-create-view, playlist-create-name, playlist-create, playlist-feedback
+
+The two local-data controls (`export-backup-btn`, `clear-data-btn`) live in
+`#settings-dialog` under a `Local data` fieldset and are wired by
+`docs/js/views/dialogs.js`, not by the sidebar view.
+
+The playlists dialog has exactly four mutually exclusive views, and shows one at a
+time: `#playlist-picker` (compact save-to-playlist checklist opened from a card's `+`
+button), `#playlist-library` (every playlist as a row with its saved count, Watch later
+first, plus one `#playlist-new` action), `#playlist-detail` (one playlist's saved items,
+with rename/delete/export hidden behind `#playlist-more` and export formats hidden
+behind `#playlist-export`), and `#playlist-create-view` (name field and Create only).
+`#playlist-back` returns to the library from detail or create. Watch later never exposes
+rename or delete.
 
 Removed from the markup: `results`, `onboarding-llm-base-url`,
 `onboarding-llm-model`, `onboarding-youmd-input`, `onboarding-continue`,
-`mood-select`, `language-select`, `genre-select`, `provider-select`, and
-`disclosure-btn`. The disclosure/developer dialog remains in the DOM but has no
+`mood-select`, `language-select`, `genre-select`, `provider-select`,
+`disclosure-btn`, `queue-prev`, `queue-next`, `playlist-manager`, and
+`playlist-select`. The disclosure/developer dialog remains in the DOM but has no
 visible opener. It opens only with `Ctrl+Alt+Shift+D`
 (`Control+Option+Shift+D` on macOS); this shortcut is discoverability only, not an
 authentication or security boundary.

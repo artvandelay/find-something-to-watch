@@ -2,6 +2,8 @@
 
 ## Required before tagging
 
+- [ ] Confirm the visible wordmark remains a temporary placeholder in release copy; do not present it as a
+      final product name.
 - [ ] Rotate the TMDB token that appeared in local debugging output.
 - [ ] Confirm redistribution rights for the legacy uNoGS and Streaming Availability records retained in the union.
 - [ ] Run `bash scripts/scan_secrets.sh`.
@@ -13,7 +15,7 @@
 - [ ] Start `node scripts/e2e_catalog_server.mjs` and complete the deterministic browser mock pass with
       a real Worker: normal `run_catalog_js`, subscription-scoped queue, timeout recovery, desktop and
       mobile layouts, and no uncaught console errors.
-- [ ] Confirm first-visit onboarding, playlists, backup import, and no-key keyword fallback work while
+- [ ] Confirm first-visit onboarding, playlists, backup export, and no-key keyword fallback work while
       the catalog Worker is unavailable.
 - [ ] Run exactly one `node scripts/stress_agent_live.mjs --limit 1` query with a release-testing
       OpenRouter key in the root `.env`; do not print, record, or place that key in browser automation.
@@ -38,6 +40,32 @@
 - [ ] Verify the maintainer developer console with `Ctrl+Alt+Shift+D` (`Control+Option+Shift+D` on
   macOS): trace, recommendation exports, and catalog provenance work; no API key or model configuration
   is exposed. This shortcut is discoverability-only, not authentication.
+
+## Phase 1–5 UX gates
+
+- [ ] **Phase 1 — catalog details:** Run `node scripts/check_catalog_fidelity.mjs`, `node
+      scripts/check_app_boot.mjs`, and `npm run check`. Verify full-record title details resolve on the
+      main thread, refresh after sidecar/subscription changes, restore focus, and group providers into
+      **On your subscriptions** and **Other known platforms**. Confirm no unavailable source fields are
+      invented and availability is described as a dated snapshot.
+- [ ] **Phase 2 — decisions and memory:** Run `node scripts/check_recommendations.mjs`, `node
+      scripts/check_preferences.mjs`, `node scripts/check_memory.mjs`, and `node
+      scripts/check_app_boot.mjs`. Verify reload, New chat archiving, conversation switching, ranked
+      queue restoration, backup migration, and learned-memory edit, disable, and clear behavior.
+- [ ] **Phase 3 — transport and cancellation:** Run `node scripts/check_llm_client.mjs`, `node
+      scripts/check_tools.mjs`, `node scripts/check_catalog_runtime.mjs`, `node
+      scripts/check_agent.mjs`, and `node scripts/stress_agent_hostile.mjs`. Confirm a deterministic
+      cancellation terminates only the matching disposable executor while the trusted catalog host stays
+      available. If a release-testing key is configured, optionally run one live stream without logging
+      the key or model context.
+- [ ] **Phase 4 — live turn UX:** Run `npm run check` and the deterministic browser fixture. Verify a
+      normal, slow, cancelled, and failed turn: user persistence, attached phase order, incremental safe
+      Markdown, Top pick/Alternatives/More options, source query, fit reasons, reported-or-unavailable
+      cost, Stop, slow state, and stale-event isolation.
+- [ ] **Phase 5 — visual system:** In the local deterministic browser fixture, check dark and light at
+      1440×900, 1100×844, 900×844, and 390×844, plus reduced motion at 1440. Confirm no horizontal
+      overflow, no sidebar/composer seam, sidebar-bottom subscriptions, visible recommendation priority,
+      and no glow, pill, or rounded-dashboard residue.
 
 ## Publish
 

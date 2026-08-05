@@ -6,7 +6,8 @@ All notable changes to this project will be documented here.
 
 ### Added
 
-- Static India OTT search across 26 curated providers.
+- Static search across 26 curated India streaming providers for a bring-your-own-compatible-model hobby
+  project.
 - Worker-backed `run_catalog_js` catalog analysis with subscription-scoped projections, observed-ID
   queue grounding, and disposable-executor fault containment. The executor is not a hostile-code
   security sandbox.
@@ -20,6 +21,14 @@ All notable changes to this project will be documented here.
 - Persistent named playlists, including immutable Watch later, with Markdown, JSON, and CSV exports.
 - Synopsis-rich recommendation cards and safe lightweight Markdown assistant replies.
 - Browser-local persistence for profile, conversation, queue, You.md, history, and playlists.
+- Shared title details with snapshot provenance and an all-curated-provider exception: providers are grouped
+  into selected subscriptions and other known platforms.
+- Ranked decisions with one Top pick, two Alternatives, and collapsed More options instead of
+  equal-weight recommendations.
+- Archived conversations with their ranked decisions, plus structured learned entertainment preferences
+  that users can inspect, edit, disable, or clear separately from You.md.
+- Streaming turn phases, attached activity, Stop and slow-turn states, and latency/token metrics with
+  provider-reported cost or an explicit unavailable state.
 - Offline hostile-input, catalog-integrity, and search-performance stress suites.
 - Live OpenRouter agent stress harness.
 
@@ -30,6 +39,19 @@ All notable changes to this project will be documented here.
 - Provider labels, accessibility contrast, focus states, and loading states were updated.
 - The visible composer is now natural-language-only; provider, language, genre, and mood intent remain
   available to the agent's subscription-gated catalog tools.
+- The shell is now three vertical panels: a collapsible sidebar (persisted, auto-collapsing below
+  1280px), a chat column with the composer pinned to the bottom and message text capped at a readable
+  measure, and a vertically scrolling picks rail of compact card rows instead of a paged grid.
+- Backup export and clear-local-data moved from the sidebar into Settings under **Local data**, and
+  the catalog snapshot line moved to a quiet footer under the picks rail.
+- Learned preference candidates now require model-produced explicit/durable decisions and literal
+  latest-query evidence; local validation does not infer preference semantics from keywords.
+- Browser-memory backups are export-only in this version.
+- The playlists dialog is now progressive — library, playlist detail, and create are separate views,
+  with rename, delete, and export behind a More control instead of one long form.
+- Product and privacy copy now states that data is stored in the browser while relevant context is sent to
+  the configured model endpoint. It labels availability as a dated catalog snapshot, preserves the
+  disposable-Worker fault-containment caveat, and does not present the temporary visible wordmark as final.
 
 ### Verification
 

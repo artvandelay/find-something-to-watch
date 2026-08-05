@@ -1,26 +1,28 @@
-# India OTT Search — bring your own key
+# Watch agent — bring your own key
+
+**A hobby watch-decision tool for people who want to configure it themselves.**
 
 Live: https://artvandelay.github.io/india-ott-byok/
 
 ## What this is
 
-The site ships a static snapshot of what is streaming in India, plus all of the search logic that runs
-over it. The visitor brings the other two pieces: their own LLM API key, and their own taste context. An
-onboarding flow collects the services you subscribe to, a required OpenRouter key, and an optional
-watch-history export. It has exactly three steps: subscriptions, key, and history. Afterward, a
-three-region shell — sidebar, chat, and a recommendation display — remembers your current conversation,
-recommendation queue, and saved playlists across reloads.
+This is a hobby project for technically curious viewers. It ships a dated India streaming-catalog
+snapshot and local search over it. Bring your preferred compatible model and your own taste context. The
+required three-step onboarding collects subscriptions, an OpenRouter key, and an optional watch-history
+export. Afterward, a three-panel shell — a collapsible sidebar, chat with a pinned composer, and a
+vertical picks rail — remembers conversations, ranked decisions, and playlists across reloads. The
+visible wordmark is a temporary placeholder, not a final product name.
 
-Nothing runs on a server — no backend, no database, no analytics, no accounts, no cloud sync. Your API
-key is held in `localStorage`; subscriptions, You.md, watch history, conversation, recommendation queue,
-and playlists are held in IndexedDB via `docs/js/memory.js`. Chat queries and bounded context are sent
-directly to the configured endpoint with the key for authentication. When you import history, only
-filenames, structural metadata, and deterministic bounded sample rows or records are sent directly to
-OpenRouter to infer the file layout; the complete upload stays in your browser.
+Stored in this browser. Relevant context is sent to the model endpoint you configure. There is no
+account, backend, analytics, or cloud sync. The API key is held in `localStorage`; subscriptions, You.md,
+watch history, conversations, queues, learned preferences, and playlists are held in IndexedDB via
+`docs/js/memory.js`. During watch-history import, bounded filenames, structural metadata, and samples are
+sent to the configured model endpoint to infer the file layout; the complete upload stays in the browser.
 
-Model-authored catalog analysis runs locally in browser Workers. The main thread keeps the trusted catalog
-records used to render cards, playlists, the initial queue, and no-key keyword search. The model sees
-bounded results from one local `run_catalog_js` tool, never watch URLs or poster URLs.
+Model-generated catalog analysis runs in a disposable Worker for fault containment; it is not a
+hostile-code security sandbox. The main thread keeps the trusted catalog records used to render cards,
+playlists, the initial queue, and no-key keyword search. The model sees bounded results from one local
+`run_catalog_js` tool, never watch URLs or poster URLs.
 
 ## Why
 
@@ -28,10 +30,10 @@ OTT catalogs are enormous, and their built-in search only matches titles. You ca
 describing it. This searches meaning across synopses, and then ranks the matches against who you
 actually are.
 
-## Bring your own key
+## Bring your preferred compatible model
 
-Onboarding requires a nonempty OpenRouter key. It stores the app's default OpenRouter endpoint and model;
-you can change compatible endpoint and model settings later in the in-app **Settings** dialog.
+Onboarding requires a nonempty OpenRouter key and starts with the app's default endpoint and model. You
+can configure a compatible endpoint and model later in the in-app **Settings** dialog.
 
 The key is stored only in `localStorage` on your device — it is never sent anywhere except to the
 configured endpoint. It is required to enter the normal app experience.
@@ -58,14 +60,21 @@ Two optional inputs shape the ranking:
 Both stay in this browser. The app limits upload, archive, sample, and normalized-history sizes to keep
 the import bounded.
 
+The app can also learn explicit, durable entertainment preferences from recent chat requests. Those facts
+are structured rather than appended to You.md: inspect, edit, disable, or clear them in **Profile &
+context**. Disabling learned memory stops it from being included in future model requests; manual You.md
+remains separate.
+
 ## Subscriptions are a hard boundary
 
 Onboarding (and Settings, later) asks which of the 26 curated India services you actually subscribe to.
-Every local search, model catalog analysis, and recommendation-display card is restricted to titles
-available on at least one of those services, and every watch link shown is intersected down to just your subscriptions —
-you never see a provider or a link for a service you didn't select. A title's link is labelled to match
-what it actually is: a true per-title deep link ("Watch on ..."), a provider search page ("Find on ..."),
-or the shared TMDB watch page that lists real providers itself ("See where to watch").
+Every local search, model catalog analysis, recommendation card, and normal provider link is restricted
+to titles available on at least one selected service. The title-details dialog is the one exception: it
+groups the catalog record's providers into **On your subscriptions** and **Other known platforms**. “All
+platforms” means the curated providers recorded in that dated catalog entry, not exhaustive or live
+market availability. A title's link is labelled to match what it actually is: a true per-title deep link
+("Watch on ..."), a provider search page ("Find on ..."), or the shared TMDB watch page that lists real
+providers itself ("See where to watch").
 
 ## Ask naturally
 
@@ -74,6 +83,20 @@ anything else in ordinary words; the agent's `run_catalog_js` analysis retains t
 subscriptions remain a hard boundary.
 
 Ratings shown are TMDB `vote_average` (audience scores out of 10), not IMDb ratings.
+
+## Decisions, conversations, and streaming
+
+Each update can rank up to 20 catalog-grounded titles, but the rail emphasizes one **Top pick**, then two
+**Alternatives**. Remaining titles stay behind **Show N more**. The source query and fit reason make the
+latest decision traceable to the conversation.
+
+Use **New chat** to archive a non-empty conversation and begin another. The sidebar keeps up to 20 recent
+conversations, including each conversation's ranked decision, so switching back restores both.
+
+The agent shows `PLANNING`, `SEARCHING CATALOG`, `ANALYZING MATCHES`, and `WRITING`, then streams the
+answer. **Stop** cancels an active turn. A turn that has not progressed for 20 seconds says `TAKING LONGER
+THAN USUAL` and retains Stop. Completed turns show latency, token totals, and either provider-reported
+cost or **Cost unavailable**. Reported cost is not an estimate.
 
 ## Export
 
@@ -152,8 +175,8 @@ bash scripts/scan_secrets.sh
 
 `scripts/check_app_boot.mjs` boots the real `docs/index.html` and the real `docs/js/ui.js` in jsdom,
 against a small catalog fixture and a fresh IndexedDB, and drives the app the way a user would:
-onboarding step by step, creating and exporting playlists, reloading, round-tripping a memory backup,
-rejecting a malformed backup without data loss, the mobile drawer, the developer shortcut, and a query
+onboarding step by step, creating and exporting playlists, reloading, exporting a key-free memory backup,
+the mobile drawer, the developer shortcut, and a query
 with no key configured.
 
 It exists because these are integration failures — a control that is never rendered, or a hidden
@@ -229,7 +252,7 @@ bash scripts/scan_secrets.sh
     history, and playlists (see CONTRACT.md's "Browser memory" section)
   - `docs/js/store.js` — localStorage for the LLM key, model, base URL, and OpenRouter-only web-search opt-in
   - `docs/js/exporters.js` — output formats
-  - `docs/js/views/` — onboarding, sidebar, chat, Markdown, recommendation-queue, playlist, and dialog
+  - `docs/js/views/` — onboarding, sidebar, chat, Markdown, picks-rail, playlist, and dialog
     UI modules, coordinated by `docs/js/ui.js`
   - `docs/js/ui.js` — the slim coordinator; the only module that imports the views
   - `docs/assets/` — built catalog JSON, synopsis sidecar, meta, prompts
