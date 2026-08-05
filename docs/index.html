@@ -3,8 +3,8 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>India OTT Home — bring your own key</title>
-    <meta name="description" content="An agentic home for what to watch across your India streaming subscriptions. Your key, taste notes, and watch history stay in this browser; the query and that context are sent directly to the model endpoint you configure.">
+    <title>Watch agent — search the catalog</title>
+    <meta name="description" content="Search a dated catalog snapshot across your India streaming subscriptions. Stored in this browser. Relevant context is sent to the model endpoint you configure.">
     <link rel="stylesheet" href="./css/app.css">
   </head>
   <body>
@@ -14,8 +14,9 @@
       <!-- ============================ Onboarding ============================ -->
       <section id="onboarding-screen" aria-labelledby="onboarding-title" hidden>
         <div class="onboarding-card">
-          <h1 id="onboarding-title">India OTT Home</h1>
-          <p class="intro">Choose your subscriptions, add an OpenRouter key, then optionally import your watch history.</p>
+          <h1 id="onboarding-title">Unscroll</h1>
+          <p class="tagline">Search the catalog. Pick something. Start watching.</p>
+          <p class="intro">Choose your subscriptions, bring your preferred compatible model, then optionally import watch history.</p>
 
           <form id="onboarding-form">
             <p id="onboarding-progress" class="note" aria-live="polite">Step 1 of 3</p>
@@ -27,12 +28,12 @@
             </fieldset>
 
             <fieldset class="field-group" data-onboarding-step="openrouter-key" hidden>
-              <legend>Connect OpenRouter</legend>
+              <legend>Connect a compatible model</legend>
               <div class="field">
                 <label for="onboarding-llm-api-key">OpenRouter API key</label>
                 <input id="onboarding-llm-api-key" type="password" autocomplete="off">
               </div>
-              <p class="note">Your key is stored only in this browser and used directly with OpenRouter.</p>
+              <p class="note">Stored in this browser. Relevant context is sent to the model endpoint you configure.</p>
             </fieldset>
 
             <fieldset class="field-group" data-onboarding-step="watch-history" hidden>
@@ -49,15 +50,14 @@
             <div id="onboarding-privacy" class="privacy-copy">
               <h2>How this works</h2>
               <ul>
-                <li>No account, no backend, no cloud sync. Everything above is written only to this
-                  browser's local storage and IndexedDB.</li>
-                <li>Files stay local; bounded sampled rows/records and filenames are sent directly to
-                  OpenRouter for schema inference; query/context/key requests go directly to the
-                  configured endpoint.</li>
-                <li>The catalog is a point-in-time snapshot — streaming availability changes constantly,
-                  so confirm a title is still where it says before committing to watch it.</li>
+                <li>Stored in this browser. Relevant context is sent to the model endpoint you configure.</li>
+                <li>There is no account, backend, or cloud sync. Files stay local; bounded filenames,
+                  structural metadata, and samples can be sent to the configured model endpoint for
+                  watch-history layout inference.</li>
+                <li>Availability comes from a dated catalog snapshot and may have changed. Confirm a title
+                  at its provider before you watch.</li>
                 <li>Clearing this browser's site data removes everything, with no way to recover it. This
-                  is not encrypted storage and is not a backup — use “Export backup” in the sidebar for
+                  is not encrypted storage and is not a backup — use “Export backup” in Settings for
                   that.</li>
               </ul>
             </div>
@@ -73,36 +73,68 @@
       <!-- =============================== Shell =============================== -->
       <div id="shell" hidden>
         <button id="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="false">
-          <span aria-hidden="true">☰</span> Menu
+          <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+            <path d="M4 7h16M4 12h16M4 17h16" fill="none" stroke="currentColor" stroke-width="1.8"/>
+          </svg>
+          Menu
         </button>
 
-        <aside id="sidebar" aria-label="Conversation and settings">
-          <div class="sidebar-brand">India OTT Home</div>
-
-          <button id="new-chat-btn" type="button">+ New chat</button>
-
-          <div id="conversation-indicator" class="sidebar-block" aria-live="polite"></div>
-
-          <div class="sidebar-block">
-            <h2>Subscriptions</h2>
-            <p id="subscriptions-summary" aria-live="polite"></p>
+        <aside id="sidebar" aria-label="Navigation and settings">
+          <div class="sidebar-head">
+            <span class="sidebar-brand">
+              <span class="brand-mark" aria-hidden="true">U</span>
+              <span class="brand-name nav-label">Unscroll</span>
+            </span>
+            <button id="sidebar-collapse" type="button" aria-controls="sidebar" aria-expanded="true"
+              aria-label="Collapse sidebar" title="Collapse sidebar">
+              <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <path d="M14 6l-6 6 6 6M8 12h12" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+            </button>
           </div>
 
-          <nav class="sidebar-nav" aria-label="Settings and data">
-            <button id="playlists-btn" type="button">Playlists</button>
-            <button id="context-btn" type="button">Profile &amp; context</button>
-            <button id="settings-btn" type="button">Settings</button>
-          </nav>
+          <div class="sidebar-main">
+            <button id="new-chat-btn" type="button" aria-label="New chat" title="New chat">
+              <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                <path d="M12 5v14M5 12h14" fill="none" stroke="currentColor" stroke-width="1.8"/>
+              </svg>
+              <span class="nav-label">New chat</span>
+            </button>
 
-          <div class="sidebar-block sidebar-data-actions">
-            <h2>Local data</h2>
-            <button id="export-backup-btn" type="button">Export backup</button>
-            <button id="import-backup-btn" type="button">Import backup</button>
-            <input id="import-backup-file" type="file" accept="application/json" hidden>
-            <button id="clear-data-btn" class="danger-action" type="button">Clear local data</button>
+            <section id="conversation-list" class="sidebar-block" aria-labelledby="conversation-list-title">
+              <h2 id="conversation-list-title">Conversations</h2>
+              <div id="conversation-list-items" role="list" aria-live="polite"></div>
+            </section>
           </div>
 
-          <p id="catalog-status" class="sidebar-block note" aria-live="polite">Loading catalog…</p>
+          <div class="sidebar-bottom">
+            <div class="sidebar-block">
+              <h2>Subscriptions</h2>
+              <p id="subscriptions-summary" aria-live="polite"></p>
+            </div>
+
+            <nav class="sidebar-nav" aria-label="Settings and data">
+              <button id="playlists-btn" type="button" aria-label="Playlists" title="Playlists">
+                <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <path d="M5 6h14M5 12h14M5 18h14" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                <span class="nav-label">Playlists</span>
+              </button>
+              <button id="context-btn" type="button" aria-label="Profile and context" title="Profile &amp; context">
+                <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <path d="M5 19h4l10-10-4-4L5 15v4Z" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                <span class="nav-label">Profile &amp; context</span>
+              </button>
+              <button id="settings-btn" type="button" aria-label="Settings" title="Settings">
+                <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                  <path d="M12 3v3M12 18v3M21 12h-3M6 12H3M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1M18.4 18.4l-2.1-2.1M7.7 7.7 5.6 5.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+                <span class="nav-label">Settings</span>
+              </button>
+            </nav>
+          </div>
         </aside>
 
         <div id="backdrop" hidden></div>
@@ -110,34 +142,41 @@
         <main id="workspace">
           <section id="chat-region" aria-label="Conversation">
             <div id="chat-transcript" role="log" aria-live="polite" aria-relevant="additions text"></div>
-            <p id="chat-note" class="note" hidden aria-live="polite"></p>
 
-            <form id="query-form">
-              <label for="query-input">What would you like to watch?</label>
-              <textarea id="query-input" rows="2" maxlength="6000" placeholder="Something short and funny for tonight — nothing I've already seen"></textarea>
+            <div class="composer-dock">
+              <div class="composer-inner">
+                <p id="chat-note" class="note" hidden aria-live="polite"></p>
 
-              <div class="form-actions">
-                <button id="send-btn" type="submit">Send</button>
-                <button id="stop-btn" type="button" hidden>Stop</button>
+                <form id="query-form">
+                  <label for="query-input">What would you like to watch?</label>
+                  <textarea id="query-input" rows="2" maxlength="6000" placeholder="Something short and funny for tonight — nothing I've already seen"></textarea>
+
+                  <div class="form-actions">
+                    <button id="send-btn" type="submit">Send</button>
+                    <button id="stop-btn" type="button" hidden>Stop</button>
+                  </div>
+                  <p class="note composer-hint">Press Enter to send; use Shift+Enter for a new line.</p>
+                </form>
               </div>
-              <p class="note">Press Enter to send; use Shift+Enter for a new line.</p>
-            </form>
+            </div>
           </section>
 
-          <section id="queue-region" aria-label="Recommendations">
+          <aside id="queue-region" aria-label="Your picks">
             <div id="queue-header">
-              <h2>For you</h2>
+              <h2>Your picks</h2>
               <p id="queue-status" aria-live="polite"></p>
-              <div class="queue-controls">
-                <button id="queue-prev" type="button" aria-label="Previous recommendations">‹</button>
-                <button id="queue-next" type="button" aria-label="More recommendations">›</button>
-              </div>
             </div>
+            <p id="queue-source" class="queue-source" hidden></p>
             <div id="queue-viewport">
-              <div id="queue-track" role="list"></div>
+              <div id="queue-track">
+                <section id="queue-top-pick" class="queue-group" hidden></section>
+                <section id="queue-alternatives" class="queue-group" hidden></section>
+                <section id="queue-more" class="queue-group queue-more-group" hidden></section>
+              </div>
+              <p id="queue-empty" class="note" hidden></p>
             </div>
-            <p id="queue-empty" class="note" hidden></p>
-          </section>
+            <p id="catalog-status" class="note rail-footer" aria-live="polite">Loading catalog…</p>
+          </aside>
         </main>
       </div>
 
@@ -174,8 +213,19 @@
           </label>
         </div>
       </fieldset>
-      <p class="note">Model-generated catalog code runs in a disposable Worker. Enabled web search lets
-        OpenRouter process relevant queries and can add cost.</p>
+      <p class="note">Bring your preferred compatible model. Model-generated catalog analysis runs in a
+        disposable Worker for fault containment; it is not a hostile-code security sandbox. Enabled web
+        search lets OpenRouter process relevant queries and can add cost.</p>
+
+      <fieldset class="field-group">
+        <legend>Local data</legend>
+        <p class="note">Exported backups are plain JSON and never contain your API key.</p>
+        <div class="button-row">
+          <button id="export-backup-btn" type="button">Export backup</button>
+          <button id="clear-data-btn" class="danger-action" type="button">Clear local data</button>
+        </div>
+      </fieldset>
+
       <p id="settings-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">
         <button id="settings-save" type="button">Save</button>
@@ -189,13 +239,27 @@
         <label for="youmd-input">You.md — what you like, what you avoid</label>
         <textarea id="youmd-input" name="youmd-input" rows="14"></textarea>
       </div>
+      <fieldset class="field-group">
+        <legend>Learned from chats</legend>
+        <div class="field">
+          <label for="memory-enabled">
+            <input id="memory-enabled" name="memory-enabled" type="checkbox">
+            Use learned preferences in future requests
+          </label>
+        </div>
+        <div id="learned-facts" role="list" aria-live="polite"></div>
+        <button id="learned-clear" type="button" class="danger-action">Clear learned facts</button>
+      </fieldset>
+      <p class="note">Only explicit, durable entertainment preferences are learned. Review, edit, disable,
+        or clear them here. Your manual You.md stays separate.</p>
       <div class="field">
         <label for="history-file">Watch-history export</label>
         <input id="history-file" name="history-file" type="file" accept=".csv,.json,.zip">
       </div>
       <p id="history-summary" aria-live="polite"></p>
       <button id="history-remove" type="button">Remove imported history</button>
-      <p class="note">Your watch history is parsed and stored locally in this browser.</p>
+      <p class="note">Your watch history is parsed and stored locally in this browser. Bounded samples may
+        be sent to the configured model endpoint only to infer an import layout.</p>
       <p id="context-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">
         <button id="context-save" type="button">Save</button>
@@ -204,34 +268,70 @@
     </dialog>
 
     <dialog id="playlists-dialog" aria-labelledby="playlists-dialog-title">
-      <h2 id="playlists-dialog-title">Playlists</h2>
+      <div class="dialog-head">
+        <button id="playlist-back" type="button" class="icon-button" aria-label="Back to your playlists" hidden>
+          <span aria-hidden="true">←</span>
+        </button>
+        <h2 id="playlists-dialog-title">Your playlists</h2>
+      </div>
 
+      <!-- Compact checklist opened from a pick's + button -->
       <section id="playlist-picker" aria-labelledby="playlist-picker-title" hidden>
         <h3 id="playlist-picker-title">Save to a playlist</h3>
         <div id="playlist-picker-list" role="group" aria-label="Available playlists"></div>
       </section>
 
-      <section id="playlist-manager" aria-label="Manage playlists" hidden>
-        <label for="playlist-select">Playlist</label>
-        <select id="playlist-select"></select>
+      <!-- Library: every playlist as a row, plus one create action -->
+      <section id="playlist-library" aria-label="Your playlists" hidden>
+        <div id="playlist-library-list" role="list"></div>
+        <p id="playlist-library-empty" class="note" hidden></p>
+        <div class="library-actions">
+          <button id="playlist-new" type="button">+ New playlist</button>
+        </div>
+      </section>
+
+      <!-- Detail: one playlist's saved titles, with secondary actions behind More -->
+      <section id="playlist-detail" aria-label="Playlist" hidden>
+        <p id="playlist-detail-count" class="note" aria-live="polite"></p>
         <div id="playlist-items" role="list" aria-live="polite"></div>
 
-        <div class="field">
-          <label for="playlist-create-name">New playlist name</label>
-          <input id="playlist-create-name" type="text" maxlength="80">
-          <button id="playlist-create" type="button">Create playlist</button>
+        <div class="detail-actions">
+          <button id="playlist-more" type="button" aria-expanded="false" aria-controls="playlist-actions">
+            More
+          </button>
         </div>
-        <div class="field">
-          <label for="playlist-rename-name">Rename selected playlist</label>
+
+        <div id="playlist-actions" class="overflow-actions" hidden>
+          <button id="playlist-rename" type="button">Rename</button>
+          <button id="playlist-delete" type="button" class="danger-action">Delete</button>
+          <button id="playlist-export" type="button" aria-expanded="false" aria-controls="playlist-export-formats">
+            Export
+          </button>
+          <div id="playlist-export-formats" class="export-formats" role="group" aria-label="Export format" hidden>
+            <button id="playlist-export-md" type="button">Markdown</button>
+            <button id="playlist-export-json" type="button">JSON</button>
+            <button id="playlist-export-csv" type="button">CSV</button>
+          </div>
+        </div>
+
+        <div id="playlist-rename-form" class="inline-form" hidden>
+          <label for="playlist-rename-name">New playlist name</label>
           <input id="playlist-rename-name" type="text" maxlength="80">
-          <button id="playlist-rename" type="button">Rename playlist</button>
-          <button id="playlist-delete" type="button">Delete playlist</button>
+          <div class="inline-form-actions">
+            <button id="playlist-rename-save" type="button">Save name</button>
+            <button id="playlist-rename-cancel" type="button">Cancel</button>
+          </div>
         </div>
-        <div class="exports">
-          <h3>Export selected playlist</h3>
-          <button id="playlist-export-md" type="button">Markdown</button>
-          <button id="playlist-export-json" type="button">JSON</button>
-          <button id="playlist-export-csv" type="button">CSV</button>
+      </section>
+
+      <!-- Create: one field, nothing else -->
+      <section id="playlist-create-view" aria-label="New playlist" hidden>
+        <div class="inline-form">
+          <label for="playlist-create-name">Playlist name</label>
+          <input id="playlist-create-name" type="text" maxlength="80">
+          <div class="inline-form-actions">
+            <button id="playlist-create" type="button">Create playlist</button>
+          </div>
         </div>
       </section>
 
@@ -239,6 +339,14 @@
       <div class="dialog-actions">
         <button id="playlists-close" type="button">Close</button>
       </div>
+    </dialog>
+
+    <dialog id="title-details-dialog" aria-labelledby="title-details-title">
+      <div class="dialog-head">
+        <h2 id="title-details-title">Title details</h2>
+        <button id="title-details-close" type="button" aria-label="Close title details">Close</button>
+      </div>
+      <div id="title-details-content"></div>
     </dialog>
 
     <dialog id="disclosure-dialog">

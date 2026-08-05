@@ -1,12 +1,24 @@
 /**
- * Playlist picker and manager. State is rendered by the coordinator after every
- * persisted domain mutation; this view only owns dialog state and interactions.
+ * Playlists dialog. One dialog, four mutually exclusive views:
+ *
+ *   picker  — compact add/remove checklist opened from a pick's + button
+ *   library — every playlist as a row (name + saved count), Watch later first
+ *   detail  — one playlist's saved titles; rename/delete/export live behind More
+ *   create  — a single name field and Create, nothing else
+ *
+ * State is rendered by the coordinator after every persisted domain mutation;
+ * this view only owns which view is showing and the interactions inside it.
  */
+const WATCH_LATER_ID = "watch-later";
+
 export function createPlaylistsView(el, deps) {
   let state = { playlists: [] };
-  let mode = "manager";
+  let view = "library";
   let picker = null;
   let selectedPlaylistId = "";
+  let moreOpen = false;
+  let exportOpen = false;
+  let renaming = false;
   let restoreFocusTo = null;
   let busy = false;
 
@@ -15,7 +27,7 @@ export function createPlaylistsView(el, deps) {
   }
 
   function selectedPlaylist() {
-    return playlists().find((playlist) => playlist.id === selectedPlaylistId) || playlists()[0] || null;
+    return playlists().find((playlist) => playlist.id === selectedPlaylistId) || null;
   }
 
   function feedback(message = "") {
@@ -27,25 +39,12 @@ export function createPlaylistsView(el, deps) {
     return error && error.message ? error.message : fallback;
   }
 
-  function setBusy(next) {
-    busy = next;
-    for (const node of [
-      el.playlistSelect,
-      el.playlistCreateName,
-      el.playlistCreate,
-      el.playlistRenameName,
-      el.playlistRename,
-      el.playlistDelete,
-      el.playlistExportMd,
-      el.playlistExportJson,
-      el.playlistExportCsv,
-      el.playlistsClose
-    ]) {
-      node.disabled = next;
-    }
-    for (const input of el.playlistPickerList.querySelectorAll("input")) input.disabled = next;
-    for (const button of el.playlistItems.querySelectorAll("button")) button.disabled = next;
-    if (mode === "manager") renderManager();
+  function titleCount(playlist) {
+    return playlist && Array.isArray(playlist.titleIds) ? playlist.titleIds.length : 0;
+  }
+
+  function countLabel(count) {
+    return count === 0 ? "No saved titles" : count + " saved title" + (count === 1 ? "" : "s");
   }
 
   function resolveTitle(titleId) {
@@ -64,6 +63,34 @@ export function createPlaylistsView(el, deps) {
     }
     return null;
   }
+
+  function setBusy(next) {
+    busy = next;
+    for (const node of [
+      el.playlistBack,
+      el.playlistNew,
+      el.playlistMore,
+      el.playlistRename,
+      el.playlistDelete,
+      el.playlistExport,
+      el.playlistExportMd,
+      el.playlistExportJson,
+      el.playlistExportCsv,
+      el.playlistRenameName,
+      el.playlistRenameSave,
+      el.playlistRenameCancel,
+      el.playlistCreateName,
+      el.playlistCreate,
+      el.playlistsClose
+    ]) {
+      node.disabled = next;
+    }
+    for (const input of el.playlistPickerList.querySelectorAll("input")) input.disabled = next;
+    for (const button of el.playlistLibraryList.querySelectorAll("button")) button.disabled = next;
+    for (const button of el.playlistItems.querySelectorAll("button")) button.disabled = next;
+  }
+
+  // ---- Picker -------------------------------------------------------------
 
   function renderPicker() {
     el.playlistPickerList.textContent = "";
@@ -100,9 +127,55 @@ export function createPlaylistsView(el, deps) {
     }
   }
 
+  // ---- Library ------------------------------------------------------------
+
+  function renderLibrary() {
+    const list = playlists();
+    el.playlistLibraryList.textContent = "";
+
+    for (const playlist of list) {
+      const row = document.createElement("div");
+      row.setAttribute("role", "listitem");
+
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "playlist-row";
+      button.dataset.playlistId = playlist.id;
+      button.disabled = busy;
+      const count = titleCount(playlist);
+      button.setAttribute("aria-label", `${playlist.name}, ${countLabel(count).toLowerCase()}`);
+
+      const name = document.createElement("span");
+      name.className = "playlist-row-name";
+      name.textContent = playlist.name;
+
+      const meta = document.createElement("span");
+      meta.className = "playlist-row-count";
+      meta.textContent = count === 0 ? "Empty" : String(count);
+
+      const chevron = document.createElement("span");
+      chevron.className = "playlist-row-chevron";
+      chevron.setAttribute("aria-hidden", "true");
+      chevron.textContent = "›";
+
+      button.append(name, meta, chevron);
+      button.addEventListener("click", () => showDetail(playlist.id));
+      row.appendChild(button);
+      el.playlistLibraryList.appendChild(row);
+    }
+
+    const nothingSaved = list.every((playlist) => titleCount(playlist) === 0);
+    const onlyWatchLater = list.length <= 1;
+    el.playlistLibraryEmpty.hidden = !(nothingSaved && onlyWatchLater);
+    el.playlistLibraryEmpty.textContent = "Nothing saved yet — use the + on any pick to save it here, "
+      + "or start a new playlist.";
+  }
+
+  // ---- Detail -------------------------------------------------------------
+
   function renderItems(playlist) {
     el.playlistItems.textContent = "";
-    if (!playlist || !Array.isArray(playlist.titleIds) || playlist.titleIds.length === 0) {
+    if (!playlist || titleCount(playlist) === 0) {
       const empty = document.createElement("p");
       empty.className = "note";
       empty.textContent = "No saved titles in this playlist yet.";
@@ -116,8 +189,13 @@ export function createPlaylistsView(el, deps) {
       item.setAttribute("role", "listitem");
 
       const details = document.createElement("div");
-      const title = document.createElement("strong");
+      const title = document.createElement("button");
+      title.type = "button";
+      title.className = "playlist-title";
+      title.dataset.titleId = titleId;
       title.textContent = record && (record.t || record.title) ? (record.t || record.title) : titleId;
+      title.setAttribute("aria-label", "View details for " + title.textContent);
+      title.addEventListener("click", () => deps.onOpenTitleDetails?.(titleId, title));
       details.appendChild(title);
       if (!record) {
         const unavailable = document.createElement("p");
@@ -129,6 +207,7 @@ export function createPlaylistsView(el, deps) {
 
       const remove = document.createElement("button");
       remove.type = "button";
+      remove.className = "playlist-item-remove";
       remove.textContent = "Remove";
       remove.disabled = busy;
       remove.setAttribute("aria-label", `Remove ${title.textContent} from ${playlist.name}`);
@@ -149,50 +228,113 @@ export function createPlaylistsView(el, deps) {
     }
   }
 
-  function renderManager() {
-    const list = playlists();
-    if (!list.some((playlist) => playlist.id === selectedPlaylistId)) {
-      selectedPlaylistId = list[0] ? list[0].id : "";
-    }
-
-    el.playlistSelect.textContent = "";
-    for (const playlist of list) {
-      const option = document.createElement("option");
-      option.value = playlist.id;
-      option.textContent = playlist.name;
-      option.selected = playlist.id === selectedPlaylistId;
-      el.playlistSelect.appendChild(option);
-    }
-
+  function renderDetail() {
     const playlist = selectedPlaylist();
-    const protectedPlaylist = !playlist || playlist.id === "watch-later";
-    el.playlistRenameName.value = playlist ? playlist.name : "";
-    el.playlistRenameName.disabled = busy || protectedPlaylist;
-    el.playlistRename.disabled = busy || protectedPlaylist;
-    el.playlistDelete.disabled = busy || protectedPlaylist;
-    el.playlistExportMd.disabled = busy || !playlist;
-    el.playlistExportJson.disabled = busy || !playlist;
-    el.playlistExportCsv.disabled = busy || !playlist;
+    if (!playlist) {
+      showLibrary();
+      return;
+    }
+    const isProtected = playlist.id === WATCH_LATER_ID;
+
+    el.playlistDetail.setAttribute("aria-label", playlist.name);
+    el.playlistDetailCount.textContent = countLabel(titleCount(playlist));
     renderItems(playlist);
+
+    el.playlistMore.setAttribute("aria-expanded", moreOpen ? "true" : "false");
+    el.playlistActions.hidden = !moreOpen || renaming;
+    el.playlistRename.hidden = isProtected;
+    el.playlistDelete.hidden = isProtected;
+    el.playlistExport.setAttribute("aria-expanded", exportOpen ? "true" : "false");
+    el.playlistExportFormats.hidden = !exportOpen;
+
+    el.playlistRenameForm.hidden = !renaming;
+    el.playlistMore.hidden = renaming;
   }
 
-  function renderDialog() {
-    const pickerMode = mode === "picker";
-    el.playlistPicker.hidden = !pickerMode;
-    el.playlistManager.hidden = pickerMode;
-    el.playlistsDialogTitle.textContent = pickerMode ? "Save to playlist" : "Playlists";
-    if (pickerMode) {
+  // ---- View switching -----------------------------------------------------
+
+  function renderCurrentView() {
+    el.playlistPicker.hidden = view !== "picker";
+    el.playlistLibrary.hidden = view !== "library";
+    el.playlistDetail.hidden = view !== "detail";
+    el.playlistCreateView.hidden = view !== "create";
+    el.playlistBack.hidden = view !== "detail" && view !== "create";
+
+    if (view === "picker") {
+      el.playlistsDialogTitle.textContent = "Save to playlist";
       const name = picker && picker.title ? `: ${picker.title}` : "";
       el.playlistPickerTitle.textContent = `Save to a playlist${name}`;
       renderPicker();
-    } else {
-      renderManager();
+      return;
     }
+    if (view === "create") {
+      el.playlistsDialogTitle.textContent = "New playlist";
+      return;
+    }
+    if (view === "detail") {
+      const playlist = selectedPlaylist();
+      el.playlistsDialogTitle.textContent = playlist ? playlist.name : "Your playlists";
+      renderDetail();
+      return;
+    }
+    el.playlistsDialogTitle.textContent = "Your playlists";
+    renderLibrary();
+  }
+
+  function focusFirst(...candidates) {
+    for (const node of candidates) {
+      if (node && !node.hidden && !node.disabled && typeof node.focus === "function") {
+        node.focus();
+        return;
+      }
+    }
+  }
+
+  function showLibrary({ focus = true } = {}) {
+    view = "library";
+    moreOpen = false;
+    exportOpen = false;
+    renaming = false;
+    renderCurrentView();
+    if (focus) {
+      const previous = el.playlistLibraryList
+        .querySelector(`[data-playlist-id="${cssEscape(selectedPlaylistId)}"]`);
+      focusFirst(previous, el.playlistLibraryList.querySelector("button"), el.playlistNew);
+    }
+    selectedPlaylistId = "";
+  }
+
+  function showDetail(playlistId, { focus = true } = {}) {
+    selectedPlaylistId = playlistId;
+    view = "detail";
+    moreOpen = false;
+    exportOpen = false;
+    renaming = false;
+    feedback();
+    renderCurrentView();
+    if (focus) focusFirst(el.playlistBack);
+  }
+
+  function showCreate() {
+    view = "create";
+    feedback();
+    el.playlistCreateName.value = "";
+    renderCurrentView();
+    focusFirst(el.playlistCreateName);
+  }
+
+  function cssEscape(value) {
+    return String(value).replace(/["\\]/g, "\\$&");
   }
 
   function render(nextState) {
     state = nextState && typeof nextState === "object" ? nextState : { playlists: [] };
-    if (el.playlistsDialog.open) renderDialog();
+    if (!el.playlistsDialog.open) return;
+    if (view === "detail" && !selectedPlaylist()) {
+      showLibrary({ focus: false });
+      return;
+    }
+    renderCurrentView();
   }
 
   function restoreFocus() {
@@ -201,24 +343,28 @@ export function createPlaylistsView(el, deps) {
     if (node && node.isConnected && typeof node.focus === "function") node.focus();
   }
 
-  function open(modeName, focusTarget) {
-    mode = modeName;
-    restoreFocusTo = document.activeElement;
-    feedback();
-    renderDialog();
-    if (!el.playlistsDialog.open) el.playlistsDialog.showModal();
-    const target = focusTarget();
-    if (target && typeof target.focus === "function") target.focus();
-  }
-
   function openPicker(titleId, title) {
     picker = { titleId, title };
-    open("picker", () => el.playlistPickerList.querySelector("input"));
+    view = "picker";
+    restoreFocusTo = document.activeElement;
+    feedback();
+    renderCurrentView();
+    if (!el.playlistsDialog.open) el.playlistsDialog.showModal();
+    focusFirst(el.playlistPickerList.querySelector("input"), el.playlistsClose);
   }
 
   function openManager() {
     picker = null;
-    open("manager", () => el.playlistSelect);
+    selectedPlaylistId = "";
+    restoreFocusTo = document.activeElement;
+    feedback();
+    view = "library";
+    moreOpen = false;
+    exportOpen = false;
+    renaming = false;
+    renderCurrentView();
+    if (!el.playlistsDialog.open) el.playlistsDialog.showModal();
+    focusFirst(el.playlistLibraryList.querySelector("button"), el.playlistNew);
   }
 
   function close() {
@@ -230,62 +376,137 @@ export function createPlaylistsView(el, deps) {
     setBusy(true);
     feedback();
     try {
-      await action();
-      feedback("Playlist updated.");
-    } catch (error) {
-      feedback(messageFor(error, fallback));
-    } finally {
+      const result = await action();
       setBusy(false);
+      return { ok: true, result };
+    } catch (error) {
+      setBusy(false);
+      feedback(messageFor(error, fallback));
+      return { ok: false, result: null };
     }
   }
 
+  // ---- Wiring -------------------------------------------------------------
+
   el.playlistsClose.addEventListener("click", close);
   el.playlistsDialog.addEventListener("close", restoreFocus);
-  el.playlistSelect.addEventListener("change", () => {
-    selectedPlaylistId = el.playlistSelect.value;
+
+  el.playlistBack.addEventListener("click", () => {
     feedback();
-    renderManager();
+    showLibrary();
   });
-  el.playlistCreate.addEventListener("click", () => {
+
+  el.playlistNew.addEventListener("click", showCreate);
+
+  el.playlistCreate.addEventListener("click", async () => {
     const name = el.playlistCreateName.value.trim();
     if (!name) {
       feedback("Enter a name for the new playlist.");
       el.playlistCreateName.focus();
       return;
     }
-    runMutation(async () => {
-      await deps.onCreate(name);
-      el.playlistCreateName.value = "";
-    }, "Could not create that playlist.");
+    const known = new Set(playlists().map((playlist) => playlist.id));
+    const outcome = await runMutation(() => deps.onCreate(name), "Could not create that playlist.");
+    if (!outcome.ok) return;
+
+    const created = playlists().find((playlist) => !known.has(playlist.id));
+    if (!created) {
+      feedback("A playlist with that name already exists.");
+      el.playlistCreateName.focus();
+      return;
+    }
+    el.playlistCreateName.value = "";
+    showDetail(created.id);
+    feedback(`Created ${created.name}.`);
   });
+
+  el.playlistMore.addEventListener("click", () => {
+    moreOpen = !moreOpen;
+    if (!moreOpen) exportOpen = false;
+    renderCurrentView();
+    if (moreOpen) {
+      focusFirst(el.playlistRename, el.playlistExport);
+    }
+  });
+
+  el.playlistExport.addEventListener("click", () => {
+    exportOpen = !exportOpen;
+    renderCurrentView();
+    if (exportOpen) focusFirst(el.playlistExportMd);
+  });
+
   el.playlistRename.addEventListener("click", () => {
     const playlist = selectedPlaylist();
+    if (!playlist || playlist.id === WATCH_LATER_ID) return;
+    renaming = true;
+    feedback();
+    el.playlistRenameName.value = playlist.name;
+    renderCurrentView();
+    focusFirst(el.playlistRenameName);
+  });
+
+  el.playlistRenameCancel.addEventListener("click", () => {
+    renaming = false;
+    feedback();
+    renderCurrentView();
+    focusFirst(el.playlistMore);
+  });
+
+  el.playlistRenameSave.addEventListener("click", async () => {
+    const playlist = selectedPlaylist();
+    if (!playlist || playlist.id === WATCH_LATER_ID) return;
     const name = el.playlistRenameName.value.trim();
-    if (!playlist || playlist.id === "watch-later") return;
     if (!name) {
       feedback("Enter a new playlist name.");
       el.playlistRenameName.focus();
       return;
     }
-    runMutation(() => deps.onRename(playlist.id, name), "Could not rename that playlist.");
+    const outcome = await runMutation(
+      () => deps.onRename(playlist.id, name),
+      "Could not rename that playlist."
+    );
+    if (!outcome.ok) return;
+
+    const updated = selectedPlaylist();
+    if (!updated || updated.name !== name) {
+      feedback("That name is already used by another playlist.");
+      el.playlistRenameName.focus();
+      return;
+    }
+    renaming = false;
+    moreOpen = false;
+    renderCurrentView();
+    feedback(`Renamed to ${updated.name}.`);
+    focusFirst(el.playlistMore);
   });
-  el.playlistDelete.addEventListener("click", () => {
+
+  el.playlistDelete.addEventListener("click", async () => {
     const playlist = selectedPlaylist();
-    if (!playlist || playlist.id === "watch-later") return;
-    runMutation(async () => {
-      await deps.onDelete(playlist.id);
-      selectedPlaylistId = "";
-    }, "Could not delete that playlist.");
+    if (!playlist || playlist.id === WATCH_LATER_ID) return;
+    const name = playlist.name;
+    const outcome = await runMutation(
+      () => deps.onDelete(playlist.id),
+      "Could not delete that playlist."
+    );
+    if (!outcome.ok) return;
+    selectedPlaylistId = "";
+    showLibrary();
+    feedback(`Deleted ${name}.`);
   });
+
   for (const [button, format] of [
     [el.playlistExportMd, "md"],
     [el.playlistExportJson, "json"],
     [el.playlistExportCsv, "csv"]
   ]) {
-    button.addEventListener("click", () => {
+    button.addEventListener("click", async () => {
       const playlist = selectedPlaylist();
       if (!playlist) return;
-      runMutation(() => deps.onExport(format, playlist.id), "Could not export that playlist.");
+      const outcome = await runMutation(
+        () => deps.onExport(format, playlist.id),
+        "Could not export that playlist."
+      );
+      if (outcome.ok) feedback(`Exported ${playlist.name}.`);
     });
   }
 

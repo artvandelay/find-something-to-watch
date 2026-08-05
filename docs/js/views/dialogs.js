@@ -1,4 +1,5 @@
 import { toMarkdown, toJson, toCsv, toYouMd } from "../exporters.js";
+import { LEARNED_KINDS } from "../preferences.js";
 import {
   downloadText,
   isAbsoluteHttpUrl,
@@ -15,15 +16,16 @@ function isOpenRouterUrl(value) {
 }
 
 /**
- * Secondary UI: settings (subscriptions + LLM key), profile & context
- * (You.md + watch-history import), and the hidden developer console.
- * Kept out of the primary chat + recommendation view so they don't compete
- * for attention.
+ * Secondary UI: settings (subscriptions + LLM key + local-data backups),
+ * profile & context (You.md + watch-history import), and the hidden developer
+ * console. Kept out of the primary chat + picks view so they don't compete for
+ * attention, and so the sidebar is not a stack of dividers.
  */
 export function createDialogs(el, deps) {
   let parsedHistoryDraft; // undefined = no pending change this dialog session
   let historyImportController = null;
   let savedHistorySummary = "No history imported.";
+  let learnedDraft = null;
 
   function feedback(node, message = "") {
     node.textContent = message;
@@ -98,16 +100,92 @@ export function createDialogs(el, deps) {
     });
   }
 
+  // ---- Settings: local data (backup export, clear) ----
+
+  function setBusy(busy) {
+    el.clearDataBtn.disabled = busy;
+  }
+
+  function wireLocalData() {
+    el.exportBackupBtn.addEventListener("click", () => deps.onExportBackup());
+    el.clearDataBtn.addEventListener("click", () => deps.onClearData());
+  }
+
   // ---- Profile & context: You.md + watch-history import ----
 
   function wireContext() {
+    function renderLearnedFacts() {
+      el.learnedFacts.textContent = "";
+      const items = Array.isArray(learnedDraft?.items) ? learnedDraft.items : [];
+      if (items.length === 0) {
+        const empty = document.createElement("p");
+        empty.className = "note";
+        empty.textContent = "No learned preferences yet.";
+        el.learnedFacts.appendChild(empty);
+        return;
+      }
+      for (const [index, item] of items.entries()) {
+        const row = document.createElement("div");
+        row.className = "learned-fact";
+        row.setAttribute("role", "listitem");
+        const polarity = document.createElement("select");
+        polarity.setAttribute("aria-label", "Preference");
+        for (const [value, label] of [["like", "Like"], ["avoid", "Avoid"]]) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          option.selected = item.polarity === value;
+          polarity.appendChild(option);
+        }
+        const kind = document.createElement("select");
+        kind.setAttribute("aria-label", "Preference type");
+        for (const value of LEARNED_KINDS) {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = value;
+          option.selected = item.kind === value;
+          kind.appendChild(option);
+        }
+        const value = document.createElement("input");
+        value.type = "text";
+        value.maxLength = 80;
+        value.value = item.value;
+        value.setAttribute("aria-label", "Preference value");
+        const remove = document.createElement("button");
+        remove.type = "button";
+        remove.className = "danger-action";
+        remove.textContent = "Remove";
+        remove.addEventListener("click", () => {
+          learnedDraft.items.splice(index, 1);
+          renderLearnedFacts();
+        });
+        for (const control of [polarity, kind, value]) {
+          control.addEventListener("input", () => {
+            learnedDraft.items[index] = {
+              ...learnedDraft.items[index],
+              polarity: polarity.value,
+              kind: kind.value,
+              value: value.value
+            };
+          });
+        }
+        row.append(polarity, kind, value, remove);
+        el.learnedFacts.appendChild(row);
+      }
+    }
+
     el.contextBtn.addEventListener("click", async () => {
       try {
         cancelHistoryImport();
-        el.youmdInput.value = await deps.getYouMd();
-        const history = await deps.getHistory();
+        const [youmd, history, profile, learned] = await Promise.all([
+          deps.getYouMd(), deps.getHistory(), deps.getProfile(), deps.getLearned()
+        ]);
+        el.youmdInput.value = youmd;
         savedHistorySummary = history ? deps.summarizeHistory(history) : "No history imported.";
         el.historySummary.textContent = savedHistorySummary;
+        el.memoryEnabled.checked = profile.memoryEnabled !== false;
+        learnedDraft = JSON.parse(JSON.stringify(learned));
+        renderLearnedFacts();
         feedback(el.contextFeedback);
         parsedHistoryDraft = undefined;
         el.contextDialog.showModal();
@@ -155,12 +233,25 @@ export function createDialogs(el, deps) {
       feedback(el.contextFeedback);
     });
 
+    el.learnedClear.addEventListener("click", () => {
+      if (!learnedDraft) return;
+      learnedDraft.items = [];
+      learnedDraft.revision = (Number.isInteger(learnedDraft.revision) ? learnedDraft.revision : 0) + 1;
+      renderLearnedFacts();
+    });
+
     el.contextSave.addEventListener("click", async () => {
       feedback(el.contextFeedback);
       el.contextSave.disabled = true;
       try {
-        await deps.setYouMd(el.youmdInput.value);
-        if (parsedHistoryDraft !== undefined) await deps.setHistory(parsedHistoryDraft);
+        const profile = await deps.getProfile();
+        const nextProfile = { ...profile, memoryEnabled: el.memoryEnabled.checked };
+        await deps.saveContextMemory({
+          youmd: el.youmdInput.value,
+          history: parsedHistoryDraft === undefined ? undefined : parsedHistoryDraft,
+          profile: nextProfile,
+          learned: learnedDraft
+        });
         el.contextDialog.close();
       } catch (err) {
         feedback(el.contextFeedback, err && err.message ? err.message : "Could not save profile and context.");
@@ -173,6 +264,7 @@ export function createDialogs(el, deps) {
     el.contextDialog.addEventListener("close", () => {
       cancelHistoryImport();
       parsedHistoryDraft = undefined;
+      learnedDraft = null;
     });
   }
 
@@ -203,7 +295,7 @@ export function createDialogs(el, deps) {
     if (m.region) parts.push("Region: " + String(m.region).toUpperCase());
     const builtAt = String(m.built_at || "").slice(0, 10);
     if (builtAt) parts.push("Built " + builtAt);
-    parts.push("Static snapshot — real availability changes constantly.");
+    parts.push("Availability comes from a dated catalog snapshot and may have changed.");
     el.catalogDetail.textContent = parts.join(" · ");
   }
 
@@ -232,7 +324,11 @@ export function createDialogs(el, deps) {
     });
     el.exportYoumd.addEventListener("click", async () => {
       try {
-        downloadText("You.md", "text/markdown;charset=utf-8", toYouMd(await deps.getYouMd(), await deps.getHistory()));
+        downloadText(
+          "You.md",
+          "text/markdown;charset=utf-8",
+          toYouMd(await deps.getYouMd(), await deps.getHistory(), await deps.getLearned())
+        );
       } catch (err) {
         feedback(el.disclosureFeedback, err && err.message ? err.message : "Could not export You.md.");
       }
@@ -255,9 +351,10 @@ export function createDialogs(el, deps) {
   }
 
   wireSettings();
+  wireLocalData();
   wireContext();
   wireExports();
   wireDeveloper();
 
-  return { appendTrace, clearTrace, openDeveloper };
+  return { appendTrace, clearTrace, openDeveloper, setBusy };
 }

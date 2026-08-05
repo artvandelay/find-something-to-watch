@@ -6,6 +6,12 @@ import { runAgent } from "./agent.js";
 import { createCatalogRuntime } from "./catalog-runtime.js";
 import { createStore, DEFAULT_LLM } from "./store.js";
 import { createBrowserMemory } from "./memory.js";
+import {
+  DEFAULT_RECOMMENDATION_REASON,
+  defaultRecommendationQueue,
+  sanitizeRecommendationQueue
+} from "./recommendations.js";
+import { mergeLearnedPreferences, renderLearnedContext } from "./preferences.js";
 import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER } from "./providers.js";
 import {
   addToPlaylist,
@@ -22,6 +28,7 @@ import { createChatView } from "./views/chat.js";
 import { createQueueView } from "./views/queue.js";
 import { createDialogs } from "./views/dialogs.js";
 import { createPlaylistsView } from "./views/playlists.js";
+import { createTitleDetailsView } from "./views/title-details.js";
 import { downloadText } from "./views/dom.js";
 import { readTestMode } from "./test-mode.js";
 
@@ -34,28 +41,34 @@ const DOM_IDS = [
   "onboarding-title", "onboarding-progress", "onboarding-llm-api-key",
   "onboarding-history-file", "onboarding-history-summary", "onboarding-history-status",
   "onboarding-history-remove", "onboarding-back", "onboarding-next",
-  "shell", "sidebar-toggle", "sidebar", "backdrop", "new-chat-btn",
-  "conversation-indicator", "subscriptions-summary", "playlists-btn", "context-btn",
-  "settings-btn", "export-backup-btn", "import-backup-btn", "import-backup-file",
-  "clear-data-btn", "catalog-status",
+  "shell", "sidebar-toggle", "sidebar", "sidebar-collapse", "backdrop", "new-chat-btn",
+  "conversation-list", "conversation-list-items", "subscriptions-summary", "playlists-btn", "context-btn",
+  "settings-btn", "catalog-status",
   "workspace", "chat-region", "chat-transcript", "chat-note",
   "query-form", "query-input", "send-btn", "stop-btn",
-  "queue-region", "queue-status", "queue-viewport", "queue-track", "queue-prev",
-  "queue-next", "queue-empty",
+  "queue-region", "queue-status", "queue-source", "queue-viewport", "queue-track", "queue-empty",
+  "queue-top-pick", "queue-alternatives", "queue-more",
+  "title-details-dialog", "title-details-close", "title-details-title", "title-details-content",
   "attribution",
   "settings-dialog", "settings-provider-list", "llm-base-url", "llm-api-key", "llm-model",
-  "llm-web-search",
+  "llm-web-search", "export-backup-btn", "clear-data-btn",
   "settings-feedback", "settings-save", "settings-close",
   "context-dialog", "youmd-input", "history-file", "history-summary", "history-remove",
-  "context-feedback", "context-save", "context-close",
+  "memory-enabled", "learned-facts", "learned-clear", "context-feedback", "context-save", "context-close",
   "disclosure-dialog", "catalog-detail", "trace",
   "export-md", "export-json", "export-csv", "export-youmd", "disclosure-feedback",
   "disclosure-close",
-  "playlists-dialog", "playlists-dialog-title", "playlists-close", "playlist-picker",
-  "playlist-picker-title", "playlist-picker-list", "playlist-manager", "playlist-select",
-  "playlist-items", "playlist-create-name", "playlist-create", "playlist-rename-name",
-  "playlist-rename", "playlist-delete", "playlist-export-md", "playlist-export-json",
-  "playlist-export-csv", "playlist-feedback"
+  "playlists-dialog", "playlists-dialog-title", "playlist-back", "playlists-close",
+  "playlist-picker", "playlist-picker-title", "playlist-picker-list",
+  "playlist-library", "playlist-library-list", "playlist-library-empty", "playlist-new",
+  "playlist-detail", "playlist-detail-count", "playlist-items",
+  "playlist-more", "playlist-actions", "playlist-rename", "playlist-delete",
+  "playlist-export", "playlist-export-formats", "playlist-export-md", "playlist-export-json",
+  "playlist-export-csv",
+  "playlist-rename-form", "playlist-rename-name", "playlist-rename-save",
+  "playlist-rename-cancel",
+  "playlist-create-view", "playlist-create-name", "playlist-create",
+  "playlist-feedback"
 ];
 
 const KEYWORD_NOTE = "Keyword search — add an API key in Settings for ranked recommendations.";
@@ -68,6 +81,7 @@ let chat = null;
 let queueView = null;
 let onboarding = null;
 let playlistsView = null;
+let titleDetailsView = null;
 
 let prompts = null;
 let records = [];
@@ -80,13 +94,15 @@ let catalogRuntimeError = null;
 
 let profile = null;
 let subscriptions = new Set();
-let conversation = { schema: 1, updatedAt: null, messages: [] };
-let queueIds = [];
+let conversation = null;
+let recommendationQueue = defaultRecommendationQueue();
+let learned = null;
 let playlists = null;
 
 let controller = null;
 let historyController = null;
 let stateGeneration = 0;
+let activeTurnId = null;
 
 const runtime = createCatalogRuntime({
   onState(nextState) {
@@ -94,7 +110,7 @@ const runtime = createCatalogRuntime({
     if (nextState === "READY_BASIC" || nextState === "READY_RICH") {
       catalogRuntimeError = null;
     }
-    if (sidebar) updateCatalogStatusLine();
+    if (queueView) updateCatalogStatusLine();
   }
 });
 
@@ -193,7 +209,7 @@ function updateCatalogStatusLine() {
   if (!index) line += " · preparing search index…";
   else if (!richIndexReady) line += " · refining with synopses…";
   if (catalogRuntimeError) line += " · catalog analysis unavailable";
-  sidebar.setCatalogStatus(line);
+  queueView.setCatalogStatus(line);
   if (chat) {
     const runtimeNote = catalogRuntimeError
       ? "Catalog analysis is unavailable; keyword search remains available without an API key."
@@ -209,6 +225,12 @@ function refreshSendReadiness() {
   chat.setSendReady(Boolean(index));
 }
 
+/** Navigation and destructive local-data controls are locked during a turn. */
+function setShellBusy(busy) {
+  if (sidebar) sidebar.setBusy(busy);
+  if (dialogs) dialogs.setBusy(busy);
+}
+
 function currentScope() {
   return { subscriptions: [...subscriptions] };
 }
@@ -217,8 +239,14 @@ function runtimeIsReady() {
   return catalogRuntimeState === "READY_BASIC" || catalogRuntimeState === "READY_RICH";
 }
 
+function hasDeterministicAgent() {
+  return typeof window.__OTT_TEST_RUN_AGENT__ === "function";
+}
+
 function runWhenIdle(run) {
-  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run);
+  // A search index is required before the composer becomes usable. Browsers may
+  // defer idle callbacks indefinitely while a page is busy, so bound the wait.
+  if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 250 });
   else setTimeout(run, 0);
 }
 
@@ -256,6 +284,7 @@ function scheduleSidecar() {
             });
           });
           renderQueue();
+          titleDetailsView?.refresh();
         }
       }
     } catch (err) {
@@ -270,7 +299,7 @@ function scheduleSidecar() {
 
 // ---- Hydration / rendering --------------------------------------------------
 
-function hydrate(id) {
+function hydrate(id, reason = "") {
   const full = recordsById.get(id);
   if (!full) return null;
   const scoped = intersectProviders(full, subscriptions);
@@ -278,19 +307,61 @@ function hydrate(id) {
   return {
     id: scoped.id, t: scoped.t, y: scoped.y, k: scoped.k, rt: scoped.rt, r: scoped.r,
     p: scoped.p, l: scoped.l, g: scoped.g, u: scoped.u, img: scoped.img, s: scoped.s || "",
-    reason: ""
+    reason
+  };
+}
+
+function resolveTitleDetails(id) {
+  const rec = recordsById.get(id);
+  const catalog = {
+    region: typeof catalogMeta?.region === "string" ? catalogMeta.region : null,
+    source: typeof catalogMeta?.source === "string" ? catalogMeta.source : null,
+    builtAt: typeof catalogMeta?.built_at === "string" ? catalogMeta.built_at : null
+  };
+  if (!rec) {
+    return { status: "missing", id, title: null, availability: [], catalog };
+  }
+
+  const availability = (Array.isArray(rec.p) ? rec.p : []).map((slug) => {
+    const url = typeof rec.u?.[slug] === "string" ? rec.u[slug] : null;
+    return {
+      slug,
+      label: providerLabel(slug),
+      subscribed: subscriptions.has(slug),
+      url,
+      cta: url ? watchCta(slug, url) : null
+    };
+  });
+  return {
+    status: "available",
+    id,
+    title: {
+      t: rec.t,
+      y: rec.y ?? null,
+      k: rec.k,
+      rt: rec.rt ?? null,
+      s: rec.s || "",
+      im: rec.im ?? null,
+      r: rec.r ?? null,
+      img: rec.img ?? null,
+      l: rec.l ?? null,
+      g: Array.isArray(rec.g) ? rec.g : [],
+      v: rec.v ?? null
+    },
+    availability,
+    catalog
   };
 }
 
 function hydratedQueue() {
-  return queueIds.map(hydrate).filter(Boolean);
+  return recommendationQueue.items.map((item) => hydrate(item.id, item.reason)).filter(Boolean);
 }
 
 function renderQueue() {
   const list = hydratedQueue();
   queueView.render(list, richIndexReady || index
     ? "Nothing queued for your current subscriptions yet."
-    : "Still preparing the catalog…");
+    : "Still preparing the catalog…", recommendationQueue.source);
 }
 
 function renderPlaylists() {
@@ -338,18 +409,22 @@ async function onPlaylistExport(format, playlistId) {
 }
 
 async function seedQueueIfEmpty() {
-  if (conversation.messages.length > 0 || queueIds.length > 0 || records.length === 0) return;
+  if (conversation.messages.length > 0 || recommendationQueue.items.length > 0 || records.length === 0) return;
   let seenKeys = [];
   try {
     seenKeys = (await memory.getHistory())?.seen ?? [];
   } catch (err) {
     showError("Watch history is unavailable, so the initial picks may include watched titles.");
   }
-  queueIds = seedQueue(records, { providers: subscriptions, excludeKeys: seenKeys, limit: 20 });
+  const ids = seedQueue(records, { providers: subscriptions, excludeKeys: seenKeys, limit: 20 });
+  recommendationQueue = {
+    ...defaultRecommendationQueue(),
+    items: ids.map((id) => ({ id, reason: DEFAULT_RECOMMENDATION_REASON }))
+  };
   try {
-    const saved = await memory.saveConversationAndQueue(conversation, { ids: queueIds });
+    const saved = await memory.saveConversationAndQueue(conversation, recommendationQueue);
     conversation = saved.conversation;
-    queueIds = saved.queue.ids;
+    recommendationQueue = saved.queue;
   } catch (err) {
     console.warn("ui: could not persist the seeded queue.", err && err.message ? err.message : err);
   }
@@ -358,7 +433,9 @@ async function seedQueueIfEmpty() {
 
 function renderConversation() {
   chat.renderConversation(conversation.messages);
-  sidebar.renderConversationIndicator(conversation.messages.length);
+  void memory.getConversationList()
+    .then((list) => sidebar.renderConversationList(list))
+    .catch((error) => console.warn("ui: could not render conversations.", error));
 }
 
 // ---- Agent tools + submission -----------------------------------------------
@@ -367,30 +444,50 @@ function makeTools(seenKeys) {
   return createTools({
     runtime,
     scope: currentScope(),
-    currentQueueIds: queueIds,
+    currentQueueIds: recommendationQueue.items.map((item) => item.id),
     seenKeys: Array.isArray(seenKeys) ? seenKeys : [],
   });
 }
 
-function makeEventHandler() {
+function makeTurnId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "turn-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+function sanitizeTraceText(value) {
+  return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, 240);
+}
+
+function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress }) {
   return function onEvent(event) {
-    if (!event || typeof event !== "object") return;
+    if (!event || typeof event !== "object" || event.turnId !== turnId ||
+      turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
     if (event.type === "status") {
-      dialogs.appendTrace(event.text || "");
-      chat.setNote(event.text || "");
+      dialogs.appendTrace(sanitizeTraceText(event.phase || event.text));
+      chat.setTurnStatus(event.phase || event.text || "Working");
+      onMeaningfulProgress();
       return;
     }
     if (event.type === "tool_call") {
-      dialogs.appendTrace(event.name + " " + JSON.stringify(event.args || {}));
+      dialogs.appendTrace("Catalog tool requested");
+      chat.setTurnStatus("SEARCHING CATALOG");
+      onMeaningfulProgress();
       return;
     }
     if (event.type === "tool_result") {
-      dialogs.appendTrace(event.name + " → " + (event.count ?? 0) + " results");
+      dialogs.appendTrace("Catalog tool returned " + (Number.isFinite(event.count) ? event.count : 0) + " results");
+      chat.addToolResult(event.count);
+      chat.setTurnStatus("ANALYZING MATCHES");
+      onMeaningfulProgress();
+      return;
+    }
+    if (event.type === "delta") {
+      chat.appendDelta(event.text);
+      onMeaningfulProgress();
       return;
     }
     if (event.type === "error") {
-      chat.setNote("");
-      showError(event.message || "Something went wrong.");
+      chat.failTurn(event);
     }
   };
 }
@@ -407,14 +504,18 @@ async function runKeywordFallback(query, seenKeys) {
   const ids = search(index, query, { limit: 20, allow: allowed })
     .map((result) => records[result.i]?.id)
     .filter(Boolean);
-  queueIds = ids.slice(0, 20);
+  const turnId = "local-" + Date.now().toString(36);
+  recommendationQueue = {
+    ...defaultRecommendationQueue(),
+    source: { conversationId: conversation.id, turnId, query: query.replace(/\s+/g, " ").trim().slice(0, 120) },
+    items: ids.slice(0, 20).map((id) => ({ id, reason: DEFAULT_RECOMMENDATION_REASON }))
+  };
   const replyText = NO_KEY_REPLY_PREFIX + (ids.length
     ? ids.map((id) => recordsById.get(id)?.t).filter(Boolean).slice(0, 5).join(", ")
     : "no matches in this catalog snapshot.");
-  conversation.messages.push({ role: "assistant", content: replyText, createdAt: new Date().toISOString() });
-  const saved = await memory.saveConversationAndQueue(conversation, { ids: queueIds });
+  const saved = await memory.completeTurn(conversation.id, { content: replyText, queue: recommendationQueue });
   conversation = saved.conversation;
-  queueIds = saved.queue.ids;
+  recommendationQueue = saved.queue;
   renderConversation();
   renderQueue();
   chat.setNote(KEYWORD_NOTE);
@@ -427,20 +528,23 @@ async function onSubmit() {
 
   clearError();
   const keyedTurn = store.hasKey();
-  if (keyedTurn && !runtimeIsReady()) {
+  if (keyedTurn && !runtimeIsReady() && !hasDeterministicAgent()) {
     chat.setNote("Catalog analysis is still preparing. Try again in a moment.");
     return;
   }
 
   chat.clearQuery();
   const turnGeneration = stateGeneration;
-  const previousConversation = {
-    ...conversation,
-    messages: conversation.messages.slice()
-  };
-  chat.appendMessage("user", query);
-  conversation.messages.push({ role: "user", content: query, createdAt: new Date().toISOString() });
-  const priorMessages = conversation.messages.slice(0, -1);
+  const priorMessages = conversation.messages.slice();
+  try {
+    const saved = await memory.appendUserMessage(conversation.id, query);
+    conversation = saved.conversation;
+    renderConversation();
+  } catch (error) {
+    showError(error && error.message ? error.message : "Could not save your message.");
+    chat.setQuery(query);
+    return;
+  }
 
   let seenKeys = [];
   try {
@@ -451,90 +555,131 @@ async function onSubmit() {
 
   if (!keyedTurn) {
     chat.setBusy(true);
-    sidebar.setBusy(true);
+    setShellBusy(true);
     try {
       await runKeywordFallback(query, seenKeys);
     } catch (err) {
-      if (turnGeneration === stateGeneration) {
-        conversation = previousConversation;
-        renderConversation();
-        chat.setQuery(query);
-      }
       showError(err && err.message ? err.message : "Keyword search failed.");
     } finally {
       chat.setBusy(false);
-      sidebar.setBusy(false);
+      setShellBusy(false);
       refreshSendReadiness();
     }
     return;
   }
 
+  const turnId = makeTurnId();
   const thisController = new AbortController();
   controller = thisController;
+  activeTurnId = turnId;
   chat.setBusy(true);
-  sidebar.setBusy(true);
+  setShellBusy(true);
   dialogs.clearTrace();
+  chat.startTurn();
+  const startedAt = Date.now();
+  let lastMeaningfulElapsed = 0;
+  const activityTimer = window.setInterval(() => {
+    if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+    const elapsed = Math.max(0, Date.now() - startedAt);
+    if (elapsed >= 1000) {
+      const slow = elapsed - lastMeaningfulElapsed >= 20000;
+      if (slow) chat.setTurnStatus("TAKING LONGER THAN USUAL");
+      chat.setTurnElapsed(elapsed, { slow });
+    }
+  }, 250);
+  const markProgress = () => { lastMeaningfulElapsed = Math.max(0, Date.now() - startedAt); };
 
   let youmd = "";
   let history = null;
   try {
-    [youmd, history] = await Promise.all([memory.getYouMd(), memory.getHistory()]);
+    const [manualYoumd, savedHistory, savedLearned, savedProfile] = await Promise.all([
+      memory.getYouMd(), memory.getHistory(), memory.getLearned(), memory.getProfile()
+    ]);
+    youmd = manualYoumd + (savedProfile.memoryEnabled === false ? "" : `\n\n${renderLearnedContext(savedLearned)}`);
+    history = savedHistory;
   } catch (err) {
     showError("Personalization data is unavailable; continuing without saved context.");
   }
 
   try {
-    const catalogManifest = await runtime.describe({ scope: currentScope() });
-    const result = await runAgent({
+    const catalogManifest = hasDeterministicAgent()
+      ? { count: records.length, providers: [...subscriptions] }
+      : await runtime.describe({ scope: currentScope() });
+    const runner = hasDeterministicAgent() ? window.__OTT_TEST_RUN_AGENT__ : runAgent;
+    const result = await runner({
       config: store.getLlm(),
       prompts,
       tools: makeTools(seenKeys),
       context: { youmd, history, mood: "", catalogManifest },
       query,
       conversation: priorMessages,
-      onEvent: makeEventHandler(),
-      signal: thisController.signal
+      onEvent: makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress: markProgress }),
+      signal: thisController.signal,
+      turnId
     });
 
-    if (turnGeneration !== stateGeneration) return;
+    if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
     if (!result.ok) {
-      conversation = previousConversation;
-      renderConversation();
-      chat.setQuery(query);
       return;
     }
 
     const replyText = result.reply || prompts.no_results || "I couldn't come up with anything this time.";
-    conversation.messages.push({ role: "assistant", content: replyText, createdAt: new Date().toISOString() });
-
+    let nextQueue = recommendationQueue;
     if (Array.isArray(result.queue)) {
-      queueIds = result.queue.slice(0, 20);
+      nextQueue = sanitizeRecommendationQueue({
+        source: {
+          conversationId: conversation.id,
+          turnId,
+          query
+        },
+        items: result.queue
+      }) || recommendationQueue;
     }
-    const saved = await memory.saveConversationAndQueue(conversation, { ids: queueIds });
+    const nextLearned = Array.isArray(result.memoryCandidates) && profile?.memoryEnabled !== false
+      ? mergeLearnedPreferences(learned || await memory.getLearned(), result.memoryCandidates, query)
+      : learned;
+    const saved = await memory.completeTurn(conversation.id, {
+      content: replyText,
+      queue: nextQueue,
+      meta: {
+        status: "complete",
+        timing: result.timing,
+        usage: result.usage,
+        billing: result.billing
+      },
+      learned: nextLearned
+    });
     conversation = saved.conversation;
-    queueIds = saved.queue.ids;
-    renderConversation();
+    recommendationQueue = saved.queue;
+    learned = saved.learned ?? nextLearned;
     renderQueue();
-    chat.setNote("");
+    chat.completeTurn({
+      reply: replyText,
+      timing: result.timing,
+      usage: result.usage,
+      billing: result.billing,
+      catalogCount: typeof catalogMeta?.count === "number" ? catalogMeta.count : records.length
+    });
   } catch (err) {
-    if (turnGeneration === stateGeneration) {
-      conversation = previousConversation;
-      renderConversation();
-      chat.setQuery(query);
+    if (turnGeneration === stateGeneration && activeTurnId === turnId) {
+      chat.failTurn({ message: err && err.message ? err.message : "The search failed." });
     }
-    showError(err && err.message ? err.message : "The search failed.");
   } finally {
+    window.clearInterval(activityTimer);
     if (controller === thisController) {
       controller = null;
+      if (activeTurnId === turnId) activeTurnId = null;
       chat.setBusy(false);
-      sidebar.setBusy(false);
+      setShellBusy(false);
       refreshSendReadiness();
     }
   }
 }
 
 function onStop() {
-  if (controller) controller.abort();
+  if (!controller) return;
+  chat.failTurn({ message: "Stopped." });
+  cancelActiveTurn();
 }
 
 // ---- New chat / subscriptions / context / backup ---------------------------
@@ -543,11 +688,12 @@ function cancelActiveTurn() {
   stateGeneration += 1;
   if (controller) controller.abort();
   controller = null;
+  activeTurnId = null;
   if (chat) {
     chat.setBusy(false);
     refreshSendReadiness();
   }
-  if (sidebar) sidebar.setBusy(false);
+  setShellBusy(false);
 }
 
 function cancelActiveOperations() {
@@ -557,12 +703,27 @@ function cancelActiveOperations() {
 
 async function onNewChat() {
   cancelActiveTurn();
-  conversation = { schema: 1, updatedAt: null, messages: [] };
-  queueIds = [];
+  const saved = await memory.startNewConversation();
+  conversation = saved.conversation;
+  recommendationQueue = saved.queue;
   renderConversation();
   await seedQueueIfEmpty();
   updateCatalogStatusLine();
   clearError();
+}
+
+async function onActivateConversation(conversationId) {
+  cancelActiveTurn();
+  try {
+    const saved = await memory.activateArchivedConversation(conversationId);
+    conversation = saved.conversation;
+    recommendationQueue = saved.queue;
+    renderConversation();
+    renderQueue();
+    clearError();
+  } catch (error) {
+    showError(error && error.message ? error.message : "Could not open that conversation.");
+  }
 }
 
 async function onSubscriptionsChange(newProviders) {
@@ -573,6 +734,7 @@ async function onSubscriptionsChange(newProviders) {
   sidebar.renderSubscriptions(profile.providers);
   renderQueue();
   renderPlaylists();
+  titleDetailsView?.refresh();
   await seedQueueIfEmpty();
 }
 
@@ -584,6 +746,16 @@ function getExportPicks() {
   return hydratedQueue();
 }
 
+async function onSaveContextMemory(payload) {
+  const saved = await memory.saveContextMemory(payload);
+  profile = saved.profile;
+  learned = saved.learned;
+  subscriptions = new Set(profile.providers);
+  sidebar.renderSubscriptions(profile.providers);
+  titleDetailsView?.refresh();
+  return saved;
+}
+
 async function onExportBackup() {
   try {
     const backup = await memory.exportBackup();
@@ -591,23 +763,6 @@ async function onExportBackup() {
   } catch (err) {
     showError("Could not export a backup. " + (err && err.message ? err.message : ""));
   }
-}
-
-async function onImportBackup(file) {
-  cancelActiveOperations();
-  const reader = new FileReader();
-  reader.onload = async () => {
-    try {
-      const parsed = JSON.parse(String(reader.result || ""));
-      await memory.importBackup(parsed);
-      await reloadFromMemory();
-      clearError();
-    } catch (err) {
-      showError("Could not import that backup. " + (err && err.message ? err.message : ""));
-    }
-  };
-  reader.onerror = () => showError("Could not read that backup file.");
-  reader.readAsText(file);
 }
 
 async function onClearData() {
@@ -628,13 +783,14 @@ async function reloadFromMemory() {
   profile = await memory.getProfile();
   subscriptions = new Set(profile.providers);
   conversation = await memory.getConversation();
-  const queue = await memory.getQueue();
-  queueIds = queue.ids;
+  recommendationQueue = await memory.getQueue();
+  learned = await memory.getLearned();
   playlists = await memory.getPlaylists();
   sidebar.renderSubscriptions(profile.providers);
   renderConversation();
   renderQueue();
   renderPlaylists();
+  titleDetailsView?.refresh();
   await seedQueueIfEmpty();
 }
 
@@ -661,7 +817,7 @@ async function showShell() {
 // ---- Boot ---------------------------------------------------------------------
 
 async function loadCatalog() {
-  sidebar && sidebar.setCatalogStatus("Loading catalog…");
+  queueView && queueView.setCatalogStatus("Loading catalog…");
   const [promptsDoc, catalogDoc] = await Promise.all([
     fetchJson("./assets/prompts.json"),
     fetchJson("./assets/catalog.json")
@@ -704,7 +860,8 @@ async function init() {
     store,
     getProfile: () => memory.getProfile(),
     getYouMd: () => memory.getYouMd(),
-    setYouMd: (v) => memory.setYouMd(v),
+    getLearned: () => memory.getLearned(),
+    saveContextMemory: onSaveContextMemory,
     getHistory: () => memory.getHistory(),
     setHistory: (v) => memory.setHistory(v),
     summarizeHistory: summarize,
@@ -713,23 +870,28 @@ async function init() {
     catalogMeta: () => catalogMeta,
     getExportPicks,
     exportMeta,
+    onExportBackup,
+    onClearData,
     onError: showError
   });
 
   sidebar = createSidebarView(el, {
     providerLabel,
     onNewChat,
+    onActivateConversation,
     onOpenPlaylists: () => playlistsView.openManager(),
-    onExportBackup,
-    onImportBackup,
-    onClearData
+    getCollapsed: () => store.getSidebarCollapsed(),
+    setCollapsed: (collapsed) => store.setSidebarCollapsed(collapsed)
   });
 
   chat = createChatView(el, { onSubmit, onStop });
 
+  titleDetailsView = createTitleDetailsView(el, { resolveDetails: resolveTitleDetails });
+
   queueView = createQueueView(el, {
     watchCta,
-    onOpenPlaylistPicker: (titleId, title) => playlistsView.openPicker(titleId, title)
+    onOpenPlaylistPicker: (titleId, title) => playlistsView.openPicker(titleId, title),
+    onOpenTitleDetails: (titleId, trigger) => titleDetailsView.open(titleId, trigger)
   });
 
   playlistsView = createPlaylistsView(el, {
@@ -740,7 +902,8 @@ async function init() {
     onRename: (playlistId, name) => savePlaylistMutation((state) =>
       renamePlaylist(state, playlistId, name)),
     onDelete: (playlistId) => savePlaylistMutation((state) => deletePlaylist(state, playlistId)),
-    onExport: onPlaylistExport
+    onExport: onPlaylistExport,
+    onOpenTitleDetails: (titleId, trigger) => titleDetailsView.open(titleId, trigger)
   });
 
   onboarding = createOnboardingView(el, {

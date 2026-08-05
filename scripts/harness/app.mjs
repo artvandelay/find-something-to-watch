@@ -28,6 +28,9 @@ export async function bootApp({
   now,
   mobile = false,
   storage = null,
+  sidecar = null,
+  agentFixture = null,
+  requestIdleCallback = null,
   quiet = true
 } = {}) {
   const html = await readFile(join(docsDir, "index.html"), "utf8");
@@ -43,6 +46,14 @@ export async function bootApp({
   installDialogShim(window);
   const media = installMatchMediaShim(window, mobile);
   const downloads = installDownloadCapture(window);
+  const idleRequests = [];
+  window.requestIdleCallback = (callback, options) => {
+    idleRequests.push(options);
+    if (typeof requestIdleCallback === "function") {
+      return requestIdleCallback(callback, options, window);
+    }
+    return window.setTimeout(() => callback({ timeRemaining: () => 8, didTimeout: false }), 0);
+  };
 
   const catalog = {
     schema: 1,
@@ -57,11 +68,18 @@ export async function bootApp({
   };
 
   const requested = [];
+  let resolveDeferredSidecar = null;
   window.fetch = async (input) => {
     const href = String(input);
     requested.push(href);
     if (href.includes("prompts.json")) return jsonResponse(prompts);
     if (href.includes("catalog.json")) return jsonResponse(catalog);
+    if (href.includes("catalog.text.json")) {
+      if (sidecar === "deferred") {
+        return await new Promise((resolve) => { resolveDeferredSidecar = resolve; });
+      }
+      if (sidecar && typeof sidecar === "object") return jsonResponse(sidecar);
+    }
     // The synopsis sidecar is optional by design; prove the app tolerates its absence.
     return { ok: false, status: 404, async json() { throw new Error("404"); }, async text() { return "not found"; } };
   };
@@ -73,6 +91,7 @@ export async function bootApp({
 
   const globals = swapGlobals(window);
   if (now) window.Date.now = () => now;
+  if (agentFixture) window.__OTT_TEST_RUN_AGENT__ = createAgentFixture(window, agentFixture);
 
   // The missing synopsis sidecar is expected here and warns on every boot.
   const warn = console.warn;
@@ -92,7 +111,14 @@ export async function bootApp({
     document: window.document,
     requested,
     downloads,
+    idleRequests,
     catalog,
+    resolveSidecar: (value) => {
+      if (!resolveDeferredSidecar) throw new Error("No deferred synopsis sidecar request is pending.");
+      const resolve = resolveDeferredSidecar;
+      resolveDeferredSidecar = null;
+      resolve(jsonResponse(value));
+    },
     setMobile: async (value) => { media.set(value); await settle(window); },
     settle: () => settle(window),
     $: (selector) => window.document.querySelector(selector),
@@ -132,6 +158,50 @@ export async function bootApp({
       restoreGlobals(globals);
       window.close();
     }
+  };
+}
+
+function createAgentFixture(window, fixture) {
+  if (typeof fixture === "function") return fixture;
+  return async (opts) => {
+    const events = Array.isArray(fixture?.events) ? fixture.events : [];
+    for (const event of events) {
+      const delay = Number.isFinite(event?.delayMs) ? Math.max(0, event.delayMs) : 0;
+      if (delay) await new Promise((resolve) => window.setTimeout(resolve, delay));
+      if (opts.signal?.aborted) {
+        opts.onEvent?.({
+          type: "error",
+          turnId: opts.turnId,
+          code: "aborted",
+          message: "Stopped.",
+          retryable: false,
+          partialReply: "",
+          timing: { totalMs: 0, firstTokenMs: null }
+        });
+        return { ok: false, reply: "", queue: null, memoryCandidates: [] };
+      }
+      opts.onEvent?.({ ...event, turnId: opts.turnId });
+    }
+    const result = fixture?.result || {
+      ok: true,
+      reply: "Fixture reply.",
+      queue: [],
+      memoryCandidates: [],
+      usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, requestCount: 1 },
+      billing: { basis: "provider_reported", amountUsd: 0.0042, complete: true, requestCount: 1, pricedRequestCount: 1 },
+      timing: { totalMs: 1200, firstTokenMs: 200 }
+    };
+    if (result.ok !== false) opts.onEvent?.({
+      type: "done",
+      turnId: opts.turnId,
+      reply: result.reply,
+      queue: result.queue,
+      memoryCandidates: result.memoryCandidates,
+      usage: result.usage,
+      billing: result.billing,
+      timing: result.timing
+    });
+    return result;
   };
 }
 
@@ -255,9 +325,7 @@ function swapGlobals(window) {
   const saved = new Map();
   for (const key of GLOBAL_KEYS) {
     saved.set(key, Object.getOwnPropertyDescriptor(globalThis, key));
-    const value = key === "requestIdleCallback"
-      ? (cb) => window.setTimeout(() => cb({ timeRemaining: () => 8, didTimeout: false }), 0)
-      : window[key];
+    const value = window[key];
     if (value === undefined) continue;
     Object.defineProperty(globalThis, key, { value, configurable: true, writable: true });
   }
