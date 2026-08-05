@@ -57,7 +57,13 @@ export function toJson(picks, meta) {
 
 function csvField(value) {
   if (value == null) return "";
-  const s = String(value);
+  let s = String(value);
+  // Neutralize spreadsheet formula injection: a leading =, +, -, @, tab, or CR
+  // makes Excel/Sheets interpret the cell as a formula. Prefixing with a
+  // single quote forces text interpretation without changing visible content.
+  if (/^[=+\-@\t\r]/.test(s)) {
+    s = `'${s}`;
+  }
   if (/[",\n\r]/.test(s)) {
     return `"${s.replace(/"/g, '""')}"`;
   }

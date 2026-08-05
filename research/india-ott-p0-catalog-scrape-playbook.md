@@ -444,7 +444,7 @@ if __name__ == "__main__":
 curl --request GET \
   --url 'https://streaming-availability.p.rapidapi.com/shows/search/filters?country=in&service=prime&show_type=series&output_language=en' \
   --header 'x-rapidapi-host: streaming-availability.p.rapidapi.com' \
-  --header 'x-rapidapi-key: f855e1c929msh34f3a78c5aac09ap1c6459jsn0ef4a080194a'
+  --header 'x-rapidapi-key: {RAPIDAPI_KEY}'
 ```
 
 ---

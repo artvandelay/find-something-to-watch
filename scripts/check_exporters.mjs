@@ -74,6 +74,10 @@ ok(csv.includes('"Slow, ""Burn"""'));
 ok(csv.includes('"Line one\nline two"'));
 ok(csv.endsWith("\n"));
 
+const injectionCsv = toCsv([{ ...picks[0], t: "=HYPERLINK(\"http://evil\")", reason: "@SUM(1,1)" }], meta);
+ok(injectionCsv.includes("'=HYPERLINK"));
+ok(injectionCsv.includes("'@SUM(1,1)"));
+
 const y1 = toYouMd("# You.md\n\n## What I love\n- heists\n", {
   series: [{ name: "Seinfeld", episodes: 79 }],
   movies: [{ title: "Gunday" }]
