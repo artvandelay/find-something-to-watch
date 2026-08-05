@@ -1,7 +1,8 @@
 export const KEYS = {
   llm: "ottbyok.llm",
   youmd: "ottbyok.youmd",
-  history: "ottbyok.history"
+  history: "ottbyok.history",
+  sidebar: "ottbyok.sidebar"
 };
 
 // The browser-memory adapter migrates these two values into IndexedDB after a
@@ -97,6 +98,14 @@ export function createStore(storage) {
     }
   }
 
+  function getSidebarCollapsed() {
+    return read(KEYS.sidebar) === "1";
+  }
+
+  function setSidebarCollapsed(collapsed) {
+    return write(KEYS.sidebar, collapsed ? "1" : "0");
+  }
+
   function clearAll() {
     let ok = true;
     for (const key of Object.values(KEYS)) {
@@ -113,6 +122,8 @@ export function createStore(storage) {
   return {
     getLlm,
     setLlm,
+    getSidebarCollapsed,
+    setSidebarCollapsed,
     clearAll,
     hasKey
   };

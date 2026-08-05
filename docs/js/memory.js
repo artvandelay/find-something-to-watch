@@ -1,16 +1,26 @@
 import { LEGACY_CONTEXT_KEYS, YOUMD_TEMPLATE } from "./store.js";
 import { PROVIDER_SLUGS } from "./providers.js";
 import { defaultPlaylists, sanitizePlaylists } from "./playlists.js";
+import {
+  defaultRecommendationQueue,
+  sanitizeRecommendationQueue
+} from "./recommendations.js";
+import {
+  defaultLearnedPreferences,
+  sanitizeLearnedPreferences
+} from "./preferences.js";
 
 export const MEMORY_DB_NAME = "ottbyok.memory";
 export const MEMORY_DB_VERSION = 1;
-export const MEMORY_SCHEMA_VERSION = 2;
+export const MEMORY_SCHEMA_VERSION = 3;
 export const MEMORY_STORE = "memory";
 
 export const MEMORY_KEYS = Object.freeze({
   profile: "profile",
   conversation: "conversation",
   queue: "queue",
+  threads: "threads",
+  learned: "learned",
   youmd: "youmd",
   history: "history",
   playlists: "playlists"
@@ -21,6 +31,8 @@ export const MEMORY_LIMITS = Object.freeze({
   conversationMessages: 24,
   messageCharacters: 6000,
   queueItems: 20,
+  inactiveConversations: 20,
+  learnedFacts: 100,
   youmdCharacters: 50000,
   historyBytes: 1024 * 1024,
   issues: 20
@@ -59,6 +71,15 @@ function boundedString(value, max) {
   return value.slice(0, max);
 }
 
+function collapsedString(value, max) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function newConversationId() {
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "conversation-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2);
+}
+
 function safeStorageRead(storage, key) {
   try {
     return storage && typeof storage.getItem === "function" ? storage.getItem(key) : null;
@@ -93,24 +114,33 @@ function profileDefault() {
     schema: MEMORY_SCHEMA_VERSION,
     updatedAt: null,
     onboardingComplete: false,
-    providers: []
+    providers: [],
+    memoryEnabled: true
   };
 }
 
-function conversationDefault() {
+function conversationDefault(now) {
+  const timestamp = nowIso(now);
   return {
     schema: MEMORY_SCHEMA_VERSION,
-    updatedAt: null,
+    id: newConversationId(),
+    title: "",
+    createdAt: timestamp,
+    updatedAt: timestamp,
     messages: []
   };
 }
 
 function queueDefault() {
-  return {
-    schema: MEMORY_SCHEMA_VERSION,
-    updatedAt: null,
-    ids: []
-  };
+  return defaultRecommendationQueue();
+}
+
+function threadsDefault() {
+  return { schema: MEMORY_SCHEMA_VERSION, updatedAt: null, items: [] };
+}
+
+function learnedDefault() {
+  return defaultLearnedPreferences();
 }
 
 function sanitizeProfile(value, now) {
@@ -126,7 +156,8 @@ function sanitizeProfile(value, now) {
     schema: MEMORY_SCHEMA_VERSION,
     updatedAt: isIsoDate(value.updatedAt) ? value.updatedAt : nowIso(now),
     onboardingComplete: value.onboardingComplete === true,
-    providers: uniqueProviders
+    providers: uniqueProviders,
+    memoryEnabled: value.memoryEnabled !== false
   };
 }
 
@@ -137,32 +168,79 @@ function sanitizeConversation(value, now) {
     if (!isPlainObject(message) || (message.role !== "user" && message.role !== "assistant")) continue;
     const content = boundedString(message.content, MEMORY_LIMITS.messageCharacters);
     if (!content || !content.trim()) continue;
-    messages.push({
+    const safe = {
       role: message.role,
       content,
       createdAt: isIsoDate(message.createdAt) ? message.createdAt : nowIso(now)
-    });
+    };
+    if (message.role === "assistant" && isPlainObject(message.meta) && message.meta.status === "complete") {
+      const timing = isPlainObject(message.meta.timing) ? message.meta.timing : {};
+      const usage = isPlainObject(message.meta.usage) ? message.meta.usage : {};
+      const billing = isPlainObject(message.meta.billing) ? message.meta.billing : {};
+      safe.meta = {
+        status: "complete",
+        timing: {
+          totalMs: Number.isFinite(timing.totalMs) && timing.totalMs >= 0 ? timing.totalMs : 0,
+          firstTokenMs: Number.isFinite(timing.firstTokenMs) && timing.firstTokenMs >= 0 ? timing.firstTokenMs : null
+        },
+        usage: {
+          promptTokens: Number.isFinite(usage.promptTokens) && usage.promptTokens >= 0 ? usage.promptTokens : 0,
+          completionTokens: Number.isFinite(usage.completionTokens) && usage.completionTokens >= 0 ? usage.completionTokens : 0,
+          totalTokens: Number.isFinite(usage.totalTokens) && usage.totalTokens >= 0 ? usage.totalTokens : 0,
+          requestCount: Number.isFinite(usage.requestCount) && usage.requestCount >= 0 ? usage.requestCount : 0
+        },
+        billing: {
+          basis: billing.basis === "provider_reported" ? "provider_reported" : "unavailable",
+          amountUsd: Number.isFinite(billing.amountUsd) && billing.amountUsd >= 0 ? billing.amountUsd : null,
+          complete: billing.complete === true,
+          requestCount: Number.isFinite(billing.requestCount) && billing.requestCount >= 0 ? billing.requestCount : 0,
+          pricedRequestCount: Number.isFinite(billing.pricedRequestCount) && billing.pricedRequestCount >= 0 ? billing.pricedRequestCount : 0
+        }
+      };
+    }
+    messages.push(safe);
   }
+  const trimmed = messages.slice(-MEMORY_LIMITS.conversationMessages);
+  const firstUser = trimmed.find((message) => message.role === "user");
+  const createdAt = isIsoDate(value.createdAt) ? value.createdAt : (trimmed[0]?.createdAt || nowIso(now));
   return {
     schema: MEMORY_SCHEMA_VERSION,
+    id: collapsedString(value.id, 160) || newConversationId(),
+    title: collapsedString(value.title || firstUser?.content, 72),
+    createdAt,
     updatedAt: isIsoDate(value.updatedAt) ? value.updatedAt : nowIso(now),
-    messages: messages.slice(-MEMORY_LIMITS.conversationMessages)
+    messages: trimmed
   };
 }
 
 function sanitizeQueue(value, now) {
-  if (!isPlainObject(value) || !Array.isArray(value.ids)) return null;
-  const ids = [];
-  for (const id of value.ids) {
-    const cleanId = typeof id === "string" ? id.trim() : "";
-    if (cleanId && !ids.includes(cleanId)) ids.push(cleanId);
-    if (ids.length === MEMORY_LIMITS.queueItems) break;
+  return sanitizeRecommendationQueue(value, {
+    updatedAt: isIsoDate(value?.updatedAt) ? value.updatedAt : nowIso(now)
+  });
+}
+
+function sanitizeThreads(value, now) {
+  if (!isPlainObject(value)) return null;
+  const ids = new Set();
+  const items = [];
+  for (const raw of Array.isArray(value.items) ? value.items : []) {
+    const conversation = sanitizeConversation(raw, now);
+    const queue = sanitizeQueue(raw?.queue, now);
+    if (!conversation || !queue || conversation.messages.length === 0 || ids.has(conversation.id)) continue;
+    ids.add(conversation.id);
+    items.push({ ...conversation, queue });
+    if (items.length === MEMORY_LIMITS.inactiveConversations) break;
   }
+  items.sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt));
   return {
     schema: MEMORY_SCHEMA_VERSION,
     updatedAt: isIsoDate(value.updatedAt) ? value.updatedAt : nowIso(now),
-    ids
+    items
   };
+}
+
+function sanitizeLearned(value, now) {
+  return sanitizeLearnedPreferences(value, { now: nowIso(now) });
 }
 
 function sanitizeYouMd(value) {
@@ -180,7 +258,8 @@ function sanitizeHistory(value) {
 }
 
 function stampRecord(key, value, now) {
-  if (key !== MEMORY_KEYS.profile && key !== MEMORY_KEYS.conversation && key !== MEMORY_KEYS.queue) {
+  if (key !== MEMORY_KEYS.profile && key !== MEMORY_KEYS.conversation && key !== MEMORY_KEYS.queue &&
+    key !== MEMORY_KEYS.threads && key !== MEMORY_KEYS.learned) {
     return value;
   }
   return { ...value, updatedAt: nowIso(now) };
@@ -188,8 +267,10 @@ function stampRecord(key, value, now) {
 
 function defaultFor(key, now) {
   if (key === MEMORY_KEYS.profile) return profileDefault();
-  if (key === MEMORY_KEYS.conversation) return conversationDefault();
+  if (key === MEMORY_KEYS.conversation) return conversationDefault(now);
   if (key === MEMORY_KEYS.queue) return queueDefault();
+  if (key === MEMORY_KEYS.threads) return threadsDefault();
+  if (key === MEMORY_KEYS.learned) return learnedDefault();
   if (key === MEMORY_KEYS.youmd) return YOUMD_TEMPLATE;
   if (key === MEMORY_KEYS.history) return null;
   if (key === MEMORY_KEYS.playlists) return defaultPlaylists(now);
@@ -200,6 +281,8 @@ function sanitizeFor(key, value, now) {
   if (key === MEMORY_KEYS.profile) return sanitizeProfile(value, now);
   if (key === MEMORY_KEYS.conversation) return sanitizeConversation(value, now);
   if (key === MEMORY_KEYS.queue) return sanitizeQueue(value, now);
+  if (key === MEMORY_KEYS.threads) return sanitizeThreads(value, now);
+  if (key === MEMORY_KEYS.learned) return sanitizeLearned(value, now);
   if (key === MEMORY_KEYS.youmd) return sanitizeYouMd(value);
   if (key === MEMORY_KEYS.history) return sanitizeHistory(value);
   if (key === MEMORY_KEYS.playlists) return sanitizePlaylists(value, now);
@@ -214,6 +297,7 @@ function requestResult(request, operation) {
 }
 
 function transactionDone(transaction, operation) {
+  if (transaction?.completed === true) return Promise.resolve();
   return new Promise((resolve, reject) => {
     transaction.oncomplete = () => resolve();
     transaction.onabort = () => reject(asMemoryError(transaction.error, operation));
@@ -254,6 +338,7 @@ export function createBrowserMemory({
   onIssue = null
 } = {}) {
   let databasePromise = null;
+  let writeTail = Promise.resolve();
   const issues = [];
 
   function reportIssue(issue) {
@@ -280,6 +365,19 @@ export function createBrowserMemory({
     }
   }
 
+  async function readRawMany(keys) {
+    try {
+      const db = await database();
+      const transaction = db.transaction(MEMORY_STORE, "readonly");
+      const store = transaction.objectStore(MEMORY_STORE);
+      const values = await Promise.all(keys.map((key) => requestResult(store.get(key), "read")));
+      await transactionDone(transaction, "read");
+      return values;
+    } catch (error) {
+      throw asMemoryError(error, "read");
+    }
+  }
+
   async function writeRaw(entries) {
     try {
       const db = await database();
@@ -290,6 +388,12 @@ export function createBrowserMemory({
     } catch (error) {
       throw asMemoryError(error, "write");
     }
+  }
+
+  function serializeWrite(work) {
+    const next = writeTail.then(work, work);
+    writeTail = next.catch(() => {});
+    return next;
   }
 
   async function get(key) {
@@ -358,22 +462,29 @@ export function createBrowserMemory({
   async function initialize() {
     await database();
     const migrated = await migrateLegacy();
-    if ((await readRaw(MEMORY_KEYS.playlists)) === undefined) {
-      await writeRaw([[MEMORY_KEYS.playlists, defaultPlaylists(now)]]);
-    }
+    const initialKeys = [MEMORY_KEYS.playlists, MEMORY_KEYS.threads, MEMORY_KEYS.learned];
+    const initialValues = await readRawMany(initialKeys);
+    const missing = initialKeys
+      .filter((_, index) => initialValues[index] === undefined)
+      .map((key) => [key, defaultFor(key, now)]);
+    if (missing.length > 0) await writeRaw(missing);
     return { migrated, issues: clone(issues) };
   }
 
   async function getSnapshot() {
-    const [profile, conversation, queue, youmd, history, playlists] = await Promise.all([
-      get(MEMORY_KEYS.profile),
-      get(MEMORY_KEYS.conversation),
-      get(MEMORY_KEYS.queue),
-      get(MEMORY_KEYS.youmd),
-      get(MEMORY_KEYS.history),
-      get(MEMORY_KEYS.playlists)
-    ]);
-    return { profile, conversation, queue, youmd, history, playlists, issues: clone(issues) };
+    const keys = Object.values(MEMORY_KEYS);
+    const values = await readRawMany(keys);
+    const snapshot = {};
+    for (const [index, key] of keys.entries()) {
+      const value = values[index];
+      if (value === undefined) snapshot[key] = defaultFor(key, now);
+      else if (key === MEMORY_KEYS.history && value === null) snapshot[key] = null;
+      else {
+        const sanitized = sanitizeFor(key, value, now);
+        snapshot[key] = sanitized === null ? defaultFor(key, now) : sanitized;
+      }
+    }
+    return { ...snapshot, issues: clone(issues) };
   }
 
   async function saveConversationAndQueue(conversation, queue) {
@@ -391,6 +502,173 @@ export function createBrowserMemory({
     return { conversation: clone(safeConversation), queue: clone(safeQueue) };
   }
 
+  async function currentConversationAndQueue() {
+    const [rawConversation, rawQueue] = await readRawMany([MEMORY_KEYS.conversation, MEMORY_KEYS.queue]);
+    const safeConversation = rawConversation === undefined
+      ? defaultFor(MEMORY_KEYS.conversation, now) : sanitizeConversation(rawConversation, now);
+    const safeQueue = rawQueue === undefined ? defaultFor(MEMORY_KEYS.queue, now) : sanitizeQueue(rawQueue, now);
+    if (!safeConversation || !safeQueue) throw new BrowserMemoryError("invalid", "Invalid current conversation data.");
+    return { conversation: safeConversation, queue: safeQueue };
+  }
+
+  async function appendUserMessage(conversationId, content) {
+    return serializeWrite(async () => {
+      const { conversation, queue } = await currentConversationAndQueue();
+      if (conversation.id !== conversationId) throw new BrowserMemoryError("invalid", "That conversation is no longer active.");
+      const text = boundedString(content, MEMORY_LIMITS.messageCharacters);
+      if (!text || !text.trim()) throw new BrowserMemoryError("invalid", "A conversation message cannot be empty.");
+      const timestamp = nowIso(now);
+      const messages = conversation.messages.concat({ role: "user", content: text, createdAt: timestamp })
+        .slice(-MEMORY_LIMITS.conversationMessages);
+      const nextConversation = {
+        ...conversation,
+        title: conversation.title || collapsedString(text, 72),
+        updatedAt: timestamp,
+        messages
+      };
+      await writeRaw([[MEMORY_KEYS.conversation, nextConversation]]);
+      return { conversation: clone(nextConversation), queue: clone(queue) };
+    });
+  }
+
+  async function completeTurn(conversationId, { content, queue = null, meta = undefined, learned = undefined } = {}) {
+    return serializeWrite(async () => {
+      const current = await currentConversationAndQueue();
+      if (current.conversation.id !== conversationId) {
+        throw new BrowserMemoryError("invalid", "That conversation is no longer active.");
+      }
+      const text = boundedString(content, MEMORY_LIMITS.messageCharacters);
+      if (!text || !text.trim()) throw new BrowserMemoryError("invalid", "A completed turn needs a reply.");
+      const timestamp = nowIso(now);
+      const assistant = { role: "assistant", content: text, createdAt: timestamp };
+      if (meta !== undefined) assistant.meta = meta;
+      const nextConversation = sanitizeConversation({
+        ...current.conversation,
+        updatedAt: timestamp,
+        messages: current.conversation.messages.concat(assistant)
+      }, now);
+      const nextQueue = queue === null ? current.queue : sanitizeQueue(queue, now);
+      if (!nextConversation || !nextQueue) throw new BrowserMemoryError("invalid", "Invalid completed turn data.");
+      const nextLearned = learned === undefined ? undefined : sanitizeLearned(learned, now);
+      if (learned !== undefined && nextLearned === null) {
+        throw new BrowserMemoryError("invalid", "Invalid learned-preferences browser-memory data.");
+      }
+      const entries = [
+        [MEMORY_KEYS.conversation, nextConversation],
+        [MEMORY_KEYS.queue, { ...nextQueue, updatedAt: timestamp }]
+      ];
+      if (nextLearned !== undefined) {
+        entries.push([MEMORY_KEYS.learned, stampRecord(MEMORY_KEYS.learned, nextLearned, now)]);
+      }
+      await writeRaw(entries);
+      return {
+        conversation: clone(nextConversation),
+        queue: clone({ ...nextQueue, updatedAt: timestamp }),
+        ...(nextLearned === undefined ? {} : { learned: clone(nextLearned) })
+      };
+    });
+  }
+
+  function archiveConversation(threads, conversation, queue, timestamp) {
+    if (conversation.messages.length === 0) return threads;
+    const withoutCurrent = threads.items.filter((item) => item.id !== conversation.id);
+    const archived = { ...conversation, updatedAt: timestamp, queue };
+    return {
+      schema: MEMORY_SCHEMA_VERSION,
+      updatedAt: timestamp,
+      items: [archived, ...withoutCurrent]
+        .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+        .slice(0, MEMORY_LIMITS.inactiveConversations)
+    };
+  }
+
+  async function startNewConversation() {
+    return serializeWrite(async () => {
+      const [current, rawThreads] = await Promise.all([
+        currentConversationAndQueue(),
+        get(MEMORY_KEYS.threads)
+      ]);
+      const timestamp = nowIso(now);
+      const threads = archiveConversation(rawThreads, current.conversation, current.queue, timestamp);
+      const conversation = conversationDefault(now);
+      const queue = queueDefault();
+      await writeRaw([
+        [MEMORY_KEYS.conversation, conversation],
+        [MEMORY_KEYS.queue, queue],
+        [MEMORY_KEYS.threads, threads]
+      ]);
+      return { conversation: clone(conversation), queue: clone(queue), threads: clone(threads) };
+    });
+  }
+
+  async function activateArchivedConversation(conversationId) {
+    return serializeWrite(async () => {
+      const [current, threads] = await Promise.all([
+        currentConversationAndQueue(),
+        get(MEMORY_KEYS.threads)
+      ]);
+      const target = threads.items.find((item) => item.id === conversationId);
+      if (!target) throw new BrowserMemoryError("invalid", "That archived conversation is unavailable.");
+      const timestamp = nowIso(now);
+      const nextThreads = archiveConversation(
+        { ...threads, items: threads.items.filter((item) => item.id !== conversationId) },
+        current.conversation,
+        current.queue,
+        timestamp
+      );
+      const conversation = { ...target, updatedAt: timestamp };
+      delete conversation.queue;
+      const queue = target.queue;
+      await writeRaw([
+        [MEMORY_KEYS.conversation, conversation],
+        [MEMORY_KEYS.queue, queue],
+        [MEMORY_KEYS.threads, nextThreads]
+      ]);
+      return { conversation: clone(conversation), queue: clone(queue), threads: clone(nextThreads) };
+    });
+  }
+
+  async function getConversationList() {
+    const [current, threads] = await Promise.all([get(MEMORY_KEYS.conversation), get(MEMORY_KEYS.threads)]);
+    return {
+      active: clone(current),
+      items: [clone(current), ...threads.items.filter((item) => item.id !== current.id).map((item) => clone(item))]
+    };
+  }
+
+  async function saveContextMemory({ youmd, history, profile, learned } = {}) {
+    return serializeWrite(async () => {
+      const entries = [];
+      if (youmd !== undefined) {
+        const safe = sanitizeYouMd(youmd);
+        if (safe === null) throw new BrowserMemoryError("invalid", "Invalid You.md browser-memory data.");
+        entries.push([MEMORY_KEYS.youmd, safe]);
+      }
+      if (history !== undefined) {
+        const safe = sanitizeHistory(history);
+        if (safe === null && history !== null) throw new BrowserMemoryError("invalid", "Invalid watch-history browser-memory data.");
+        entries.push([MEMORY_KEYS.history, safe]);
+      }
+      if (profile !== undefined) {
+        const safe = sanitizeProfile(profile, now);
+        if (safe === null) throw new BrowserMemoryError("invalid", "Invalid profile browser-memory data.");
+        entries.push([MEMORY_KEYS.profile, stampRecord(MEMORY_KEYS.profile, safe, now)]);
+      }
+      if (learned !== undefined) {
+        const safe = sanitizeLearned(learned, now);
+        if (safe === null) throw new BrowserMemoryError("invalid", "Invalid learned-preferences browser-memory data.");
+        entries.push([MEMORY_KEYS.learned, stampRecord(MEMORY_KEYS.learned, safe, now)]);
+      }
+      if (entries.length) await writeRaw(entries);
+      return {
+        youmd: youmd === undefined ? await get(MEMORY_KEYS.youmd) : clone(entries.find(([key]) => key === MEMORY_KEYS.youmd)?.[1]),
+        history: history === undefined ? await get(MEMORY_KEYS.history) : clone(entries.find(([key]) => key === MEMORY_KEYS.history)?.[1]),
+        profile: profile === undefined ? await get(MEMORY_KEYS.profile) : clone(entries.find(([key]) => key === MEMORY_KEYS.profile)?.[1]),
+        learned: learned === undefined ? await get(MEMORY_KEYS.learned) : clone(entries.find(([key]) => key === MEMORY_KEYS.learned)?.[1])
+      };
+    });
+  }
+
   async function exportBackup() {
     const { issues, ...backup } = await getSnapshot();
     return {
@@ -398,25 +676,6 @@ export function createBrowserMemory({
       exportedAt: nowIso(now),
       ...backup
     };
-  }
-
-  async function importBackup(backup) {
-    if (!isPlainObject(backup) || (backup.schema !== 1 && backup.schema !== MEMORY_SCHEMA_VERSION)) {
-      throw new BrowserMemoryError("invalid", "Unsupported browser-memory backup.");
-    }
-    const source = backup.schema === 1
-      ? { ...backup, playlists: defaultPlaylists(now) }
-      : backup;
-    const entries = Object.values(MEMORY_KEYS).map((key) => {
-      const sanitized = sanitizeFor(key, source[key], now);
-      const isEmptyHistory = key === MEMORY_KEYS.history && backup[key] === null;
-      if (sanitized === null && !isEmptyHistory) {
-        throw new BrowserMemoryError("invalid", `Invalid ${key} in browser-memory backup.`);
-      }
-      return [key, isEmptyHistory ? null : sanitized];
-    });
-    await writeRaw(entries);
-    return getSnapshot();
   }
 
   async function clear() {
@@ -438,6 +697,9 @@ export function createBrowserMemory({
     setConversation: (conversation) => set(MEMORY_KEYS.conversation, conversation),
     getQueue: () => get(MEMORY_KEYS.queue),
     setQueue: (queue) => set(MEMORY_KEYS.queue, queue),
+    getThreads: () => get(MEMORY_KEYS.threads),
+    getLearned: () => get(MEMORY_KEYS.learned),
+    setLearned: (learned) => set(MEMORY_KEYS.learned, learned),
     getYouMd: () => get(MEMORY_KEYS.youmd),
     setYouMd: (youmd) => set(MEMORY_KEYS.youmd, youmd),
     getHistory: () => get(MEMORY_KEYS.history),
@@ -445,9 +707,14 @@ export function createBrowserMemory({
     getPlaylists: () => get(MEMORY_KEYS.playlists),
     setPlaylists: (playlists) => set(MEMORY_KEYS.playlists, playlists),
     saveConversationAndQueue,
+    appendUserMessage,
+    completeTurn,
+    startNewConversation,
+    activateArchivedConversation,
+    getConversationList,
+    saveContextMemory,
     getSnapshot,
     exportBackup,
-    importBackup,
     clear,
     getIssues: () => clone(issues)
   };

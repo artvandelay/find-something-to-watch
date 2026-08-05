@@ -139,15 +139,15 @@ assert.equal(conversation.messages[0].content.length, MEMORY_LIMITS.messageChara
 const queue = await memory.setQueue({
   ids: ["tmdb:one", "tmdb:one", ...Array.from({ length: 25 }, (_, index) => `tmdb:${index}`)]
 });
-assert.equal(queue.ids.length, MEMORY_LIMITS.queueItems);
-assert.equal(new Set(queue.ids).size, MEMORY_LIMITS.queueItems);
+assert.equal(queue.items.length, MEMORY_LIMITS.queueItems);
+assert.equal(new Set(queue.items.map((item) => item.id)).size, MEMORY_LIMITS.queueItems);
 
 await memory.saveConversationAndQueue(
   { messages: [{ role: "user", content: "new turn" }] },
   { ids: ["tmdb:atomic"] }
 );
 assert.equal((await memory.getConversation()).messages[0].content, "new turn");
-assert.deepEqual((await memory.getQueue()).ids, ["tmdb:atomic"]);
+assert.deepEqual((await memory.getQueue()).items.map((item) => item.id), ["tmdb:atomic"]);
 
 const savedPlaylists = await memory.setPlaylists(addToPlaylist(
   await memory.getPlaylists(),
@@ -166,35 +166,59 @@ const backup = await memory.exportBackup();
 assert.equal(backup.schema, MEMORY_SCHEMA_VERSION);
 assert.equal("llm" in backup, false);
 assert.equal("issues" in backup, false);
+assert.deepEqual(backup.threads.items, []);
+assert.deepEqual(backup.learned.items, []);
 assert.deepEqual(backup.playlists.playlists[0].titleIds, ["tmdb:playlist"]);
-await memory.importBackup(backup);
-assert.deepEqual((await memory.getQueue()).ids, ["tmdb:replacement"]);
+assert.deepEqual((await memory.getQueue()).items.map((item) => item.id), ["tmdb:replacement"]);
 assert.deepEqual((await memory.getPlaylists()).playlists[0].titleIds, ["tmdb:playlist"]);
 
-const schemaOneBackup = {
-  schema: 1,
-  profile: { schema: 1, onboardingComplete: true, providers: ["netflix"] },
-  conversation: { schema: 1, messages: [{ role: "user", content: "old backup" }] },
-  queue: { schema: 1, ids: ["tmdb:legacy"] },
-  youmd: "Legacy backup",
-  history: null
-};
-await memory.importBackup(schemaOneBackup);
-assert.equal((await memory.getProfile()).schema, MEMORY_SCHEMA_VERSION);
-assert.equal((await memory.getConversation()).messages[0].content, "old backup");
-assert.deepEqual((await memory.getQueue()).ids, ["tmdb:legacy"]);
-assert.equal(await memory.getYouMd(), "Legacy backup");
-assert.deepEqual((await memory.getPlaylists()).playlists[0].titleIds, []);
-
-const beforeInvalidImport = await memory.getSnapshot();
+const active = await memory.getConversation();
+await memory.appendUserMessage(active.id, "I always avoid horror.");
+const completed = await memory.completeTurn(active.id, {
+  content: "Try a comedy.",
+  queue: {
+    source: { conversationId: active.id, turnId: "turn-1", query: "I always avoid horror." },
+    items: [{ id: "tmdb:comedy", reason: "No horror." }]
+  }
+});
+assert.equal(completed.conversation.messages.length, 3);
+assert.equal(completed.queue.items[0].reason, "No horror.");
 await assert.rejects(
-  memory.importBackup({ ...backup, playlists: null }),
+  memory.appendUserMessage("stale-id", "Nope"),
   (error) => error instanceof BrowserMemoryError && error.code === "invalid"
 );
-assert.deepEqual(await memory.getSnapshot(), beforeInvalidImport);
+const archived = await memory.startNewConversation();
+assert.equal(archived.conversation.messages.length, 0);
+assert.equal(archived.threads.items.length, 1);
+assert.deepEqual(archived.threads.items[0].queue.items.map((item) => item.id), ["tmdb:comedy"]);
+const restored = await memory.activateArchivedConversation(active.id);
+assert.equal(restored.conversation.id, active.id);
+assert.deepEqual(restored.queue.items.map((item) => item.id), ["tmdb:comedy"]);
+const list = await memory.getConversationList();
+assert.equal(list.active.id, active.id);
+await memory.saveContextMemory({
+  profile: { ...(await memory.getProfile()), memoryEnabled: false },
+  learned: {
+    schema: 1,
+    revision: 1,
+    items: [{ id: "fact-1", kind: "genre", polarity: "avoid", value: "horror" }]
+  }
+});
+assert.equal((await memory.getProfile()).memoryEnabled, false);
+assert.equal((await memory.getLearned()).items[0].value, "horror");
+
+const concurrentConversation = await memory.getConversation();
+await Promise.all([
+  memory.appendUserMessage(concurrentConversation.id, "First concurrent message"),
+  memory.appendUserMessage(concurrentConversation.id, "Second concurrent message")
+]);
+assert.deepEqual(
+  (await memory.getConversation()).messages.slice(-2).map((message) => message.content),
+  ["First concurrent message", "Second concurrent message"]
+);
 
 idb.records.set(MEMORY_KEYS.queue, { ids: "not an array" });
-assert.deepEqual((await memory.getQueue()).ids, []);
+assert.deepEqual((await memory.getQueue()).items, []);
 assert.equal(memory.getIssues().at(-1).code, "corrupt");
 
 idb.records.set(MEMORY_KEYS.playlists, { playlists: "not an array" });
@@ -222,7 +246,7 @@ idb.failWrites = false;
 
 await memory.clear();
 assert.equal((await memory.getConversation()).messages.length, 0);
-assert.equal((await memory.getQueue()).ids.length, 0);
+assert.equal((await memory.getQueue()).items.length, 0);
 assert.equal(idb.records.has(MEMORY_KEYS.playlists), false);
 assert.deepEqual((await memory.getPlaylists()).playlists, defaultPlaylists(() => new Date("2026-08-05T00:00:00.000Z")).playlists);
 

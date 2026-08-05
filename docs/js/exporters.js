@@ -1,6 +1,7 @@
 // Pure export formatters: data in, string out. providers.js is the one
 // import allowed here since it is itself import-free and DOM-free.
 import { providerLabel, watchCta } from "./providers.js";
+import { renderLearnedContext } from "./preferences.js";
 
 const MAX_RECENT = 25;
 
@@ -78,16 +79,17 @@ export function toCsv(picks, meta) {
   return `${[header].concat(rows).join("\n")}\n`;
 }
 
-export function toYouMd(youmd, history) {
+export function toYouMd(youmd, history, learned = null) {
   const base = String(youmd || "")
     .replace(/\n## Recently watched[\s\S]*$/, "")
     .trimEnd();
-  if (history == null) return `${base}\n`;
+  const learnedContext = renderLearnedContext(learned);
+  if (history == null) return `${base}${learnedContext ? `\n\n${learnedContext}` : ""}\n`;
   const series = Array.isArray(history.series) ? history.series : [];
   const movies = Array.isArray(history.movies) ? history.movies : [];
   const lines = series
     .slice(0, MAX_RECENT)
     .map((s) => `- ${s.name} — ${s.episodes} episodes`)
     .concat(movies.slice(0, MAX_RECENT).map((m) => `- ${m.title}`));
-  return `${base}\n\n## Recently watched\n${lines.length ? `${lines.join("\n")}\n` : ""}`;
+  return `${base}${learnedContext ? `\n\n${learnedContext}` : ""}\n\n## Recently watched\n${lines.length ? `${lines.join("\n")}\n` : ""}`;
 }
