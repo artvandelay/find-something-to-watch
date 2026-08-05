@@ -7,9 +7,20 @@
 - [ ] Run `bash scripts/scan_secrets.sh`.
 - [ ] Run both catalog validator forms.
 - [ ] Run `npm install --ignore-scripts` and `npm run check`.
-- [ ] Run the three offline stress suites.
-- [ ] Run `node scripts/stress_agent_live.mjs` with a release-testing OpenRouter key.
-- [ ] Smoke-test the final catalog in a browser with no console errors.
+- [ ] Confirm catalog execution and catalog runtime unit checks pass, including request timeout, Worker
+      restart, duplicate-finish suppression, observed-ID grounding, and output limits.
+- [ ] Run `node scripts/stress_agent_hostile.mjs` and `node scripts/stress_search_perf.mjs`.
+- [ ] Start `node scripts/e2e_catalog_server.mjs` and complete the deterministic browser mock pass with
+      a real Worker: normal `run_catalog_js`, subscription-scoped queue, timeout recovery, desktop and
+      mobile layouts, and no uncaught console errors.
+- [ ] Confirm first-visit onboarding, playlists, backup import, and no-key keyword fallback work while
+      the catalog Worker is unavailable.
+- [ ] Run exactly one `node scripts/stress_agent_live.mjs --limit 1` query with a release-testing
+      OpenRouter key in the root `.env`; do not print, record, or place that key in browser automation.
+- [ ] Verify Settings web search is off by default, available only for the exact `openrouter.ai`
+      hostname, and discloses that it can add cost. Confirm it is not present in onboarding.
+- [ ] Confirm the disposable executor is documented as fault containment, not a hostile-code security
+      sandbox.
 - [ ] Confirm `gzip -c docs/assets/catalog.json | wc -c` is below 2,000,000 bytes.
 - [ ] On a fresh production-like origin, verify the required three-panel onboarding flow: subscriptions,
   nonempty OpenRouter key, then optional CSV/JSON/ZIP history. Confirm no base URL, model, or You.md

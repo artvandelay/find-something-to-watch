@@ -366,6 +366,56 @@ async function keywordFallbackWithoutKey() {
   }
 }
 
+async function workerUnavailableKeepsOnboardingAndFallback() {
+  const app = await bootApp();
+  try {
+    check("the harness has no Worker implementation", typeof app.window.Worker === "undefined",
+      String(app.window.Worker));
+    check("Worker unavailability still shows first-visit onboarding",
+      app.$("#onboarding-screen").hidden === false && app.$("#shell").hidden === true);
+
+    await completeOnboarding(app);
+    app.window.localStorage.removeItem("ottbyok.llm");
+    const input = app.$("#query-input");
+    input.value = "comedy";
+    input.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.click("#send-btn");
+
+    check("Worker unavailability keeps no-key fallback available",
+      /api key/i.test(app.text("#chat-transcript") || ""));
+  } finally {
+    app.restore();
+  }
+}
+
+async function settingsWebSearchIsScopedToOpenRouter() {
+  const app = await bootApp();
+  try {
+    await completeOnboarding(app);
+    await app.click("#settings-btn");
+
+    const baseUrl = app.$("#llm-base-url");
+    const webSearch = app.$("#llm-web-search");
+    check("settings exposes the web-search control", !!webSearch);
+
+    baseUrl.value = "https://model.example.test/v1";
+    baseUrl.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.settle();
+    check("web search is disabled for a non-OpenRouter URL", webSearch.disabled === true);
+
+    baseUrl.value = "https://openrouter.ai/api/v1";
+    baseUrl.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.settle();
+    webSearch.checked = true;
+    await app.click("#settings-save");
+
+    const stored = JSON.parse(app.window.localStorage.getItem("ottbyok.llm") || "{}");
+    check("OpenRouter web-search preference persists", stored.webSearch === true, JSON.stringify(stored));
+  } finally {
+    app.restore();
+  }
+}
+
 async function developerSurfaceIsHidden() {
   const app = await bootApp();
   try {
@@ -414,6 +464,8 @@ const suites = [
   backupRoundTripRestoresUserState,
   mobileDrawerCloses,
   keywordFallbackWithoutKey,
+  workerUnavailableKeepsOnboardingAndFallback,
+  settingsWebSearchIsScopedToOpenRouter,
   developerSurfaceIsHidden,
   testModeIsLocalhostOnly
 ];

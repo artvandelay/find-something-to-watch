@@ -132,17 +132,23 @@ catalog/catalog.db, matching this union.
 
 ```js
 const KEYS = {
-  llm: "ottbyok.llm" // { baseUrl, apiKey, model }
+  llm: "ottbyok.llm" // { baseUrl, apiKey, model, webSearch }
 };
 const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "",
-  model: "anthropic/claude-sonnet-4.6"
+  model: "anthropic/claude-sonnet-4.6",
+  webSearch: false
 };
 ```
 
 LLM configuration, including the API key, remains in `localStorage` for backward
 compatibility. It is intentionally absent from IndexedDB and `memory.json` exports.
+`webSearch` is a strict boolean and defaults to `false`. The Settings-only checkbox
+may persist it as `true` only when the configured base URL hostname is exactly
+`openrouter.ai`; onboarding has no web-search control. An enabled turn may append
+`{ type: "openrouter:web_search" }` to the model tools, which can add OpenRouter
+search and model cost. Catalog search remains local.
 
 ## Shared chat-completions client
 
@@ -162,6 +168,62 @@ sends JSON with the configured `model` and `stream: false`, a
 Failures use the stable error codes `auth`, `credit`, `rate`, `context`, `network`,
 and `config`; abort errors from the supplied signal/fetch implementation propagate
 unchanged.
+
+## Catalog execution runtime
+
+The model has exactly one catalog-analysis function, `run_catalog_js`. It accepts an
+explicit JavaScript `code` string and runs it against subscription-scoped analytical
+data. The main thread retains the trusted presentation catalog used for cards,
+playlists, initial queue seeding, and no-key keyword search. Model-authored analysis
+runs in Workers.
+
+`createCatalogRuntime({ workerFactory, onState, requestTimeoutMs })` exposes
+`initialize`, `describe`, `runCode`, `keywordSearch`, `resolve`, `seedQueue`,
+`dispose`, `state`, and `epoch`. Its outer Worker protocol is version 1:
+
+```js
+{ v: 1, type: "request", epoch, id, op, payload }
+```
+
+The runtime states are `BOOTING`, `READY_BASIC`, `READY_RICH`, and `RESTARTING`.
+The supported operations are `initialize`, `describe`, `keywordSearch`, `resolve`,
+`seedQueue`, and `tool.execute`. The host uses bounded request timeouts; initialization
+and normal requests default to 30 seconds, catalog code has a 15-second host timeout,
+and a disposable executor has 10 seconds to initialize and 3 seconds to run. A rich
+synopsis-sidecar failure is non-fatal: `READY_BASIC` remains usable.
+
+The trusted catalog Worker applies `{ subscriptions: string[] }` to every operation.
+For each tool call it creates a fresh disposable executor Worker. The executor receives
+only the analytical projection and fixed helpers (`search`, `where`, `get`, `sample`,
+and `normalizeTitle`):
+
+```js
+{ id, t, y, k, rt, s, im, r, p, l, g, v }
+```
+
+The projection deliberately excludes `u` and `img`. It is frozen before execution.
+Source is limited to 12,000 characters and rejects the standalone `import` keyword.
+Returned values must be plain JSON-like data: depth 8, 5,000 nodes, 100 array items,
+2,000 characters per string, and 65,536 UTF-8 output bytes; cycles, accessors, array
+holes, non-finite values, and unsupported values are rejected.
+
+Trusted resolved cards contain:
+
+```js
+{ id, t, y, k, rt, r, p, u, img, s, l, g, reason }
+```
+
+`createTools({ runtime, scope, currentQueueIds, seenKeys })` exposes one public
+schema and forwards normalized `seenKeys` as `excludeKeys` in every `runCode` request.
+Only IDs observed in a successful `run_catalog_js` result, or already in
+`currentQueueIds`, can reach `runtime.resolve`; resolution re-applies subscriptions
+and caps requests at 20 IDs.
+
+The disposable executor is fault containment, not a hostile-code security sandbox.
+It receives no keys, user memory, watch history, watch URLs, images, DOM access, or
+network capabilities. Reassess this prototype boundary before adding accounts,
+authenticated APIs, session cookies, cloud memory, payment data, or other sensitive
+data.
 
 ## Browser memory
 
@@ -352,9 +414,9 @@ deep link (currently only `u.netflix` values shaped like `.../title/{id}`) is
 // providers: Set<string> | string[], the visitor's subscription gate — a record
 //            survives only if rec.p includes at least one member. AND-ed on top of
 //            every other filter, including `provider`. An empty set excludes
-//            everything. docs/js/tools.js's createTools({ subscriptions }) injects
-//            this into every tool call automatically; callers that build filters by
-//            hand (e.g. the local queue seed) pass it explicitly.
+//            everything. The trusted catalog Worker applies this to every model
+//            execution and resolve operation; callers that build filters by hand
+//            (e.g. the local queue seed) pass it explicitly.
 ```
 
 ## Local recommendation queue seed — catalog.js seedQueue()
@@ -505,7 +567,7 @@ provider-agnostic local parser.
 ## Pick / hydrated-card shape
 
 ```js
-{ id, t, y, k, rt, r, p, u, img, s, reason }
+{ id, t, y, k, rt, r, p, u, img, s, l, g, reason }
 ```
 
 `p` and `u` are already restricted to the visitor's subscribed providers (see
@@ -520,10 +582,10 @@ clamped description and use a local fallback sentence when it is empty.
 
 ```js
 runAgent({
-  config,               // { baseUrl, apiKey, model }
+  config,               // { baseUrl, apiKey, model, webSearch }
   prompts,               // docs/assets/prompts.json
   tools,                 // createTools(...) result
-  context: { youmd, history, mood },
+  context: { youmd, history, mood, catalogManifest },
   query,                 // this turn's new user message (string)
   conversation,          // prior turns only, [{ role: "user"|"assistant", content }],
                          // i.e. memory's conversation.messages BEFORE this turn is
@@ -534,9 +596,12 @@ runAgent({
 // -> { ok: boolean, reply: string, queue: string[] | null, usage }
 ```
 
-`ok` is `true` only for a successfully parsed final response. Authentication,
-configuration, network, abort, budget, and parse failures return `ok: false`; callers
-must not persist those failures as assistant replies.
+`runAgent` uses the shared `callChatCompletion` client. It first runs a bounded tool
+loop with the catalog-manifest system message before prior turns, then appends
+`prompts.rerank` and makes a final no-tools request. `ok` is `true` only for a
+successfully parsed final response. Authentication, configuration, catalog-runtime,
+network, abort, budget, and parse failures return `ok: false`; callers must not
+persist those failures as assistant replies.
 
 ## Agent event shapes
 
@@ -545,20 +610,22 @@ must not persist those failures as assistant replies.
 { type: "tool_call",   name: string, args: object }
 { type: "tool_result", name: string, count: number }
 { type: "done",        reply: string, queue: string[] | null, usage: { prompt_tokens, completion_tokens } | null }
-{ type: "error",       code: "auth"|"config"|"credit"|"rate"|"context"|"network"|"aborted"|"budget"|"parse", message: string }
+{ type: "error",       code: string, message: string }
 ```
 
-Changed in this overhaul: `"done"` now carries `reply` (always shown verbatim as the
-assistant's chat message for this turn) and `queue` instead of `picks`. `queue` is
-`null` when the model's turn did not include a queue update — "leave the display
-unchanged" — and an array (0 to 20 catalog ids, already validated against
-`get_titles`) when it did, including an explicit empty array to clear the display.
-The `"delta"` event was removed; nothing emits it now that the note/reason text lives
-in `reply` and is only available once, at `"done"`.
+`"done"` carries `reply` (always shown verbatim as the assistant's chat message for
+this turn) and `queue` instead of `picks`. `queue` is `null` when the model's turn did
+not include a queue update — "leave the display unchanged" — and an array of 0–20
+catalog IDs when it did, including an explicit empty array to clear the display. The
+agent validates nonempty queue IDs through `tools.resolve`. The `"delta"` event was
+removed; nothing emits it now that the note/reason text lives in `reply` and is only
+available once, at `"done"`.
 
-## Rerank prompt response schema (docs/assets/prompts.json, version 2)
+## Rerank prompt response schema (docs/assets/prompts.json, version 4)
 
-The final (no-more-tool-calls) LLM response, after `prompts.rerank`, must be exactly:
+`prompts.json` contains exactly `version`, `system`, `planner`, `rerank`,
+`history_plan`, and `no_results`; it has no `output` key. The final no-tools response,
+after `prompts.rerank`, must be exactly:
 
 ```json
 { "reply": "<1-4 sentences shown verbatim in the chat transcript>", "queue": ["<catalog id>", "..."] }
@@ -572,15 +639,16 @@ remain literal text. `queue` is OPTIONAL: 0-20 catalog ids, verbatim from tool
 results, best first, duplicates
 dropped. Omitting the `queue` key means "leave the current recommendation display
 untouched" (a purely clarifying turn); an explicit `"queue": []` means "clear it".
-`docs/js/agent.js` re-validates every id via `get_titles` before emitting it, so ids
-that fail subscription/filter gating are silently dropped from the returned queue.
+Queue IDs must come from observed `run_catalog_js` output. `docs/js/agent.js`
+re-validates them through `tools.resolve`, so IDs that fail observation,
+subscription, or availability gating are silently dropped from the returned queue.
 
 ## Tool names
 
-Exactly four: `search_titles`, `filter_titles`, `get_titles`, `sample_titles`. All four
-accept the visitor's subscription gate automatically via `createTools({ subscriptions })`
-(see the Provider/language module section above) — no tool parameter needs to carry
-it explicitly.
+Exactly one: `run_catalog_js`. The model has no `search_titles`, `filter_titles`,
+`get_titles`, or `sample_titles` functions. The trusted runtime applies the visitor's
+subscription gate to every execution and resolve operation, so model code cannot widen
+its catalog scope.
 
 ## Frozen DOM IDs
 
@@ -618,7 +686,7 @@ queue-region, queue-status, queue-viewport, queue-track, queue-prev, queue-next,
 queue-empty
 
 Dialogs:
-settings-dialog, settings-provider-list, llm-base-url, llm-api-key, llm-model,
+settings-dialog, settings-provider-list, llm-base-url, llm-api-key, llm-model, llm-web-search,
 settings-feedback, settings-save, settings-close, context-dialog, youmd-input,
 history-file, history-summary, history-remove, context-feedback, context-save,
 context-close, disclosure-dialog, catalog-detail, trace, export-md, export-json,

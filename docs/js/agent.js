@@ -9,6 +9,7 @@ const MAX_QUERY_CHARACTERS = 6000;
 const MAX_YOUMD_CONTEXT_CHARACTERS = 8000;
 const MAX_CONVERSATION_CONTEXT_CHARACTERS = 18000;
 const MAX_HISTORY_CONTEXT_CHARACTERS = 9600;
+const MAX_CATALOG_MANIFEST_CHARACTERS = 8000;
 
 // Sent as its own system message. This directly reaches the configured LLM
 // endpoint — see CONTRACT.md and the app's privacy copy for what "local-only"
@@ -97,6 +98,90 @@ function priorTurnMessages(conversation) {
   return out;
 }
 
+function buildCatalogManifestBlock(context) {
+  const manifest = context && context.catalogManifest;
+  if (manifest === null || manifest === undefined) return "## Catalog manifest\nNot supplied.";
+  let text;
+  try {
+    text = typeof manifest === "string" ? manifest : JSON.stringify(manifest);
+  } catch {
+    text = "Unavailable.";
+  }
+  return "## Catalog manifest\n" + String(text || "Unavailable.").slice(0, MAX_CATALOG_MANIFEST_CHARACTERS);
+}
+
+function makeAbortError() {
+  const err = new Error("The operation was aborted.");
+  err.name = "AbortError";
+  return err;
+}
+
+function abortable(promise, signal) {
+  if (!signal) return promise;
+  if (signal.aborted) return Promise.reject(makeAbortError());
+  return new Promise((resolve, reject) => {
+    const abort = () => reject(makeAbortError());
+    signal.addEventListener("abort", abort, { once: true });
+    Promise.resolve(promise).then(
+      (value) => {
+        signal.removeEventListener("abort", abort);
+        resolve(value);
+      },
+      (err) => {
+        signal.removeEventListener("abort", abort);
+        reject(err);
+      }
+    );
+  });
+}
+
+function isExactOpenRouter(baseUrl) {
+  try {
+    return new URL(String(baseUrl || "")).hostname === "openrouter.ai";
+  } catch {
+    return false;
+  }
+}
+
+function localToolSchemas(tools) {
+  const handlers = (tools && tools.handlers) || {};
+  const schemas = Array.isArray(tools && tools.schemas) ? tools.schemas : [];
+  return schemas.filter((schema) => {
+    const name = schema && schema.function && schema.function.name;
+    return typeof name === "string" && typeof handlers[name] === "function";
+  });
+}
+
+function toolResultContent(value) {
+  try {
+    const content = JSON.stringify(value);
+    return typeof content === "string"
+      ? content
+      : JSON.stringify({ error: "tool returned a non-serializable result" });
+  } catch {
+    return JSON.stringify({ error: "tool returned a non-serializable result" });
+  }
+}
+
+function normalizeToolResult(value) {
+  if (value === null || value === undefined) return { error: "tool returned no result" };
+  try {
+    if (typeof JSON.stringify(value) === "string") return value;
+  } catch {
+    // Replaced with a repairable result below.
+  }
+  return { error: "tool returned a non-serializable result" };
+}
+
+function resultCount(value) {
+  return value && typeof value.count === "number" ? value.count : 0;
+}
+
+function resolvedIds(value) {
+  const records = Array.isArray(value) ? value : Array.isArray(value && value.results) ? value.results : [];
+  return new Set(records.map((record) => record && record.id).filter((id) => typeof id === "string"));
+}
+
 export async function runAgent(opts) {
   const config = opts.config;
   const prompts = opts.prompts;
@@ -105,12 +190,40 @@ export async function runAgent(opts) {
   const query = opts.query;
   const conversation = opts.conversation;
   const emit = typeof opts.onEvent === "function" ? opts.onEvent : function () {};
-  const signal = opts.signal || null;
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
-  const budget = opts.budget || DEFAULT_BUDGET;
+  const budget = { ...DEFAULT_BUDGET, ...(opts.budget || {}) };
+  const maxMs = Number.isFinite(budget.maxMs) ? Math.max(0, budget.maxMs) : DEFAULT_BUDGET.maxMs;
+  const maxSteps = Number.isFinite(budget.maxSteps) ? Math.max(0, budget.maxSteps) : DEFAULT_BUDGET.maxSteps;
+  const externalSignal = opts.signal || null;
+  const controller = new AbortController();
+  let externallyAborted = false;
+  let timedOut = false;
+  const abortFromUser = () => {
+    externallyAborted = true;
+    if (!controller.signal.aborted) controller.abort();
+  };
+  if (externalSignal) {
+    if (externalSignal.aborted) abortFromUser();
+    else externalSignal.addEventListener("abort", abortFromUser, { once: true });
+  }
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (!controller.signal.aborted) controller.abort();
+  }, maxMs);
 
   let usage = null;
   const fail = () => ({ ok: false, reply: "", queue: null, usage });
+  const abortFailure = () => {
+    if (externallyAborted || externalSignal?.aborted) {
+      emit({ type: "error", code: "aborted", message: "Stopped." });
+    } else {
+      emit({ type: "error", code: "budget", message: "Search took too long and was stopped." });
+    }
+    return fail();
+  };
+  const ensureActive = () => {
+    if (controller.signal.aborted) throw makeAbortError();
+  };
 
   try {
     if (typeof config.apiKey !== "string" || config.apiKey.trim() === "") {
@@ -118,10 +231,14 @@ export async function runAgent(opts) {
       return fail();
     }
 
-    const deadline = Date.now() + budget.maxMs;
+    const requestTools = localToolSchemas(tools);
+    if (config.webSearch === true && isExactOpenRouter(config.baseUrl)) {
+      requestTools.push({ type: "openrouter:web_search" });
+    }
     const messages = [
       { role: "system", content: prompts.system },
       { role: "system", content: buildContextBlock(context) },
+      { role: "system", content: buildCatalogManifestBlock(context) },
       ...priorTurnMessages(conversation),
       {
         role: "user",
@@ -132,20 +249,15 @@ export async function runAgent(opts) {
     emit({ type: "status", text: "Planning search" });
 
     let finalText = null;
-    for (let step = 0; step < budget.maxSteps; step++) {
-      if (signal && signal.aborted) {
-        emit({ type: "error", code: "aborted", message: "Stopped." });
-        return fail();
-      }
-      if (Date.now() > deadline) {
-        emit({ type: "error", code: "budget", message: "Search took too long and was stopped." });
-        return fail();
-      }
-
-      const data = await callChatCompletion(
-        config,
-        { messages, tools: tools.schemas, tool_choice: "auto" },
-        { fetchImpl, signal }
+    for (let step = 0; step < maxSteps; step++) {
+      ensureActive();
+      const data = await abortable(
+        callChatCompletion(
+          config,
+          { messages, tools: requestTools, tool_choice: "auto" },
+          { fetchImpl, signal: controller.signal }
+        ),
+        controller.signal
       );
       usage = addUsage(usage, data.usage);
 
@@ -154,28 +266,41 @@ export async function runAgent(opts) {
 
       if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
         for (const call of msg.tool_calls) {
-          const name = call.function.name;
-          let args = {};
+          ensureActive();
+          const name = call && call.function && typeof call.function.name === "string"
+            ? call.function.name
+            : "unknown";
+          const toolCallId = call && typeof call.id === "string" ? call.id : "";
+          let args;
+          let result = null;
           try {
-            args = JSON.parse(call.function.arguments || "{}");
-          } catch (err) {
+            args = JSON.parse((call && call.function && call.function.arguments) || "{}");
+            if (!args || typeof args !== "object" || Array.isArray(args)) {
+              throw new Error("tool arguments must be a JSON object");
+            }
+          } catch {
             args = {};
+            result = { error: "tool arguments must be valid JSON object" };
           }
           emit({ type: "tool_call", name, args });
 
-          const handler = tools.handlers[name];
-          let result;
-          if (!handler) {
+          const handler = tools && tools.handlers && tools.handlers[name];
+          if (result) {
+            // The role:tool result gives the model a chance to repair its call.
+          } else if (name === "openrouter:web_search" || typeof handler !== "function") {
             result = { error: "unknown tool" };
           } else {
             try {
-              result = await handler(args);
+              result = normalizeToolResult(
+                await abortable(Promise.resolve(handler(args, controller.signal)), controller.signal)
+              );
             } catch (err) {
-              result = { error: String(err.message) };
+              if (err && err.name === "AbortError") throw err;
+              result = { error: String((err && err.message) || err) };
             }
           }
-          emit({ type: "tool_result", name, count: result.count ?? 0 });
-          messages.push({ role: "tool", tool_call_id: call.id, content: JSON.stringify(result) });
+          emit({ type: "tool_result", name, count: resultCount(result) });
+          messages.push({ role: "tool", tool_call_id: toolCallId, content: toolResultContent(result) });
         }
         continue;
       }
@@ -192,10 +317,13 @@ export async function runAgent(opts) {
     emit({ type: "status", text: "Writing a reply" });
 
     messages.push({ role: "user", content: prompts.rerank });
-    const finalData = await callChatCompletion(
-      config,
-      { messages },
-      { fetchImpl, signal }
+    const finalData = await abortable(
+      callChatCompletion(
+        config,
+        { messages },
+        { fetchImpl, signal: controller.signal }
+      ),
+      controller.signal
     );
     usage = addUsage(usage, finalData.usage);
 
@@ -206,8 +334,16 @@ export async function runAgent(opts) {
       emit({ type: "error", code: "parse", message: "The model did not return valid JSON." });
       return fail();
     }
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+      emit({ type: "error", code: "parse", message: "The model did not return a JSON object." });
+      return fail();
+    }
 
     const reply = typeof parsed.reply === "string" ? parsed.reply : "";
+    if (reply.trim() === "") {
+      emit({ type: "error", code: "parse", message: "The model response needs a non-empty reply." });
+      return fail();
+    }
 
     // queue stays null ("leave the display unchanged") unless the model
     // explicitly included a queue key, even an empty array ("clear it").
@@ -222,8 +358,11 @@ export async function runAgent(opts) {
         if (rawIds.length === MAX_QUEUE_IDS) break;
       }
       if (rawIds.length > 0) {
-        const resolved = await tools.handlers.get_titles({ ids: rawIds });
-        const foundIds = new Set(((resolved && resolved.results) || []).map((r) => r.id));
+        const resolved = await abortable(
+          Promise.resolve(tools.resolve(rawIds, controller.signal)),
+          controller.signal
+        );
+        const foundIds = resolvedIds(resolved);
         queue = rawIds.filter((id) => foundIds.has(id));
       } else {
         queue = [];
@@ -233,11 +372,18 @@ export async function runAgent(opts) {
     emit({ type: "done", reply, queue, usage });
     return { ok: true, reply, queue, usage };
   } catch (err) {
-    if (err && err.name === "AbortError") {
+    if (externallyAborted || externalSignal?.aborted) {
+      return abortFailure();
+    } else if (timedOut) {
+      return abortFailure();
+    } else if (err && err.name === "AbortError") {
       emit({ type: "error", code: "aborted", message: "Stopped." });
     } else {
       emit({ type: "error", code: (err && err.code) || "network", message: err && err.message });
     }
     return fail();
+  } finally {
+    clearTimeout(timer);
+    if (externalSignal) externalSignal.removeEventListener("abort", abortFromUser);
   }
 }

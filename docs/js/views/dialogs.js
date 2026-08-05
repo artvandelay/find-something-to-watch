@@ -6,6 +6,14 @@ import {
   selectedProviders
 } from "./dom.js";
 
+function isOpenRouterUrl(value) {
+  try {
+    return new URL(String(value || "")).hostname === "openrouter.ai";
+  } catch {
+    return false;
+  }
+}
+
 /**
  * Secondary UI: settings (subscriptions + LLM key), profile & context
  * (You.md + watch-history import), and the hidden developer console.
@@ -39,6 +47,9 @@ export function createDialogs(el, deps) {
         el.llmBaseUrl.value = llm.baseUrl || "";
         el.llmApiKey.value = llm.apiKey || "";
         el.llmModel.value = llm.model || "";
+        el.llmWebSearch.checked = llm.webSearch === true;
+        el.llmWebSearch.disabled = !isOpenRouterUrl(el.llmBaseUrl.value);
+        if (el.llmWebSearch.disabled) el.llmWebSearch.checked = false;
         feedback(el.settingsFeedback);
         el.settingsDialog.showModal();
       } catch (err) {
@@ -56,7 +67,8 @@ export function createDialogs(el, deps) {
       const llm = {
         baseUrl: el.llmBaseUrl.value.trim(),
         apiKey: el.llmApiKey.value.trim(),
-        model: el.llmModel.value.trim()
+        model: el.llmModel.value.trim(),
+        webSearch: isOpenRouterUrl(el.llmBaseUrl.value) && el.llmWebSearch.checked
       };
       if (llm.apiKey && !isAbsoluteHttpUrl(llm.baseUrl)) {
         feedback(el.settingsFeedback, "Enter an absolute HTTP(S) model base URL before saving the API key.");
@@ -79,6 +91,11 @@ export function createDialogs(el, deps) {
     });
 
     el.settingsClose.addEventListener("click", () => el.settingsDialog.close());
+    el.llmBaseUrl.addEventListener("input", () => {
+      const enabled = isOpenRouterUrl(el.llmBaseUrl.value);
+      el.llmWebSearch.disabled = !enabled;
+      if (!enabled) el.llmWebSearch.checked = false;
+    });
   }
 
   // ---- Profile & context: You.md + watch-history import ----

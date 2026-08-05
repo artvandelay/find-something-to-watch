@@ -248,7 +248,7 @@ const GLOBAL_KEYS = [
   "window", "document", "navigator", "location", "fetch", "Event", "CustomEvent",
   "KeyboardEvent", "MouseEvent", "Blob", "URL", "HTMLElement", "Node", "getComputedStyle",
   "requestAnimationFrame", "cancelAnimationFrame", "localStorage", "indexedDB", "IDBKeyRange",
-  "requestIdleCallback", "Response", "Headers", "AbortController", "FileReader", "File"
+  "requestIdleCallback", "Response", "Headers", "AbortController", "FileReader", "File", "Worker"
 ];
 
 function swapGlobals(window) {

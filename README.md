@@ -18,6 +18,10 @@ directly to the configured endpoint with the key for authentication. When you im
 filenames, structural metadata, and deterministic bounded sample rows or records are sent directly to
 OpenRouter to infer the file layout; the complete upload stays in your browser.
 
+Model-authored catalog analysis runs locally in browser Workers. The main thread keeps the trusted catalog
+records used to render cards, playlists, the initial queue, and no-key keyword search. The model sees
+bounded results from one local `run_catalog_js` tool, never watch URLs or poster URLs.
+
 ## Why
 
 OTT catalogs are enormous, and their built-in search only matches titles. You cannot find something by
@@ -31,6 +35,11 @@ you can change compatible endpoint and model settings later in the in-app **Sett
 
 The key is stored only in `localStorage` on your device — it is never sent anywhere except to the
 configured endpoint. It is required to enter the normal app experience.
+
+**Web search is off by default.** The Settings dialog can enable it only when the base URL hostname is
+exactly `openrouter.ai`. When enabled, OpenRouter may process relevant queries with web search and can
+add cost. It is never shown during the three-step onboarding flow, and it does not change the local
+catalog or subscription boundary.
 
 No catalog key of any kind is needed at runtime. The catalog is a static JSON file built ahead of time
 (see below) and shipped with the site.
@@ -52,8 +61,8 @@ the import bounded.
 ## Subscriptions are a hard boundary
 
 Onboarding (and Settings, later) asks which of the 26 curated India services you actually subscribe to.
-Every search, filter, sample, and recommendation-display card is restricted to titles available on at
-least one of those services, and every watch link shown is intersected down to just your subscriptions —
+Every local search, model catalog analysis, and recommendation-display card is restricted to titles
+available on at least one of those services, and every watch link shown is intersected down to just your subscriptions —
 you never see a provider or a link for a service you didn't select. A title's link is labelled to match
 what it actually is: a true per-title deep link ("Watch on ..."), a provider search page ("Find on ..."),
 or the shared TMDB watch page that lists real providers itself ("See where to watch").
@@ -61,7 +70,7 @@ or the shared TMDB watch page that lists real providers itself ("See where to wa
 ## Ask naturally
 
 The composer is a minimal natural-language prompt. Ask for runtime, language, genre, mood, provider, or
-anything else in ordinary words; the agent's structured catalog tools retain those filters while selected
+anything else in ordinary words; the agent's `run_catalog_js` analysis retains those constraints while selected
 subscriptions remain a hard boundary.
 
 Ratings shown are TMDB `vote_average` (audience scores out of 10), not IMDb ratings.
@@ -134,6 +143,9 @@ Module checks (development-only):
 
 ```bash
 npm run check
+node scripts/stress_agent_hostile.mjs
+node scripts/stress_search_perf.mjs
+bash scripts/scan_secrets.sh
 ```
 
 ### Whole-app boot test
@@ -156,6 +168,21 @@ node scripts/check_app_boot.mjs
 `scripts/harness/app.mjs` provides the boot helper. Pass `storage` from `createStorage()` to share
 state between two boots and simulate a reload, `mobile: true` to start at the drawer breakpoint, and
 `records` to substitute catalog fixtures.
+
+### Deterministic browser test
+
+The browser pass uses a real catalog Worker and mocks only chat completions. It never reads the root
+`.env` or sends a real key:
+
+```bash
+node scripts/e2e_catalog_server.mjs
+# In another terminal, open:
+# http://127.0.0.1:8916/?testMode=1&testProviders=netflix,prime
+```
+
+Verify one `run_catalog_js` call, a subscription-scoped queue, bounded timeout recovery, and a second
+successful query after the timeout. Run one live `stress_agent_live.mjs --limit 1` query separately with
+`OPENROUTER_API_KEY` in the root `.env`; never log that key.
 
 Stress suites:
 
@@ -191,12 +218,16 @@ bash scripts/scan_secrets.sh
   - `docs/js/playlists.js` — immutable Watch later and named-playlist domain rules
   - `docs/js/providers.js` — shared provider slugs/labels, language names, and
     watch-link-kind helpers (the one module `tools.js`/`exporters.js` import)
-  - `docs/js/tools.js` — browser-local agent tools, subscription-gated
-  - `docs/js/agent.js` — OpenAI-compatible tool-calling loop with bounded multi-turn
-    history and a reply + optional queue-update response
+  - `docs/js/catalog-runtime.js` / `docs/js/catalog-worker.js` — trusted Worker host,
+    subscription-scoped catalog protocol, and final card resolution
+  - `docs/js/catalog-execution.js` / `docs/js/catalog-executor.js` — disposable
+    bounded JavaScript executor for model-authored catalog analysis
+  - `docs/js/tools.js` — one `run_catalog_js` model tool with observed-ID queue grounding
+  - `docs/js/agent.js` — shared-client, two-stage tool and rerank loop with bounded
+    multi-turn history and a reply + optional queue-update response
   - `docs/js/memory.js` — versioned IndexedDB adapter for profile, conversation, queue, You.md, watch
     history, and playlists (see CONTRACT.md's "Browser memory" section)
-  - `docs/js/store.js` — localStorage, now scoped to just the LLM key/model/baseUrl
+  - `docs/js/store.js` — localStorage for the LLM key, model, base URL, and OpenRouter-only web-search opt-in
   - `docs/js/exporters.js` — output formats
   - `docs/js/views/` — onboarding, sidebar, chat, Markdown, recommendation-queue, playlist, and dialog
     UI modules, coordinated by `docs/js/ui.js`
@@ -212,8 +243,9 @@ bash scripts/scan_secrets.sh
 - `RELEASE_CHECKLIST.md` — remaining checks before tagging and publishing
 
 `docs/js/ui.js` coordinates the DOM-facing views. The history importer keeps complete files local and
-uses the shared LLM client only for its bounded schema-inference request; catalog and agent tools still
-enforce subscription gating before candidates and links reach the UI.
+uses the shared LLM client only for its bounded schema-inference request. The trusted Worker applies
+subscription scope before model analysis and resolution, while the main thread retains trusted
+presentation data. The disposable executor is fault containment, not a hostile-code security sandbox.
 
 ## Data and attribution
 

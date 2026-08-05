@@ -16,6 +16,10 @@ only filenames, structural metadata, and deterministic bounded sample rows or re
 to OpenRouter to infer the file layout. The complete export remains in your browser; there is no server,
 account, or cloud sync.
 
+Catalog analysis requested by the model runs locally in browser Workers. The main thread keeps the trusted
+records used for recommendation cards, playlists, and no-key keyword search; the model does not receive
+watch URLs or poster URLs.
+
 (Running a local copy instead? From the project folder run
 `python3 -m http.server --directory docs` and open http://localhost:8000.)
 
@@ -34,6 +38,16 @@ The first time you open the app, complete these three short steps:
 Click **Continue** to enter the app. This flow appears once; reopen subscriptions and key settings from
 **Settings**, and edit You.md or replace history from **Profile & context** later. You.md is deliberately
 not an onboarding field.
+
+## Settings and optional web search
+
+**Settings** lets you change subscriptions, model endpoint, API key, and model name. It also has an
+**Allow web search with OpenRouter (can add cost)** checkbox. The checkbox is available only when the
+base URL hostname is exactly `openrouter.ai`; changing to any other endpoint clears and disables it.
+
+Web search is off by default and does not appear in onboarding. When enabled, OpenRouter may process
+relevant queries with web search and may charge for that extra work. It does not change the local catalog,
+the subscription gate, or the rule that recommendations must be grounded in catalog results.
 
 ## The three-region layout
 
@@ -59,7 +73,9 @@ Type what you're in the mood for, the way you'd say it to a friend:
 The agent replies with short paragraphs or simple lists and may update the recommendation tray below.
 Mention mood, time available, language, genre, a provider, or what to avoid directly in your message.
 Selected subscriptions still gate every candidate and watch link. Adding You.md and watch history under
-**Profile & context** can make picks more personal.
+**Profile & context** can make picks more personal. The model receives results from one local catalog
+analysis tool; only IDs observed in that tool's output (or already displayed in the tray) can become new
+recommendations after the app resolves them against your current subscriptions.
 
 ## Understanding the recommendation cards
 
@@ -126,9 +142,13 @@ this is not encrypted storage and is not a backup, so export a backup first if t
 - **"auth" error** — your key is wrong, revoked, or pasted with extra spaces. Re-enter it in Settings.
 - **"credit" error** — your model provider account is out of credit. Top it up or switch models.
 - **"rate" error** — you're sending requests too quickly for your plan. Wait a moment and retry.
+- **Web search is unavailable** — it is a Settings-only OpenRouter option. Set the base URL to an
+  OpenRouter URL or leave web search off.
 - **Picks feel generic** — add a You.md and your viewing history under **Profile & context**.
 - **The catalog line says it's still preparing** — search is blocked until the title index finishes
   building (usually under a second); a second note about "refining with synopses" may linger briefly
   after that while the fuller, synopsis-aware index finishes in the background.
+- **Catalog analysis is still preparing** — no-key keyword search and playlists continue to work. Wait
+  a moment before retrying a keyed agent request.
 - **A recommended title has no working link** — your subscriptions changed since it was added to the
   tray, or the snapshot's link for it is stale; send a new message or start a **New chat** to refresh.

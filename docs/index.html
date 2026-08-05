@@ -167,9 +167,15 @@
           <label for="llm-model">Model</label>
           <input id="llm-model" name="llm-model" type="text" placeholder="openai/gpt-4o-mini">
         </div>
+        <div class="field">
+          <label for="llm-web-search">
+            <input id="llm-web-search" name="llm-web-search" type="checkbox">
+            Allow web search with OpenRouter (can add cost)
+          </label>
+        </div>
       </fieldset>
-      <p class="note">Your key is stored only in this browser and is sent directly to the endpoint above
-        whenever you send a message.</p>
+      <p class="note">Model-generated catalog code runs in a disposable Worker. Enabled web search lets
+        OpenRouter process relevant queries and can add cost.</p>
       <p id="settings-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">
         <button id="settings-save" type="button">Save</button>

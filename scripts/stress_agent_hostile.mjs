@@ -45,15 +45,21 @@ function ok(payload) {
 
 function makeTools(overrides = {}) {
   return {
-    schemas: [],
+    schemas: [{
+      type: "function",
+      function: { name: "run_catalog_js", description: "local catalog analysis", parameters: { type: "object" } }
+    }],
     handlers: {
-      search_titles: async () => ({
+      run_catalog_js: async () => ({
         count: 1,
         results: [{ id: "netflix:1", t: "A", s: "A perfectly nice film." }]
       }),
-      get_titles: async () => ({
-        count: 1,
-        results: [{
+      ...overrides
+    },
+    resolve: async (ids) => {
+      const known = new Map([[
+        "netflix:1",
+        {
           id: "netflix:1",
           t: "A",
           y: 2020,
@@ -65,9 +71,9 @@ function makeTools(overrides = {}) {
           g: ["Comedy"],
           u: { netflix: "https://x/1" },
           img: null
-        }]
-      }),
-      ...overrides
+        }
+      ]]);
+      return ids.map((id) => known.get(id)).filter(Boolean);
     }
   };
 }
@@ -81,7 +87,7 @@ function happyFetch() {
           tool_calls: [{
             id: "c1",
             type: "function",
-            function: { name: "search_titles", arguments: "{}" }
+            function: { name: "run_catalog_js", arguments: "{}" }
           }]
         }
       }]
@@ -208,7 +214,7 @@ const cases = [
             tool_calls: [{
               id: "c" + n,
               type: "function",
-              function: { name: "search_titles", arguments: "{}" }
+              function: { name: "run_catalog_js", arguments: "{}" }
             }]
           }
         }]
@@ -237,7 +243,7 @@ const cases = [
 
   ["prompt injection inside a tool result is treated as data", async () => {
     const tools = makeTools({
-      search_titles: async () => ({
+      run_catalog_js: async () => ({
         count: 1,
         results: [{
           id: "netflix:1",
@@ -260,26 +266,29 @@ const cases = [
     }
   }],
 
-  ["tool returning null/undefined -> clean surfaced error, no unhandled TypeError", async () => {
-    const tools = makeTools({ search_titles: async () => undefined });
-    const fetchImpl = counted(async () => ok({
-      choices: [{
-        message: {
-          role: "assistant",
-          tool_calls: [{
-            id: "c1",
-            type: "function",
-            function: { name: "search_titles", arguments: "{}" }
-          }]
-        }
-      }]
-    }));
+  ["null tool result becomes a repairable response", async () => {
+    const tools = makeTools({ run_catalog_js: async () => undefined });
+    let index = 0;
+    const responses = [
+      ok({
+        choices: [{
+          message: {
+            role: "assistant",
+            tool_calls: [{
+              id: "c1",
+              type: "function",
+              function: { name: "run_catalog_js", arguments: "{}" }
+            }]
+          }
+        }]
+      }),
+      ok({ choices: [{ message: { role: "assistant", content: "done thinking" } }] }),
+      ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Recovered.\"}" } }] })
+    ];
+    const fetchImpl = counted(async () => responses[index++]);
     const { events, result } = await drive({ tools, fetchImpl });
-    const err = errorOf(events);
-    assert.ok(err, "expected an error event");
-    assert.equal(err.code, "network");
-    assert.equal(result.reply, "");
-    assert.equal(result.queue, null);
+    assert.equal(errorOf(events), null);
+    assert.equal(result.reply, "Recovered.");
   }],
 
   ["empty choices array in API response -> clean error, no crash", async () => {

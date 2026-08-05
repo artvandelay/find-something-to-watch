@@ -1,8 +1,8 @@
 // Live OpenRouter stress harness for the agent loop. Makes real API calls.
 // Usage: node scripts/stress_agent_live.mjs [--limit N]
 // Key resolution: process.env.OPENROUTER_API_KEY first, then the .env file at
-// the repo root (override the path with STRESS_ENV_FILE). The key is never
-// printed. Missing key exits non-zero so the script is safe to wire into CI.
+// the repo root. The key is never printed. Missing key exits non-zero so the
+// script is safe to wire into CI.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -10,9 +10,12 @@ import { fileURLToPath } from "node:url";
 import { runAgent } from "../docs/js/agent.js";
 import { DEFAULT_LLM } from "../docs/js/store.js";
 import { createTools } from "../docs/js/tools.js";
-import { buildIndex, search, filterIndices } from "../docs/js/catalog.js";
+import { executeCatalogCode, prepareExecutionEnvironment } from "../docs/js/catalog-execution.js";
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
+const MAX_PROMPT_TOKENS = 20000;
+const MAX_QUERY_MS = 60000;
+const STRESS_SUBSCRIPTIONS = new Set(["netflix", "prime", "hotstar"]);
 
 function parseLimit(argv) {
   const i = argv.indexOf("--limit");
@@ -50,8 +53,150 @@ async function readKeyFromEnvFile(file) {
   return "";
 }
 
+function normalizedSubscriptions(scope) {
+  return new Set((Array.isArray(scope?.subscriptions) ? scope.subscriptions : [])
+    .filter((slug) => typeof slug === "string" && slug.trim() !== ""));
+}
+
+function scopedRecord(record, subscriptions, excludeKeys) {
+  if (!record || !Array.isArray(record.p) || !record.p.some((slug) => subscriptions.has(slug))) {
+    return null;
+  }
+  if (excludeKeys.has(record.k)) return null;
+  return {
+    id: record.id,
+    t: record.t,
+    y: record.y,
+    k: record.k,
+    rt: record.rt,
+    s: record.s || "",
+    im: record.im,
+    r: record.r,
+    p: record.p.filter((slug) => subscriptions.has(slug)),
+    l: record.l || null,
+    g: Array.isArray(record.g) ? record.g : [],
+    v: record.v
+  };
+}
+
+function card(record, subscriptions) {
+  if (!record || !Array.isArray(record.p) || !record.p.some((slug) => subscriptions.has(slug))) {
+    return null;
+  }
+  const p = record.p.filter((slug) => subscriptions.has(slug));
+  const u = {};
+  for (const slug of p) {
+    if (typeof record.u?.[slug] === "string") u[slug] = record.u[slug];
+  }
+  return {
+    id: record.id,
+    t: record.t,
+    y: record.y,
+    k: record.k,
+    rt: record.rt,
+    r: record.r,
+    p,
+    u,
+    img: record.img,
+    s: record.s || "",
+    l: record.l || null,
+    g: Array.isArray(record.g) ? record.g : [],
+    reason: ""
+  };
+}
+
+// Browser catalog runtimes use a Worker. Node cannot, so live stress uses this
+// in-process adapter over the same scoped projection and trusted display cards.
+async function createLocalRuntimeAdapter() {
+  const catalog = JSON.parse(await readFile(path.join(ROOT, "docs/assets/catalog.json"), "utf8"));
+  const sidecar = JSON.parse(await readFile(path.join(ROOT, "docs/assets/catalog.text.json"), "utf8"));
+  const leanRecords = Array.isArray(catalog) ? catalog : catalog.records;
+  const synopses = sidecar && sidecar.s && typeof sidecar.s === "object" ? sidecar.s : {};
+  if (!Array.isArray(leanRecords)) throw new Error("catalog records are unavailable");
+
+  const records = leanRecords.map((record) => ({
+    ...record,
+    s: typeof synopses[record.id] === "string" ? synopses[record.id] : (record.s || "")
+  }));
+  const recordsById = new Map(records.map((record) => [record.id, record]));
+
+  return {
+    kind: "local Node catalog adapter",
+    records,
+    recordsById,
+    catalogIds: new Set(recordsById.keys()),
+    async runCode({ code, scope, excludeKeys = [] }) {
+      const subscriptions = normalizedSubscriptions(scope);
+      const excluded = new Set((Array.isArray(excludeKeys) ? excludeKeys : [])
+        .filter((key) => typeof key === "string" && key.trim() !== ""));
+      const projection = records
+        .map((record) => scopedRecord(record, subscriptions, excluded))
+        .filter(Boolean);
+      const environment = prepareExecutionEnvironment(JSON.stringify({
+        records: projection,
+        meta: { count: projection.length },
+        fields: ["id", "t", "y", "k", "rt", "s", "im", "r", "p", "l", "g", "v"]
+      }));
+      const execution = await executeCatalogCode(code, environment);
+      return { result: execution.json, observedIds: execution.observedIds, count: execution.count };
+    },
+    async resolve({ ids, scope }) {
+      const subscriptions = normalizedSubscriptions(scope);
+      const requested = new Set((Array.isArray(ids) ? ids : [])
+        .filter((id) => typeof id === "string" && id.trim() !== ""));
+      return [...requested]
+        .map((id) => card(recordsById.get(id), subscriptions))
+        .filter(Boolean);
+    }
+  };
+}
+
+function isScopedCard(record, subscriptions) {
+  if (!record || typeof record.id !== "string") return false;
+  if (!Array.isArray(record.p) || record.p.length === 0 || record.p.some((slug) => !subscriptions.has(slug))) {
+    return false;
+  }
+  return !record.u || typeof record.u !== "object"
+    || Object.keys(record.u).every((slug) => subscriptions.has(slug));
+}
+
+function createObservedTools(runtime, subscriptions) {
+  const observed = { records: new Map(), scopeViolations: [] };
+  const observedRuntime = {
+    async runCode(request) {
+      const value = await runtime.runCode(request);
+      for (const id of Array.isArray(value?.observedIds) ? value.observedIds : []) {
+        const record = runtime.recordsById.get(id);
+        if (!record || !record.p.some((slug) => subscriptions.has(slug))) {
+          observed.scopeViolations.push("run_catalog_js:" + id);
+        } else {
+          observed.records.set(id, record);
+        }
+      }
+      return value;
+    },
+    async resolve(request) {
+      const cards = await runtime.resolve(request);
+      for (const record of cards) {
+        if (!isScopedCard(record, subscriptions)) {
+          observed.scopeViolations.push("resolve:" + (record && record.id ? record.id : "unknown"));
+        }
+      }
+      return cards;
+    }
+  };
+  const tools = createTools({
+    runtime: observedRuntime,
+    scope: { subscriptions: [...subscriptions] },
+    currentQueueIds: [],
+    seenKeys: []
+  });
+
+  return { tools, observed };
+}
+
 const limit = parseLimit(process.argv.slice(2));
-const envFile = process.env.STRESS_ENV_FILE || path.join(ROOT, ".env");
+const envFile = path.join(ROOT, ".env");
 const apiKey = (process.env.OPENROUTER_API_KEY || "").trim()
   || await readKeyFromEnvFile(envFile);
 
@@ -60,17 +205,14 @@ if (!apiKey) {
   process.exit(1);
 }
 
-const catalog = JSON.parse(await readFile(path.join(ROOT, "docs/assets/catalog.json"), "utf8"));
 const prompts = JSON.parse(await readFile(path.join(ROOT, "docs/assets/prompts.json"), "utf8"));
-const records = catalog.records;
-const catalogIds = new Set(records.map((r) => r.id));
-const tools = createTools({
-  records,
-  index: buildIndex(records),
-  search,
-  filterIndices,
-  seenKeys: []
-});
+let runtime;
+try {
+  runtime = await createLocalRuntimeAdapter();
+} catch {
+  console.log("catalog runtime could not be instantiated; skipping live stress");
+  process.exit(0);
+}
 
 const config = {
   baseUrl: DEFAULT_LLM.baseUrl,
@@ -107,7 +249,9 @@ const QUERIES = [
 
 const queries = limit === null ? QUERIES : QUERIES.slice(0, limit);
 console.log("live stress: " + queries.length + " queries against " + config.baseUrl
-  + " model " + config.model + " (" + records.length + " catalog records)");
+  + " model " + config.model + " (" + runtime.records.length + " catalog records)");
+console.log("runtime: " + runtime.kind + " | subscriptions: "
+  + [...STRESS_SUBSCRIPTIONS].join(", "));
 
 const SOFT_CODES = new Set(["credit", "rate"]);
 const rows = [];
@@ -120,13 +264,14 @@ const wallStart = Date.now();
 for (const query of queries) {
   const events = [];
   const start = Date.now();
+  const fixture = createObservedTools(runtime, STRESS_SUBSCRIPTIONS);
   let result;
   let thrown = null;
   try {
     result = await runAgent({
       config,
       prompts,
-      tools,
+      tools: fixture.tools,
       context: { youmd: "", history: null, mood: "" },
       query,
       conversation: [],
@@ -143,9 +288,24 @@ for (const query of queries) {
   const errorEvent = events.find((e) => e.type === "error");
   const soft = !thrown && errorEvent && SOFT_CODES.has(errorEvent.code);
   const queue = result.queue || [];
-  const badIds = queue.filter((id) => !catalogIds.has(id));
+  const badIds = queue.filter((id) => !runtime.catalogIds.has(id));
+  const unobservedQueueIds = queue.filter((id) => !fixture.observed.records.has(id));
+  const unscopedQueueIds = queue.filter((id) => {
+    const record = fixture.observed.records.get(id);
+    return record && !record.p.some((slug) => STRESS_SUBSCRIPTIONS.has(slug));
+  });
+  const promptTokens = Number(result.usage && result.usage.prompt_tokens);
+  const budgetViolations = [];
+  if (Number.isFinite(promptTokens) && promptTokens > MAX_PROMPT_TOKENS) {
+    budgetViolations.push("prompt tokens " + promptTokens + " > " + MAX_PROMPT_TOKENS);
+  }
+  if (Number.isFinite(ms) && ms > MAX_QUERY_MS) {
+    budgetViolations.push("time " + ms + " ms > " + MAX_QUERY_MS + " ms");
+  }
   const ok = !thrown && result.ok === true && !errorEvent &&
-    typeof result.reply === "string" && result.reply.trim() !== "" && badIds.length === 0;
+    typeof result.reply === "string" && result.reply.trim() !== "" && badIds.length === 0 &&
+    unobservedQueueIds.length === 0 && unscopedQueueIds.length === 0 &&
+    fixture.observed.scopeViolations.length === 0 && budgetViolations.length === 0;
 
   if (ok) passed++;
   if (soft) softFails++;
@@ -166,6 +326,11 @@ for (const query of queries) {
     detail: thrown ? String(thrown && thrown.message)
       : errorEvent ? errorEvent.code + ": " + errorEvent.message
       : badIds.length ? "unresolved ids: " + badIds.join(",")
+      : unobservedQueueIds.length ? "queue ids not returned by observed tools: " + unobservedQueueIds.join(",")
+      : unscopedQueueIds.length ? "queue ids escaped subscription scope: " + unscopedQueueIds.join(",")
+      : fixture.observed.scopeViolations.length
+        ? "tool results escaped subscription scope: " + fixture.observed.scopeViolations.join(",")
+      : budgetViolations.length ? budgetViolations.join("; ")
       : ""
   });
 }

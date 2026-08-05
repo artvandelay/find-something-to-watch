@@ -6,24 +6,23 @@ const tools = {
   schemas: [{
     type: "function",
     function: {
-      name: "search_titles",
+      name: "run_catalog_js",
       description: "d",
       parameters: { type: "object", properties: {}, required: [] }
     }
   }],
   handlers: {
-    search_titles: async () => ({ count: 1, results: [{ id: "netflix:1", t: "A" }] }),
-    get_titles: async (args) => {
+    run_catalog_js: async () => ({ count: 1, results: [{ id: "netflix:1", t: "A" }] })
+  },
+  resolve: async (ids) => {
       const known = new Map([
         ["netflix:1", {
           id: "netflix:1", t: "A", y: 2020, k: "movie", rt: 90, r: 7,
           p: ["netflix"], l: "en", g: ["Comedy"], u: { netflix: "https://x/1" }, img: null
         }]
       ]);
-      const ids = Array.isArray(args?.ids) ? args.ids : [];
       const results = ids.map((id) => known.get(id)).filter(Boolean);
-      return { count: results.length, results };
-    }
+      return results;
   }
 };
 
@@ -33,7 +32,7 @@ const prompts = JSON.parse(await readFile(
 ));
 const config = { baseUrl: "https://fake/v1", apiKey: "sk-test", model: "m" };
 
-assert.equal(prompts.version, 2);
+assert.equal(prompts.version, 4);
 assert.match(prompts.rerank, /unordered or ordered lists/);
 assert.match(prompts.rerank, /Never emit raw HTML/);
 assert.match(prompts.history_plan, /bounded sample/);
@@ -62,7 +61,7 @@ function ok(payload) {
           tool_calls: [{
             id: "c1",
             type: "function",
-            function: { name: "search_titles", arguments: "{}" }
+            function: { name: "run_catalog_js", arguments: "{}" }
           }]
         }
       }]
@@ -91,7 +90,7 @@ function ok(payload) {
     fetchImpl
   });
 
-  assert.ok(events.some((e) => e.type === "tool_call" && e.name === "search_titles"));
+  assert.ok(events.some((e) => e.type === "tool_call" && e.name === "run_catalog_js"));
   assert.ok(events.some((e) => e.type === "tool_result" && e.count === 1));
   assert.equal(result.ok, true);
   assert.equal(result.reply, "Try Space Heist tonight.");
@@ -306,6 +305,102 @@ function ok(payload) {
   assert.equal(fetched, false);
   assert.equal(result.ok, false);
   assert.equal(events.at(-1).code, "config");
+}
+
+// Test 6 - catalog manifests are bounded and precede prior conversation turns.
+{
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push(JSON.parse(init.body));
+    return requests.length === 1
+      ? ok({ choices: [{ message: { role: "assistant", content: "ready" } }] })
+      : ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Done.\"}" } }] });
+  };
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: { catalogManifest: "x".repeat(9000), youmd: "", history: null, mood: "" },
+    query: "q",
+    conversation: [{ role: "user", content: "earlier turn" }],
+    onEvent: () => {},
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  assert.equal(requests[0].messages[2].role, "system");
+  assert.equal(requests[0].messages[2].content.length, "## Catalog manifest\n".length + 8000);
+  assert.equal(requests[0].messages[3].content, "earlier turn");
+}
+
+// Test 7 - the OpenRouter web tool is advertised only for its exact hostname.
+{
+  for (const [baseUrl, webSearch, expected] of [
+    ["https://openrouter.ai/api/v1", true, true],
+    ["https://api.openrouter.ai/v1", true, false],
+    ["https://openrouter.ai/api/v1", false, false]
+  ]) {
+    const requests = [];
+    const fetchImpl = async (url, init) => {
+      requests.push(JSON.parse(init.body));
+      return requests.length === 1
+        ? ok({ choices: [{ message: { role: "assistant", content: "ready" } }] })
+        : ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Done.\"}" } }] });
+    };
+    const result = await runAgent({
+      config: { ...config, baseUrl, webSearch },
+      prompts,
+      tools,
+      context: { youmd: "", history: null, mood: "" },
+      query: "q",
+      conversation: [],
+      onEvent: () => {},
+      fetchImpl
+    });
+    assert.equal(result.ok, true);
+    assert.equal(
+      requests[0].tools.some((tool) => tool.type === "openrouter:web_search"),
+      expected
+    );
+    assert.equal("tools" in requests[1], false);
+  }
+}
+
+// Test 8 - the internal deadline aborts asynchronous tool handlers.
+{
+  const events = [];
+  const hangingTools = {
+    schemas: tools.schemas,
+    handlers: {
+      run_catalog_js: async (args, signal) => new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(Object.assign(new Error("timed out"), { name: "AbortError" })));
+      })
+    },
+    resolve: tools.resolve
+  };
+  const result = await runAgent({
+    config,
+    prompts,
+    tools: hangingTools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "q",
+    conversation: [],
+    onEvent: (event) => events.push(event),
+    budget: { maxMs: 10 },
+    fetchImpl: sequenceFetch([ok({
+      choices: [{
+        message: {
+          role: "assistant",
+          tool_calls: [{
+            id: "timeout",
+            type: "function",
+            function: { name: "run_catalog_js", arguments: "{}" }
+          }]
+        }
+      }]
+    })])
+  });
+  assert.equal(result.ok, false);
+  assert.equal(events.at(-1).code, "budget");
 }
 
 console.log("check_agent OK");

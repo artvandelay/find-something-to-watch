@@ -12,14 +12,30 @@ const s = createStore(storage);
 
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);
 strictEqual(s.hasKey(), false);
+strictEqual(DEFAULT_LLM.webSearch, false);
 
-s.setLlm({ baseUrl: "https://x/v1", apiKey: "sk-1", model: "m", junk: 1 });
-deepStrictEqual(s.getLlm(), { baseUrl: "https://x/v1", apiKey: "sk-1", model: "m" });
+s.setLlm({ baseUrl: "https://x/v1", apiKey: "sk-1", model: "m", webSearch: true, junk: 1 });
+deepStrictEqual(s.getLlm(), {
+  baseUrl: "https://x/v1",
+  apiKey: "sk-1",
+  model: "m",
+  webSearch: true
+});
 strictEqual(s.hasKey(), true);
+
+storage.setItem(KEYS.llm, JSON.stringify({
+  baseUrl: "https://x/v1",
+  apiKey: "sk-1",
+  model: "m",
+  webSearch: "true"
+}));
+strictEqual(s.getLlm().webSearch, false);
 
 storage.setItem(KEYS.llm, "{not json");
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);
 
+s.setLlm({ baseUrl: "https://x/v1", apiKey: "sk-1", model: "m" });
+strictEqual(s.getLlm().webSearch, false);
 s.clearAll();
 strictEqual(mem.size, 0);
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);

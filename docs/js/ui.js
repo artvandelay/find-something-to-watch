@@ -3,6 +3,7 @@ import { parseWatchHistoryExport, summarize } from "./history.js";
 import { createHistoryPlanInferer } from "./history-model.js";
 import { createTools } from "./tools.js";
 import { runAgent } from "./agent.js";
+import { createCatalogRuntime } from "./catalog-runtime.js";
 import { createStore, DEFAULT_LLM } from "./store.js";
 import { createBrowserMemory } from "./memory.js";
 import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER } from "./providers.js";
@@ -43,6 +44,7 @@ const DOM_IDS = [
   "queue-next", "queue-empty",
   "attribution",
   "settings-dialog", "settings-provider-list", "llm-base-url", "llm-api-key", "llm-model",
+  "llm-web-search",
   "settings-feedback", "settings-save", "settings-close",
   "context-dialog", "youmd-input", "history-file", "history-summary", "history-remove",
   "context-feedback", "context-save", "context-close",
@@ -73,6 +75,8 @@ let recordsById = new Map();
 let catalogMeta = null;
 let index = null;
 let richIndexReady = false;
+let catalogRuntimeState = "BOOTING";
+let catalogRuntimeError = null;
 
 let profile = null;
 let subscriptions = new Set();
@@ -83,6 +87,16 @@ let playlists = null;
 let controller = null;
 let historyController = null;
 let stateGeneration = 0;
+
+const runtime = createCatalogRuntime({
+  onState(nextState) {
+    catalogRuntimeState = nextState;
+    if (nextState === "READY_BASIC" || nextState === "READY_RICH") {
+      catalogRuntimeError = null;
+    }
+    if (sidebar) updateCatalogStatusLine();
+  }
+});
 
 function camelize(id) {
   return id.replace(/-([a-z])/g, (m, letter) => letter.toUpperCase());
@@ -178,15 +192,29 @@ function updateCatalogStatusLine() {
   let line = count.toLocaleString("en-IN") + " titles · snapshot " + builtAt;
   if (!index) line += " · preparing search index…";
   else if (!richIndexReady) line += " · refining with synopses…";
+  if (catalogRuntimeError) line += " · catalog analysis unavailable";
   sidebar.setCatalogStatus(line);
   if (chat) {
-    chat.setNote(!richIndexReady ? "Search is still refining with full synopses — results may be less precise for a moment." : "");
+    const runtimeNote = catalogRuntimeError
+      ? "Catalog analysis is unavailable; keyword search remains available without an API key."
+      : "";
+    chat.setNote(runtimeNote || (!richIndexReady
+      ? "Search is still refining with full synopses — results may be less precise for a moment."
+      : ""));
     chat.setSendReady(Boolean(index));
   }
 }
 
 function refreshSendReadiness() {
   chat.setSendReady(Boolean(index));
+}
+
+function currentScope() {
+  return { subscriptions: [...subscriptions] };
+}
+
+function runtimeIsReady() {
+  return catalogRuntimeState === "READY_BASIC" || catalogRuntimeState === "READY_RICH";
 }
 
 function runWhenIdle(run) {
@@ -337,14 +365,10 @@ function renderConversation() {
 
 function makeTools(seenKeys) {
   return createTools({
-    records,
-    index,
-    search,
-    filterIndices,
-    normalizeTitle,
+    runtime,
+    scope: currentScope(),
+    currentQueueIds: queueIds,
     seenKeys: Array.isArray(seenKeys) ? seenKeys : [],
-    subscriptions,
-    recordsById
   });
 }
 
@@ -372,9 +396,17 @@ function makeEventHandler() {
 }
 
 async function runKeywordFallback(query, seenKeys) {
-  const tools = makeTools(seenKeys);
-  const result = await tools.handlers.search_titles({ query, exclude_seen: seenKeys.length > 0, limit: 20 });
-  const ids = (result.results || []).map((r) => r.id);
+  if (!index) {
+    index = buildIndex(records);
+    updateCatalogStatusLine();
+  }
+  const allowed = new Set(filterIndices(records, {
+    providers: subscriptions,
+    excludeKeys: seenKeys
+  }));
+  const ids = search(index, query, { limit: 20, allow: allowed })
+    .map((result) => records[result.i]?.id)
+    .filter(Boolean);
   queueIds = ids.slice(0, 20);
   const replyText = NO_KEY_REPLY_PREFIX + (ids.length
     ? ids.map((id) => recordsById.get(id)?.t).filter(Boolean).slice(0, 5).join(", ")
@@ -392,12 +424,14 @@ async function onSubmit() {
   if (controller) return;
   const query = chat.getQuery();
   if (!query) return;
-  if (!index) {
-    chat.setNote("Still preparing the catalog — try again in a moment.");
+
+  clearError();
+  const keyedTurn = store.hasKey();
+  if (keyedTurn && !runtimeIsReady()) {
+    chat.setNote("Catalog analysis is still preparing. Try again in a moment.");
     return;
   }
 
-  clearError();
   chat.clearQuery();
   const turnGeneration = stateGeneration;
   const previousConversation = {
@@ -415,7 +449,7 @@ async function onSubmit() {
     showError("Personalization data is unavailable; this search may include watched titles.");
   }
 
-  if (!store.hasKey()) {
+  if (!keyedTurn) {
     chat.setBusy(true);
     sidebar.setBusy(true);
     try {
@@ -450,11 +484,12 @@ async function onSubmit() {
   }
 
   try {
+    const catalogManifest = await runtime.describe({ scope: currentScope() });
     const result = await runAgent({
       config: store.getLlm(),
       prompts,
       tools: makeTools(seenKeys),
-      context: { youmd, history, mood: "" },
+      context: { youmd, history, mood: "", catalogManifest },
       query,
       conversation: priorMessages,
       onEvent: makeEventHandler(),
@@ -534,6 +569,7 @@ async function onSubscriptionsChange(newProviders) {
   cancelActiveTurn();
   profile = await memory.setProfile({ ...profile, providers: newProviders, onboardingComplete: true });
   subscriptions = new Set(profile.providers);
+  updateRuntimeCatalogMetadata();
   sidebar.renderSubscriptions(profile.providers);
   renderQueue();
   renderPlaylists();
@@ -611,6 +647,7 @@ async function onOnboardingComplete(payload) {
     onboardingComplete: true
   });
   subscriptions = new Set(profile.providers);
+  updateRuntimeCatalogMetadata();
   await showShell();
 }
 
@@ -634,6 +671,28 @@ async function loadCatalog() {
   recordsById = new Map();
   for (const rec of records) recordsById.set(rec.id, rec);
   catalogMeta = catalogDoc.meta || {};
+}
+
+function initializeCatalogRuntime() {
+  void runtime.initialize()
+    .catch(reportCatalogRuntimeFailure);
+}
+
+function reportCatalogRuntimeFailure(error) {
+  catalogRuntimeError = error || new Error("Catalog runtime is unavailable.");
+  console.warn("ui: catalog runtime unavailable.", error && error.message ? error.message : error);
+  updateCatalogStatusLine();
+}
+
+function updateRuntimeCatalogMetadata() {
+  void runtime.describe({ scope: currentScope() })
+    .then((manifest) => {
+      if (manifest && manifest.meta && typeof manifest.meta === "object") {
+        catalogMeta = { ...catalogMeta, ...manifest.meta };
+        updateCatalogStatusLine();
+      }
+    })
+    .catch(reportCatalogRuntimeFailure);
 }
 
 async function init() {
@@ -697,6 +756,7 @@ async function init() {
     clearError();
     await loadCatalog();
     updateCatalogStatusLine();
+    initializeCatalogRuntime();
 
     const initResult = await memory.initialize();
     if (initResult.issues && initResult.issues.length > 0) {
@@ -713,6 +773,7 @@ async function init() {
       });
     }
     subscriptions = new Set(profile.providers);
+    updateRuntimeCatalogMetadata();
 
     if (!profile.onboardingComplete) {
       onboarding.show();
@@ -727,4 +788,5 @@ async function init() {
   }
 }
 
+window.addEventListener("pagehide", () => runtime.dispose());
 init();

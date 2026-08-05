@@ -14,7 +14,8 @@ export const LEGACY_CONTEXT_KEYS = Object.freeze({
 export const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "",
-  model: "anthropic/claude-sonnet-4.6"
+  model: "anthropic/claude-sonnet-4.6",
+  webSearch: false
 };
 
 export const YOUMD_TEMPLATE = `# You.md
@@ -72,7 +73,11 @@ export function createStore(storage) {
       if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
         return { ...DEFAULT_LLM };
       }
-      return { ...DEFAULT_LLM, ...parsed };
+      return {
+        ...DEFAULT_LLM,
+        ...parsed,
+        webSearch: parsed.webSearch === true
+      };
     } catch (err) {
       return { ...DEFAULT_LLM };
     }
@@ -84,7 +89,8 @@ export function createStore(storage) {
       return write(KEYS.llm, JSON.stringify({
         baseUrl: source.baseUrl,
         apiKey: source.apiKey,
-        model: source.model
+        model: source.model,
+        webSearch: source.webSearch === true
       }));
     } catch (err) {
       return false;

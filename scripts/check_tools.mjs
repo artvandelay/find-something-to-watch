@@ -1,112 +1,107 @@
-import { strictEqual, deepStrictEqual, ok } from "node:assert/strict";
+import { strictEqual, deepStrictEqual, ok, rejects } from "node:assert/strict";
 import { createTools } from "../docs/js/tools.js";
-import { buildIndex, search, filterIndices, normalizeTitle } from "../docs/js/catalog.js";
 
-const recs = [
-  { id: "netflix:1", t: "Space Heist", y: 2020, k: "movie", rt: 100,
-    s: "A crew of thieves plan a daring heist aboard a space station.",
-    im: null, r: 7.2, p: ["netflix", "prime"], u: { netflix: "https://x/1", prime: "https://y/1" }, img: null,
-    l: "en", g: ["Crime"], v: 10 },
-  { id: "netflix:2", t: "Slow Burn", y: 2015, k: "series", rt: 45,
-    s: "A quiet detective story about a small town and a long grudge.",
-    im: null, r: 8.1, p: ["netflix"], u: { netflix: "https://x/2" }, img: null,
-    l: "en", g: ["Drama"], v: 20 },
-  { id: "netflix:3", t: "Heist Academy", y: 2022, k: "series", rt: 30,
-    s: "Students learn the art of the heist.",
-    im: null, r: null, p: ["netflix"], u: { netflix: "https://x/3" }, img: null,
-    l: "hi", g: ["Comedy"], v: 0 },
-  { id: "netflix:4", t: "Quiet Town", y: 1999, k: "movie", rt: 200,
-    s: "Nothing happens here.",
-    im: null, r: 6.0, p: ["prime"], u: { prime: "https://y/4" }, img: null,
-    l: "hi", g: ["Drama"], v: 5 }
-];
+function fakeRuntime({ result = { summary: "ok" }, observedIds = [], error = null } = {}) {
+  const calls = { runCode: [], resolve: [] };
+  return {
+    calls,
+    async runCode(request) {
+      calls.runCode.push(request);
+      if (error) throw error;
+      return { result: JSON.stringify(result), observedIds };
+    },
+    async resolve(request) {
+      calls.resolve.push(request);
+      return request.ids.map((id) => ({ id }));
+    }
+  };
+}
 
-const t = createTools({
-  records: recs,
-  index: buildIndex(recs),
-  search,
-  filterIndices,
-  normalizeTitle,
-  seenKeys: ["space heist"]
+const scope = { subscriptions: ["netflix"] };
+const runtime = fakeRuntime({
+  result: { titles: ["tmdb:1", "tmdb:2"] },
+  observedIds: ["tmdb:1", "tmdb:2", "tmdb:1"]
+});
+const tools = createTools({
+  runtime,
+  scope,
+  currentQueueIds: ["queue:1", "queue:1", "", 42],
+  seenKeys: ["watched:1", " watched:1 ", "", 42, "watched:2"]
 });
 
-strictEqual(t.schemas.length, 4);
-deepStrictEqual(t.schemas.map((s) => s.function.name),
-  ["search_titles", "filter_titles", "get_titles", "sample_titles"]);
-ok(t.schemas.every((s) => s.type === "function" && s.function.parameters.type === "object"));
+strictEqual(tools.schemas.length, 1);
+strictEqual(Object.keys(tools.handlers).length, 1);
+strictEqual(tools.schemas[0].type, "function");
+strictEqual(tools.schemas[0].function.name, "run_catalog_js");
+strictEqual(tools.schemas[0].function.parameters.properties.code.maxLength, 12000);
+strictEqual(tools.schemas[0].function.parameters.additionalProperties, false);
+ok(tools.schemas[0].function.description.includes("catalog"));
+ok(tools.schemas[0].function.description.includes("return"));
+ok(!("search_titles" in tools.handlers));
+ok(!("filter_titles" in tools.handlers));
+ok(!("get_titles" in tools.handlers));
+ok(!("sample_titles" in tools.handlers));
 
-const a = await t.handlers.search_titles({ query: "heist" });
-strictEqual(a.count, 2);
-deepStrictEqual(Object.keys(a.results[0]).sort(), ["g", "id", "k", "l", "p", "r", "rt", "s", "t", "y"]);
+const success = await tools.handlers.run_catalog_js({ code: "return catalog.search('quiet');" });
+deepStrictEqual(success, { result: { titles: ["tmdb:1", "tmdb:2"] }, count: 2 });
+deepStrictEqual(runtime.calls.runCode, [{
+  code: "return catalog.search('quiet');",
+  scope,
+  excludeKeys: ["watched:1", "watched:2"]
+}]);
 
-const b = await t.handlers.search_titles({ query: "heist", exclude_seen: true });
-strictEqual(b.count, 1);
-strictEqual(b.results[0].id, "netflix:3");
+const malformed = await tools.handlers.run_catalog_js({ code: 42 });
+strictEqual(malformed.code, "invalid_args");
+strictEqual(malformed.count, 0);
+strictEqual(runtime.calls.runCode.length, 1);
 
-const c = await t.handlers.filter_titles({ type: "series", sort: "rating" });
-strictEqual(c.count, 2);
-strictEqual(c.results[0].id, "netflix:2");
+const oversized = await tools.handlers.run_catalog_js({ code: "x".repeat(12001) });
+strictEqual(oversized.code, "invalid_args");
+strictEqual(oversized.count, 0);
 
-const d = await t.handlers.get_titles({ ids: ["netflix:2", "nope:9"] });
-strictEqual(d.count, 1);
-ok("u" in d.results[0]);
-ok("img" in d.results[0]);
+const runtimeError = fakeRuntime({ error: Object.assign(new Error("execution stopped"), { code: "limit" }) });
+const failingTools = createTools({ runtime: runtimeError, scope });
+deepStrictEqual(
+  await failingTools.handlers.run_catalog_js({ code: "return 1;" }),
+  { error: "execution stopped", code: "limit", count: 0 }
+);
 
-const dFiltered = await t.handlers.get_titles({
-  ids: ["netflix:1", "netflix:3"],
-  language: "hi",
-  genre: "Comedy"
+const resolved = await tools.resolve(["queue:1", "tmdb:2", "blocked:1", "tmdb:1", "tmdb:2"]);
+deepStrictEqual(resolved, [{ id: "queue:1" }, { id: "tmdb:2" }, { id: "tmdb:1" }]);
+deepStrictEqual(runtime.calls.resolve, [{
+  ids: ["queue:1", "tmdb:2", "tmdb:1"],
+  scope
+}]);
+
+const manyObserved = Array.from({ length: 30 }, (_, i) => "tmdb:" + i);
+const cappedRuntime = fakeRuntime({ observedIds: manyObserved });
+const cappedTools = createTools({ runtime: cappedRuntime, scope });
+await cappedTools.handlers.run_catalog_js({ code: "return [];" });
+await cappedTools.resolve([...manyObserved, ...manyObserved]);
+strictEqual(cappedRuntime.calls.resolve.length, 1);
+strictEqual(cappedRuntime.calls.resolve[0].ids.length, 20);
+deepStrictEqual(cappedRuntime.calls.resolve[0].scope, scope);
+
+const isolatedRuntime = fakeRuntime({ observedIds: ["isolated:1"] });
+const isolatedTools = createTools({ runtime: isolatedRuntime, scope });
+deepStrictEqual(await isolatedTools.resolve(["tmdb:1", "queue:1"]), []);
+await isolatedTools.handlers.run_catalog_js({ code: "return null;" });
+deepStrictEqual(await isolatedTools.resolve(["tmdb:1", "isolated:1"]), [{ id: "isolated:1" }]);
+
+const abortedRuntime = fakeRuntime();
+const abortedTools = createTools({
+  runtime: abortedRuntime,
+  scope,
+  currentQueueIds: ["queue:1"]
 });
-strictEqual(dFiltered.count, 1);
-strictEqual(dFiltered.results[0].id, "netflix:3");
-
-const e = await t.handlers.sample_titles({ n: 2, seed: 42 });
-strictEqual(e.count, 2);
-
-const f = await t.handlers.sample_titles({ n: 2, seed: 42 });
-deepStrictEqual(e.results.map((x) => x.id), f.results.map((x) => x.id));
-
-const g = await t.handlers.search_titles({ query: "heist", limit: 999 });
-ok(g.count <= 50);
-
-// Subscription gating: createTools({ subscriptions }) restricts every handler's
-// candidates to records with at least one subscribed provider slug, and trims
-// every returned record's p/u down to only the subscribed slugs.
-const gated = createTools({
-  records: recs,
-  index: buildIndex(recs),
-  search,
-  filterIndices,
-  normalizeTitle,
-  seenKeys: [],
-  subscriptions: ["netflix"]
-});
-
-const h = await gated.handlers.search_titles({ query: "heist" });
-strictEqual(h.count, 2);
-ok(h.results.every((r) => r.p.every((slug) => slug === "netflix")));
-
-const i = await gated.handlers.filter_titles({});
-ok(!i.results.some((r) => r.id === "netflix:4"), "netflix-only subscription must exclude a prime-only title");
-
-const j = await gated.handlers.get_titles({ ids: ["netflix:1"] });
-strictEqual(j.count, 1);
-deepStrictEqual(j.results[0].p, ["netflix"]);
-deepStrictEqual(Object.keys(j.results[0].u), ["netflix"]);
-
-const k = await gated.handlers.get_titles({ ids: ["netflix:4"] });
-strictEqual(k.count, 0, "a prime-only title must not resolve under a netflix-only subscription");
-
-const emptyGate = createTools({
-  records: recs,
-  index: buildIndex(recs),
-  search,
-  filterIndices,
-  normalizeTitle,
-  seenKeys: [],
-  subscriptions: []
-});
-const m = await emptyGate.handlers.filter_titles({});
-strictEqual(m.count, 0, "an empty subscription set must exclude every title");
+const controller = new AbortController();
+controller.abort();
+await rejects(
+  abortedTools.handlers.run_catalog_js({ code: "return [];" }, controller.signal),
+  { name: "AbortError" }
+);
+await rejects(abortedTools.resolve(["queue:1"], controller.signal), { name: "AbortError" });
+strictEqual(abortedRuntime.calls.runCode.length, 0);
+strictEqual(abortedRuntime.calls.resolve.length, 0);
 
 console.log("check_tools OK");
