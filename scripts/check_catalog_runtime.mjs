@@ -16,8 +16,8 @@ class FakeWorker {
   postMessage(message) {
     this.sent.push(message);
     if (this.autoInitialize && message.op === "initialize") {
-      this.emit({ v: 1, type: "state", epoch: message.epoch, state: "READY_BASIC" });
-      this.emit({ v: 1, type: "response", epoch: message.epoch, id: message.id, ok: true, value: {} });
+      this.emit({ v: 2, type: "state", epoch: message.epoch, state: "READY_BASIC" });
+      this.emit({ v: 2, type: "response", epoch: message.epoch, id: message.id, ok: true, value: {} });
     }
   }
 
@@ -61,8 +61,8 @@ async function expectError(promise, code) {
   const pending = runtime.keywordSearch({ query: "comedy" });
   await Promise.resolve();
   const request = worker.sent.at(-1);
-  worker.emit({ v: 1, type: "response", epoch: request.epoch - 1, id: request.id, ok: true, value: { results: ["stale"] } });
-  worker.emit({ v: 1, type: "response", epoch: request.epoch, id: request.id, ok: true, value: { results: ["matched"] } });
+  worker.emit({ v: 2, type: "response", epoch: request.epoch - 1, id: request.id, ok: true, value: { results: ["stale"] } });
+  worker.emit({ v: 2, type: "response", epoch: request.epoch, id: request.id, ok: true, value: { results: ["matched"] } });
   assert.deepEqual(await pending, ["matched"]);
   assert.ok(states.includes("READY_BASIC"));
   runtime.dispose();
@@ -75,6 +75,26 @@ async function expectError(promise, code) {
   const pending = runtime.resolve({ ids: ["tmdb:m1"] });
   await Promise.resolve();
   await expectError(pending, "TIMEOUT");
+  runtime.dispose();
+}
+
+{
+  const workers = [];
+  const runtime = createCatalogRuntime({ workerFactory: factory(workers) });
+  await runtime.initialize();
+  const controller = new AbortController();
+  const pending = runtime.runCode({ code: "return [];" }, controller.signal);
+  await Promise.resolve();
+  const worker = workers[0];
+  const request = worker.sent.at(-1);
+  controller.abort();
+  await assert.rejects(pending, { name: "AbortError" });
+  const cancels = worker.sent.filter((message) => message.type === "cancel" && message.id === request.id);
+  assert.equal(cancels.length, 1);
+  assert.equal(cancels[0].v, 2);
+  assert.equal(workers.length, 1, "cancelling a request must not restart the trusted host");
+  worker.emit({ v: 2, type: "response", epoch: request.epoch, id: request.id, ok: true, value: { result: "late" } });
+  assert.equal(workers.length, 1, "late responses remain suppressed");
   runtime.dispose();
 }
 
@@ -107,6 +127,9 @@ async function expectError(promise, code) {
     "utf8"
   );
   assert.match(workerSource, /s: record\.s \|\| "",\s+l: record\.l \|\| null,\s+g: Array\.isArray\(record\.g\) \? record\.g : \[\],/);
+  assert.match(workerSource, /const V = 2;/);
+  assert.match(workerSource, /type === "cancel"/);
+  assert.match(workerSource, /active\.executor\?\.terminate\(\)/);
   const settled = workerSource.indexOf("let settled = false;");
   const guard = workerSource.indexOf("if (settled) return;", settled);
   const set = workerSource.indexOf("settled = true;", guard);

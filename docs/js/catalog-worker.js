@@ -1,6 +1,6 @@
 import { buildIndex, filterIndices, search, seedQueue as rankSeedQueue } from "./catalog.js";
 
-const V = 1;
+const V = 2;
 const EXECUTOR_READY_MS = 10_000;
 const EXECUTOR_RUN_MS = 3_000;
 const PROJECTION_KEYS = ["id", "t", "y", "k", "rt", "s", "im", "r", "p", "l", "g", "v"];
@@ -10,6 +10,9 @@ let catalog = null;
 let richCatalog = null;
 let loading = null;
 let richLoading = null;
+const executors = new Map();
+const cancelled = new Set();
+const MAX_CANCELLED_REQUESTS = 256;
 
 function fault(code, message, retryable, phase) {
   return { code, message, retryable: Boolean(retryable), phase };
@@ -21,6 +24,21 @@ function respond(epoch, id, value) {
 
 function reject(epoch, id, error) {
   postMessage({ v: V, type: "response", epoch, id, ok: false, error });
+}
+
+function requestKey(epoch, id) {
+  return `${epoch}:${id}`;
+}
+
+function rememberCancelled(key) {
+  cancelled.add(key);
+  while (cancelled.size > MAX_CANCELLED_REQUESTS) {
+    cancelled.delete(cancelled.values().next().value);
+  }
+}
+
+function isCancelled(key) {
+  return cancelled.has(key);
 }
 
 function setState(epoch, state, detail = null) {
@@ -252,7 +270,7 @@ function describe(payload) {
   };
 }
 
-function waitForExecutor(executor, code) {
+function waitForExecutor(executor, code, registerCancel) {
   return new Promise((resolve, reject) => {
     let ready = false;
     let timer = null;
@@ -267,6 +285,7 @@ function waitForExecutor(executor, code) {
       if (error) reject(error);
       else resolve(value);
     };
+    registerCancel(() => finish(fault("EXECUTOR_CANCELLED", "Code execution was cancelled.", true, "execute")));
     executor.onmessage = ({ data }) => {
       if (!data || typeof data !== "object") return;
       if (!ready && data.type === "ready") {
@@ -296,7 +315,7 @@ function waitForExecutor(executor, code) {
   });
 }
 
-async function executeTool(payload) {
+async function executeTool(payload, key) {
   const source = requireCatalog();
   const { scope, indices } = scopedRecords(source, payload);
   if (scope.subscriptions.size === 0) return { result: "[]", observedIds: [], count: 0 };
@@ -305,7 +324,11 @@ async function executeTool(payload) {
   try {
     executor = new Worker(new URL("./catalog-executor.js", import.meta.url), { type: "module" });
     const code = typeof payload?.code === "string" ? payload.code : "";
-    const pending = waitForExecutor(executor, code);
+    executors.set(key, { executor, cancel: null });
+    const pending = waitForExecutor(executor, code, (cancel) => {
+      const active = executors.get(key);
+      if (active) active.cancel = cancel;
+    });
     executor.postMessage({
       type: "init",
       projectionJson: JSON.stringify({
@@ -324,6 +347,9 @@ async function executeTool(payload) {
       })
     });
     const result = await pending;
+    if (isCancelled(key)) {
+      throw fault("EXECUTOR_CANCELLED", "Code execution was cancelled.", true, "execute");
+    }
     const ids = Array.isArray(result?.observedIds) ? result.observedIds : [];
     const allowed = new Set(observed.map((record) => record.id));
     const observedIds = [];
@@ -335,11 +361,12 @@ async function executeTool(payload) {
     }
     return { result: result.json, observedIds, count: observedIds.length };
   } finally {
+    executors.delete(key);
     if (executor) executor.terminate();
   }
 }
 
-async function dispatch(op, payload, epoch) {
+async function dispatch(op, payload, epoch, id) {
   if (op === "initialize") {
     await loadCatalog(epoch);
     return { state: richCatalog ? "READY_RICH" : "READY_BASIC" };
@@ -348,19 +375,34 @@ async function dispatch(op, payload, epoch) {
   if (op === "keywordSearch") return keywordSearch(payload);
   if (op === "resolve") return resolve(payload);
   if (op === "seedQueue") return seedQueue(payload);
-  if (op === "tool.execute") return executeTool(payload);
+  if (op === "tool.execute") return executeTool(payload, requestKey(epoch, id));
   throw fault("UNKNOWN_OPERATION", "Unknown catalog operation.", false, "request");
 }
 
 self.onmessage = async ({ data }) => {
-  if (!data || data.v !== V || data.type !== "request" || !Number.isInteger(data.epoch) || !Number.isInteger(data.id)) return;
+  if (!data || data.v !== V || !Number.isInteger(data.epoch) || !Number.isInteger(data.id)) return;
+  const key = requestKey(data.epoch, data.id);
+  if (data.type === "cancel") {
+    rememberCancelled(key);
+    const active = executors.get(key);
+    if (active) {
+      active.cancel?.();
+      active.executor?.terminate();
+    }
+    return;
+  }
+  if (data.type !== "request") return;
   if (data.epoch < currentEpoch) return;
   currentEpoch = data.epoch;
   try {
-    respond(data.epoch, data.id, await dispatch(data.op, data.payload || {}, data.epoch));
+    const value = await dispatch(data.op, data.payload || {}, data.epoch, data.id);
+    if (!isCancelled(key)) respond(data.epoch, data.id, value);
   } catch (error) {
+    if (isCancelled(key)) return;
     reject(data.epoch, data.id, error && error.code
       ? error
       : fault("INTERNAL_ERROR", "Catalog operation failed.", false, "catalog"));
+  } finally {
+    cancelled.delete(key);
   }
 };

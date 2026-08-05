@@ -1,4 +1,4 @@
-const PROTOCOL_VERSION = 1;
+const PROTOCOL_VERSION = 2;
 const READY_TIMEOUT_MS = 30_000;
 const DEFAULT_TIMEOUT_MS = 30_000;
 const CODE_TIMEOUT_MS = 15_000;
@@ -25,6 +25,12 @@ function asRuntimeError(error, fallbackCode = "WORKER_ERROR") {
 
 function defaultWorkerFactory() {
   return new Worker(new URL("./catalog-worker.js", import.meta.url), { type: "module" });
+}
+
+function abortError() {
+  const error = new Error("The catalog request was aborted.");
+  error.name = "AbortError";
+  return error;
 }
 
 /**
@@ -60,12 +66,18 @@ export function createCatalogRuntime({
     }
   }
 
+  function settlePending(id, entry, error = null, value = undefined) {
+    clearTimeout(entry.timer);
+    entry.signal?.removeEventListener("abort", entry.abort);
+    pending.delete(id);
+    if (error) entry.reject(error);
+    else entry.resolve(value);
+  }
+
   function rejectPending(error, onlyEpoch = null) {
     for (const [id, entry] of pending) {
       if (onlyEpoch !== null && entry.epoch !== onlyEpoch) continue;
-      clearTimeout(entry.timer);
-      pending.delete(id);
-      entry.reject(error);
+      settlePending(id, entry, error);
     }
   }
 
@@ -114,10 +126,8 @@ export function createCatalogRuntime({
     if (message.type !== "response" || !Number.isInteger(message.id)) return;
     const entry = pending.get(message.id);
     if (!entry || entry.epoch !== message.epoch) return;
-    clearTimeout(entry.timer);
-    pending.delete(message.id);
-    if (message.ok === true) entry.resolve(message.value);
-    else entry.reject(asRuntimeError(message.error, "REQUEST_FAILED"));
+    if (message.ok === true) settlePending(message.id, entry, null, message.value);
+    else settlePending(message.id, entry, asRuntimeError(message.error, "REQUEST_FAILED"));
   }
 
   function startWorker() {
@@ -140,10 +150,11 @@ export function createCatalogRuntime({
     );
   }
 
-  function request(op, payload, timeoutMs = requestTimeoutMs) {
+  function request(op, payload, timeoutMs = requestTimeoutMs, signal = null) {
     if (disposed) {
       return Promise.reject(new CatalogRuntimeError("DISPOSED", "Catalog runtime has been disposed."));
     }
+    if (signal?.aborted) return Promise.reject(abortError());
     startWorker();
     if (!worker) {
       return Promise.reject(new CatalogRuntimeError("WORKER_UNAVAILABLE", "Catalog worker is unavailable.", {
@@ -154,28 +165,39 @@ export function createCatalogRuntime({
     const id = nextId++;
     const requestEpoch = epoch;
     return new Promise((resolve, reject) => {
+      const cancel = (error) => {
+        const entry = pending.get(id);
+        if (!entry || entry.epoch !== requestEpoch) return;
+        try {
+          worker?.postMessage({ v: PROTOCOL_VERSION, type: "cancel", epoch: requestEpoch, id });
+        } catch {
+          // The local pending entry is still settled even if a dying worker misses cancel.
+        }
+        settlePending(id, entry, error);
+      };
       const timer = setTimeout(() => {
-        if (!pending.has(id)) return;
-        pending.delete(id);
-        reject(new CatalogRuntimeError("TIMEOUT", "Catalog request timed out.", {
+        cancel(new CatalogRuntimeError("TIMEOUT", "Catalog request timed out.", {
           retryable: true,
           phase: op === "tool.execute" ? "execute" : "request"
         }));
       }, Math.max(0, Number(timeoutMs) || DEFAULT_TIMEOUT_MS));
-      pending.set(id, { epoch: requestEpoch, timer, resolve, reject });
+      const abort = () => cancel(abortError());
+      pending.set(id, { epoch: requestEpoch, timer, resolve, reject, signal, abort });
       try {
         worker.postMessage({ v: PROTOCOL_VERSION, type: "request", epoch: requestEpoch, id, op, payload });
+        signal?.addEventListener("abort", abort, { once: true });
+        if (signal?.aborted) abort();
       } catch (error) {
-        clearTimeout(timer);
-        pending.delete(id);
-        reject(asRuntimeError(error, "POST_FAILED"));
+        settlePending(id, pending.get(id), asRuntimeError(error, "POST_FAILED"));
       }
     });
   }
 
-  async function withReady(op, payload, timeoutMs) {
+  async function withReady(op, payload, timeoutMs, signal = null) {
+    if (signal?.aborted) throw abortError();
     await initialize();
-    return request(op, payload, timeoutMs);
+    if (signal?.aborted) throw abortError();
+    return request(op, payload, timeoutMs, signal);
   }
 
   function initialize(payload = {}) {
@@ -221,18 +243,18 @@ export function createCatalogRuntime({
     get state() { return state; },
     get epoch() { return epoch; },
     initialize,
-    describe(payload = {}) { return withReady("describe", payload, requestTimeoutMs); },
-    runCode(payload = {}) { return withReady("tool.execute", payload, CODE_TIMEOUT_MS); },
-    async keywordSearch(payload = {}) {
-      const value = await withReady("keywordSearch", payload, requestTimeoutMs);
+    describe(payload = {}, signal = null) { return withReady("describe", payload, requestTimeoutMs, signal); },
+    runCode(payload = {}, signal = null) { return withReady("tool.execute", payload, CODE_TIMEOUT_MS, signal); },
+    async keywordSearch(payload = {}, signal = null) {
+      const value = await withReady("keywordSearch", payload, requestTimeoutMs, signal);
       return Array.isArray(value?.results) ? value.results : [];
     },
-    async resolve(payload = {}) {
-      const value = await withReady("resolve", payload, requestTimeoutMs);
+    async resolve(payload = {}, signal = null) {
+      const value = await withReady("resolve", payload, requestTimeoutMs, signal);
       return Array.isArray(value?.results) ? value.results : [];
     },
-    async seedQueue(payload = {}) {
-      const value = await withReady("seedQueue", payload, requestTimeoutMs);
+    async seedQueue(payload = {}, signal = null) {
+      const value = await withReady("seedQueue", payload, requestTimeoutMs, signal);
       return Array.isArray(value?.results) ? value.results : [];
     },
     dispose() {

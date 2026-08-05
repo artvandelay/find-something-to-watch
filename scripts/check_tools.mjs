@@ -104,4 +104,34 @@ await rejects(abortedTools.resolve(["queue:1"], controller.signal), { name: "Abo
 strictEqual(abortedRuntime.calls.runCode.length, 0);
 strictEqual(abortedRuntime.calls.resolve.length, 0);
 
+{
+  const seen = [];
+  const runtime = {
+    runCode(_request, signal) {
+      seen.push(signal);
+      return new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+      });
+    },
+    resolve(_request, signal) {
+      seen.push(signal);
+      return new Promise((resolve, reject) => {
+        signal.addEventListener("abort", () => reject(Object.assign(new Error("aborted"), { name: "AbortError" })), { once: true });
+      });
+    }
+  };
+  const signalTools = createTools({ runtime, scope, currentQueueIds: ["queue:1"] });
+  const runController = new AbortController();
+  const pendingRun = signalTools.handlers.run_catalog_js({ code: "return [];" }, runController.signal);
+  runController.abort();
+  await rejects(pendingRun, { name: "AbortError" });
+  const resolveController = new AbortController();
+  const pendingResolve = signalTools.resolve(["queue:1"], resolveController.signal);
+  resolveController.abort();
+  await rejects(pendingResolve, { name: "AbortError" });
+  strictEqual(seen.length, 2);
+  strictEqual(seen[0], runController.signal);
+  strictEqual(seen[1], resolveController.signal);
+}
+
 console.log("check_tools OK");

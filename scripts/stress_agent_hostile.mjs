@@ -40,7 +40,54 @@ const config = { baseUrl: "https://mock.local/v1", apiKey: "sk-mock", model: "mo
 const prompts = { system: "sys", planner: "plan {{QUERY}}", rerank: "rerank", no_results: "none" };
 
 function ok(payload) {
-  return { ok: true, status: 200, json: async () => payload };
+  const encoder = new TextEncoder();
+  const streaming = {
+    ...payload,
+    choices: Array.isArray(payload.choices)
+      ? payload.choices.map((choice) => choice?.message ? { ...choice, delta: choice.message } : choice)
+      : payload.choices
+  };
+  const chunks = [
+    encoder.encode("data: " + JSON.stringify(streaming) + "\n\n"),
+    encoder.encode("data: [DONE]\n\n")
+  ];
+  let index = 0;
+  return {
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      pull(controller) {
+        if (index >= chunks.length) controller.close();
+        else controller.enqueue(chunks[index++]);
+      }
+    })
+  };
+}
+
+function rawStream(chunks) {
+  let index = 0;
+  return {
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      pull(controller) {
+        if (index >= chunks.length) controller.close();
+        else controller.enqueue(chunks[index++]);
+      }
+    })
+  };
+}
+
+function rawSse(text, splitAt = []) {
+  const bytes = new TextEncoder().encode(text);
+  const offsets = [...splitAt, bytes.length].sort((a, b) => a - b);
+  let from = 0;
+  const chunks = [];
+  for (const to of offsets) {
+    if (to > from) chunks.push(bytes.slice(from, to));
+    from = to;
+  }
+  return rawStream(chunks);
 }
 
 function makeTools(overrides = {}) {
@@ -92,12 +139,12 @@ function happyFetch() {
         }
       }]
     }),
-    ok({ choices: [{ message: { role: "assistant", content: "done thinking" } }] }),
+    ok({ choices: [{ message: { role: "assistant", content: "{\"queue\":[{\"id\":\"netflix:1\",\"reason\":\"A fit\"}]}" } }] }),
     ok({
       choices: [{
         message: {
           role: "assistant",
-          content: "{\"reply\":\"Try this.\",\"queue\":[\"netflix:1\"]}"
+          content: "Try this."
         }
       }]
     })
@@ -120,7 +167,8 @@ async function drive(opts) {
     query: opts.query || "q",
     onEvent: (e) => events.push(e),
     signal: opts.signal || null,
-    fetchImpl: opts.fetchImpl
+    fetchImpl: opts.fetchImpl,
+    budget: opts.budget
   });
   return { events, result };
 }
@@ -183,7 +231,7 @@ const cases = [
     assert.equal(result.queue, null);
   }],
 
-  ["truncated JSON body -> clean surfaced error, no crash", async () => {
+  ["unreadable stream -> clean surfaced error, no crash", async () => {
     const { events, result } = await drive({
       fetchImpl: counted(async () => ({
         ok: true,
@@ -196,7 +244,6 @@ const cases = [
     const err = errorOf(events);
     assert.ok(err, "expected an error event");
     assert.equal(err.code, "network");
-    assert.ok(err.message.includes("Unexpected end of JSON input"));
     assert.equal(result.reply, "");
     assert.equal(result.queue, null);
   }],
@@ -238,7 +285,7 @@ const cases = [
     const { events, result } = await drive({ query, fetchImpl: happyFetch() });
     assert.equal(errorOf(events), null);
     assert.equal(result.reply, "Try this.");
-    assert.deepStrictEqual(result.queue, ["netflix:1"]);
+    assert.deepStrictEqual(result.queue, [{ id: "netflix:1", reason: "A fit" }]);
   }],
 
   ["prompt injection inside a tool result is treated as data", async () => {
@@ -255,14 +302,14 @@ const cases = [
     const { events, result } = await drive({ tools, fetchImpl: happyFetch() });
     assert.equal(errorOf(events), null);
     assert.equal(result.reply, "Try this.");
-    assert.deepStrictEqual(result.queue, ["netflix:1"]);
+    assert.deepStrictEqual(result.queue, [{ id: "netflix:1", reason: "A fit" }]);
   }],
 
   ["emoji-only and Devanagari queries -> no encoding crash", async () => {
     for (const query of ["🎬🍿😂🇮🇳", "मुझे एक अच्छी कॉमेडी फिल्म चाहिए"]) {
       const { events, result } = await drive({ query, fetchImpl: happyFetch() });
       assert.equal(errorOf(events), null, "unexpected error for query: " + query);
-      assert.deepStrictEqual(result.queue, ["netflix:1"]);
+      assert.deepStrictEqual(result.queue, [{ id: "netflix:1", reason: "A fit" }]);
     }
   }],
 
@@ -282,8 +329,8 @@ const cases = [
           }
         }]
       }),
-      ok({ choices: [{ message: { role: "assistant", content: "done thinking" } }] }),
-      ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Recovered.\"}" } }] })
+      ok({ choices: [{ message: { role: "assistant", content: "{}" } }] }),
+      ok({ choices: [{ message: { role: "assistant", content: "Recovered." } }] })
     ];
     const fetchImpl = counted(async () => responses[index++]);
     const { events, result } = await drive({ tools, fetchImpl });
@@ -291,15 +338,119 @@ const cases = [
     assert.equal(result.reply, "Recovered.");
   }],
 
-  ["empty choices array in API response -> clean error, no crash", async () => {
+  ["empty choices array in API response -> parse error, no crash", async () => {
     const { events, result } = await drive({
       fetchImpl: counted(async () => ok({ choices: [] }))
     });
     const err = errorOf(events);
     assert.ok(err, "expected an error event");
-    assert.equal(err.code, "network");
+    assert.equal(err.code, "parse");
     assert.equal(result.reply, "");
     assert.equal(result.queue, null);
+  }],
+
+  ["split UTF-8, CRLF, comments, and fragmented final SSE preserve text", async () => {
+    const final = "data: {\"choices\":[{\"index\":0,\"delta\":{\"content\":\"नमस्ते 🎬\"}}]}\r\n\r\n: keepalive\r\n\r\ndata: {\"usage\":{\"prompt_tokens\":2,\"completion_tokens\":3,\"total_tokens\":5,\"cost\":0.1},\"choices\":[]}\r\n\r\ndata: [DONE]\r\n\r\n";
+    const split = new TextEncoder().encode(final).findIndex((_, index, bytes) => bytes[index] === 0xe0) + 1;
+    const responses = [
+      ok({ choices: [{ message: { role: "assistant", content: "{}" } }] }),
+      rawSse(final, [split, split + 2, 23])
+    ];
+    let index = 0;
+    const { events, result } = await drive({ fetchImpl: counted(async () => responses[index++]) });
+    assert.equal(result.ok, true);
+    assert.equal(result.reply, "नमस्ते 🎬");
+    assert.equal(events.filter((event) => event.type === "delta").map((event) => event.text).join(""), "नमस्ते 🎬");
+    assert.equal(result.billing.basis, "unavailable", "the planning request had no reported cost");
+  }],
+
+  ["malformed decision JSON and missing DONE fail without persistence output", async () => {
+    for (const response of [
+      rawSse("data: {not json}\n\ndata: [DONE]\n\n"),
+      rawSse("data: {\"choices\":[{\"delta\":{\"content\":\"{}\"}}]}\n\n")
+    ]) {
+      const { events, result } = await drive({ fetchImpl: counted(async () => response) });
+      assert.equal(result.ok, false);
+      assert.ok(["parse", "network"].includes(errorOf(events).code));
+      assert.equal(result.reply, "");
+    }
+  }],
+
+  ["midstream provider error and oversized SSE event are contained", async () => {
+    for (const response of [
+      rawSse("data: {\"error\":{\"message\":\"provider stopped\"}}\n\ndata: [DONE]\n\n"),
+      rawSse("data: " + "x".repeat(262_145) + "\n\n")
+    ]) {
+      const { events, result } = await drive({ fetchImpl: counted(async () => response) });
+      assert.equal(result.ok, false);
+      assert.equal(errorOf(events).code, "network");
+    }
+  }],
+
+  ["unobserved IDs and memory-evidence attacks are discarded", async () => {
+    const responses = [
+      ok({
+        choices: [{
+          message: {
+            role: "assistant",
+            content: JSON.stringify({
+              queue: [{ id: "not-observed", reason: "invented" }],
+              memoryCandidates: [
+                { kind: "genre", polarity: "like", value: "crime", evidence: "not in this request" },
+                { kind: "content", polarity: "avoid", value: "medical drama", evidence: "medical" }
+              ]
+            })
+          }
+        }]
+      }),
+      ok({ choices: [{ message: { role: "assistant", content: "Safe reply." } }] })
+    ];
+    let index = 0;
+    const { result } = await drive({ fetchImpl: counted(async () => responses[index++]) });
+    assert.deepStrictEqual(result.queue, []);
+    assert.deepStrictEqual(result.memoryCandidates, []);
+  }],
+
+  ["abort race and timeout retain partial reply only in error metadata", async () => {
+    const controller = new AbortController();
+    const stalled = () => new ReadableStream({
+      start(controller) {
+        controller.enqueue(new TextEncoder().encode("data: {\"choices\":[{\"delta\":{\"content\":\"Partial\"}}]}\n\n"));
+      }
+    });
+    const responses = [
+      ok({ choices: [{ message: { role: "assistant", content: "{}" } }] }),
+      { ok: true, status: 200, body: stalled() }
+    ];
+    let index = 0;
+    const pending = drive({ signal: controller.signal, fetchImpl: counted(async () => responses[index++]) });
+    setTimeout(() => controller.abort(), 5);
+    const aborted = await pending;
+    assert.equal(errorOf(aborted.events).code, "aborted");
+    assert.equal(errorOf(aborted.events).partialReply, "Partial");
+
+    index = 0;
+    const timedOut = await drive({
+      fetchImpl: counted(async () => index++ === 0
+        ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+        : { ok: true, status: 200, body: stalled() }),
+      budget: { maxMs: 5 }
+    });
+    assert.equal(errorOf(timedOut.events).code, "budget");
+    assert.equal(errorOf(timedOut.events).partialReply, "Partial");
+  }],
+
+  ["incomplete provider costs remain unavailable", async () => {
+    const responses = [
+      ok({ usage: { prompt_tokens: 1, completion_tokens: 1, total_tokens: 2, cost: 0.01 }, choices: [{ message: { role: "assistant", content: "{}" } }] }),
+      ok({ choices: [{ message: { role: "assistant", content: "No price for this request." } }] })
+    ];
+    let index = 0;
+    const { result } = await drive({ fetchImpl: counted(async () => responses[index++]) });
+    assert.equal(result.ok, true);
+    assert.equal(result.billing.basis, "unavailable");
+    assert.equal(result.billing.amountUsd, null);
+    assert.equal(result.billing.pricedRequestCount, 1);
   }]
 ];
 

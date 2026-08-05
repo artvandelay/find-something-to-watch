@@ -35,6 +35,7 @@ const config = { baseUrl: "https://fake/v1", apiKey: "sk-test", model: "m" };
 assert.equal(prompts.version, 4);
 assert.match(prompts.rerank, /unordered or ordered lists/);
 assert.match(prompts.rerank, /Never emit raw HTML/);
+assert.match(prompts.rerank, /Do not return JSON/);
 assert.match(prompts.history_plan, /bounded sample/);
 assert.match(prompts.history_plan, /"schema": 1/);
 
@@ -48,13 +49,35 @@ function sequenceFetch(responses) {
 }
 
 function ok(payload) {
-  return { ok: true, status: 200, json: async () => payload };
+  const encoder = new TextEncoder();
+  const streaming = {
+    ...payload,
+    choices: Array.isArray(payload.choices)
+      ? payload.choices.map((choice) => choice?.message ? { ...choice, delta: choice.message } : choice)
+      : payload.choices
+  };
+  const chunks = [
+    encoder.encode("data: " + JSON.stringify(streaming) + "\n\n"),
+    encoder.encode("data: [DONE]\n\n")
+  ];
+  let index = 0;
+  return {
+    ok: true,
+    status: 200,
+    body: new ReadableStream({
+      pull(controller) {
+        if (index >= chunks.length) controller.close();
+        else controller.enqueue(chunks[index++]);
+      }
+    })
+  };
 }
 
 // Test 1 - happy path, with a queue update.
 {
   const fetchImpl = sequenceFetch([
     ok({
+      usage: { prompt_tokens: 4, completion_tokens: 2, total_tokens: 6, cost: 0.001 },
       choices: [{
         message: {
           role: "assistant",
@@ -66,12 +89,16 @@ function ok(payload) {
         }
       }]
     }),
-    ok({ choices: [{ message: { role: "assistant", content: "done thinking" } }] }),
     ok({
+      usage: { prompt_tokens: 3, completion_tokens: 1, total_tokens: 4, cost: 0.001 },
+      choices: [{ message: { role: "assistant", content: "{\"queue\":[{\"id\":\"netflix:1\",\"reason\":\"A focused fit\"}]}" } }]
+    }),
+    ok({
+      usage: { prompt_tokens: 2, completion_tokens: 3, total_tokens: 5, cost: 0.002 },
       choices: [{
         message: {
           role: "assistant",
-          content: "{\"reply\":\"Try Space Heist tonight.\",\"queue\":[\"netflix:1\",\"netflix:1\",\"nope:9\"]}"
+          content: "Try Space Heist tonight."
         }
       }]
     })
@@ -95,23 +122,45 @@ function ok(payload) {
   assert.equal(result.ok, true);
   assert.equal(result.reply, "Try Space Heist tonight.");
   // duplicates removed, unresolved id dropped, order preserved.
-  assert.deepStrictEqual(result.queue, ["netflix:1"]);
+  assert.deepStrictEqual(result.queue, [{ id: "netflix:1", reason: "A focused fit" }]);
   const done = events.at(-1);
   assert.equal(done.type, "done");
   assert.equal(done.reply, "Try Space Heist tonight.");
-  assert.deepStrictEqual(done.queue, ["netflix:1"]);
+  assert.deepStrictEqual(done.queue, [{ id: "netflix:1", reason: "A focused fit" }]);
+  assert.equal(typeof done.turnId, "string");
+  assert.deepStrictEqual(done.usage, {
+    promptTokens: 9,
+    completionTokens: 6,
+    totalTokens: 15,
+    requestCount: 3
+  });
+  assert.deepStrictEqual(done.billing, {
+    basis: "provider_reported",
+    amountUsd: 0.004,
+    complete: true,
+    requestCount: 3,
+    pricedRequestCount: 3
+  });
+  assert.ok(done.timing.totalMs >= 0);
+  assert.ok(done.timing.firstTokenMs !== null && done.timing.firstTokenMs >= 0);
+  assert.equal(done.usage.requestCount, 3);
+  assert.ok(events.some((event) => event.type === "status" && event.phase === "PLANNING"));
+  assert.ok(events.some((event) => event.type === "status" && event.phase === "SEARCHING CATALOG"));
+  assert.ok(events.some((event) => event.type === "status" && event.phase === "ANALYZING MATCHES"));
+  assert.ok(events.some((event) => event.type === "status" && event.phase === "WRITING"));
+  assert.ok(events.some((event) => event.type === "delta" && event.text === "Try Space Heist tonight."));
 }
 
 // Test 1a - agent uses the shared client and preserves safe Markdown replies.
 {
   const requests = [];
   const responses = [
-    ok({ choices: [{ message: { role: "assistant", content: "I have enough." } }] }),
+    ok({ choices: [{ message: { role: "assistant", content: "{\"queue\":[]}" } }] }),
     ok({
       choices: [{
         message: {
           role: "assistant",
-          content: "{\"reply\":\"**Solar Drift** is a *quiet* pick.\\n\\n- Its `94-minute` runtime fits tonight.\",\"queue\":[]}"
+          content: "**Solar Drift** is a *quiet* pick.\n\n- Its `94-minute` runtime fits tonight."
         }
       }]
     })
@@ -146,7 +195,7 @@ function ok(payload) {
   assert.equal(requests.length, 2);
   assert.equal(requests[0].url, "https://fake/v1/chat/completions");
   assert.equal(requests[0].body.model, "m");
-  assert.equal(requests[0].body.stream, false);
+  assert.equal(requests[0].body.stream, true);
   const contextMessage = requests[0].body.messages[1].content;
   assert.match(contextMessage, /Source: Watched\.json \(json; 2 records\)/);
   assert.match(contextMessage, /Other: Unclassified documentary/);
@@ -157,10 +206,10 @@ function ok(payload) {
 // Test 1b - omitted queue key means "leave the display unchanged" (null, not []).
 {
   const fetchImpl = sequenceFetch([
-    ok({ choices: [{ message: { role: "assistant", content: "sure, one sec" } }] }),
+    ok({ choices: [{ message: { role: "assistant", content: "{}" } }] }),
     ok({
       choices: [{
-        message: { role: "assistant", content: "{\"reply\":\"Could you say more about the mood?\"}" }
+        message: { role: "assistant", content: "Could you say more about the mood?" }
       }]
     })
   ]);
@@ -186,10 +235,10 @@ function ok(payload) {
 // Test 1c - an explicit empty queue clears the display (distinct from omitted).
 {
   const fetchImpl = sequenceFetch([
-    ok({ choices: [{ message: { role: "assistant", content: "ok" } }] }),
+    ok({ choices: [{ message: { role: "assistant", content: "{\"queue\":[]}" } }] }),
     ok({
       choices: [{
-        message: { role: "assistant", content: "{\"reply\":\"Nothing fits, clearing your tray.\",\"queue\":[]}" }
+        message: { role: "assistant", content: "Nothing fits, clearing your tray." }
       }]
     })
   ]);
@@ -313,8 +362,8 @@ function ok(payload) {
   const fetchImpl = async (url, init) => {
     requests.push(JSON.parse(init.body));
     return requests.length === 1
-      ? ok({ choices: [{ message: { role: "assistant", content: "ready" } }] })
-      : ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Done.\"}" } }] });
+      ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+      : ok({ choices: [{ message: { role: "assistant", content: "Done." } }] });
   };
   const result = await runAgent({
     config,
@@ -343,8 +392,8 @@ function ok(payload) {
     const fetchImpl = async (url, init) => {
       requests.push(JSON.parse(init.body));
       return requests.length === 1
-        ? ok({ choices: [{ message: { role: "assistant", content: "ready" } }] })
-        : ok({ choices: [{ message: { role: "assistant", content: "{\"reply\":\"Done.\"}" } }] });
+        ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+        : ok({ choices: [{ message: { role: "assistant", content: "Done." } }] });
     };
     const result = await runAgent({
       config: { ...config, baseUrl, webSearch },

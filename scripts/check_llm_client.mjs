@@ -1,7 +1,8 @@
 import assert from "node:assert/strict";
 import {
   callChatCompletion,
-  createChatCompletionsUrl
+  createChatCompletionsUrl,
+  streamChatCompletion
 } from "../docs/js/llm-client.js";
 
 assert.equal(
@@ -123,6 +124,102 @@ await assert.rejects(
     caught = error;
   }
   assert.strictEqual(caught, abort, "abort errors must propagate unchanged");
+}
+
+function streamFrom(chunks, { onCancel = null } = {}) {
+  const encoder = new TextEncoder();
+  let index = 0;
+  return new ReadableStream({
+    pull(controller) {
+      if (index >= chunks.length) {
+        controller.close();
+        return;
+      }
+      controller.enqueue(encoder.encode(chunks[index++]));
+    },
+    cancel() {
+      onCancel?.();
+    }
+  });
+}
+
+{
+  const events = [];
+  let request;
+  const result = await streamChatCompletion(
+    { baseUrl: "https://example.test/v1", apiKey: "x", model: "m" },
+    { messages: [] },
+    {
+      onEvent: (event) => events.push(event),
+      fetchImpl: async (url, init) => {
+        request = { url, init };
+        return {
+          ok: true,
+          status: 200,
+          body: streamFrom([
+            ": keepalive\r\n\r\n",
+            "data: {\"id\":\"stream-1\",\"model\":\"m\",\"choices\":[{\"index\":0,\"delta\":{\"role\":\"assistant\",\"content\":\"Hel",
+            "lo\"}}]}\r\n\r\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"call_\",\"type\":\"function\",\"function\":{\"name\":\"run_\",\"arguments\":\"{\\\"code\\\":\\\"ret\"}},{\"index\":1,\"id\":\"other\",\"type\":\"function\",\"function\":{\"name\":\"second\",\"arguments\":\"{}\"}}]}}]}\n\n",
+            "data: {\"choices\":[{\"index\":0,\"delta\":{\"tool_calls\":[{\"index\":0,\"id\":\"1\",\"function\":{\"name\":\"catalog_js\",\"arguments\":\"urn 1\\\"}\"}}]}}]}\n\n",
+            "data: {\"choices\":[],\n",
+            "data: \"usage\":{\"prompt_tokens\":3,\"completion_tokens\":2,\"total_tokens\":5,\"cost\":0.004}}\n\n",
+            "data: [DONE]\n\n"
+          ])
+        };
+      }
+    }
+  );
+  assert.equal(request.url, "https://example.test/v1/chat/completions");
+  assert.equal(JSON.parse(request.init.body).stream, true);
+  assert.equal(result.id, "stream-1");
+  assert.equal(result.message.content, "Hello");
+  assert.equal(result.message.tool_calls.length, 2);
+  assert.deepEqual(result.message.tool_calls[0], {
+    id: "call_1",
+    type: "function",
+    function: { name: "run_catalog_js", arguments: "{\"code\":\"return 1\"}" }
+  });
+  assert.deepEqual(result.usage, { prompt_tokens: 3, completion_tokens: 2, total_tokens: 5, cost: 0.004 });
+  assert.ok(events.some((event) => event.type === "heartbeat"));
+  assert.deepEqual(events.filter((event) => event.type === "content"), [{ type: "content", text: "Hello" }]);
+}
+
+for (const body of [
+  ["data: {\"choices\":[]}\n\n"],
+  ["data: {\"choices\":[{\"delta\":{\"tool_calls\":[{\"function\":{\"arguments\":\"", "x".repeat(65_537), "\"}}]}}]}\n\n"]
+]) {
+  await assert.rejects(
+    streamChatCompletion(
+      { baseUrl: "https://example.test/v1", apiKey: "x", model: "m" },
+      {},
+      { fetchImpl: async () => ({ ok: true, status: 200, body: streamFrom(body) }) }
+    ),
+    (error) => error.code === "network"
+  );
+}
+
+{
+  const controller = new AbortController();
+  let cancelled = false;
+  const pending = streamChatCompletion(
+    { baseUrl: "https://example.test/v1", apiKey: "x", model: "m" },
+    {},
+    {
+      signal: controller.signal,
+      fetchImpl: async () => ({
+        ok: true,
+        status: 200,
+        body: new ReadableStream({
+          start() {},
+          cancel() { cancelled = true; }
+        })
+      })
+    }
+  );
+  setTimeout(() => controller.abort(), 0);
+  await assert.rejects(pending, { name: "AbortError" });
+  assert.equal(cancelled, true);
 }
 
 console.log("check_llm_client: OK");

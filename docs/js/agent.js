@@ -1,7 +1,9 @@
 // Agent loop. No DOM or localStorage: fetch is injected so this module can run
-// under Node for tests. Requests are never streamed.
+// under Node for tests. Only final presentation text reaches streaming consumers.
 
-import { callChatCompletion } from "./llm-client.js";
+import { streamChatCompletion } from "./llm-client.js";
+import { sanitizeRecommendationQueue } from "./recommendations.js";
+import { validatePreferenceCandidates } from "./preferences.js";
 
 const DEFAULT_BUDGET = { maxSteps: 8, maxMs: 120000 };
 const MAX_QUEUE_IDS = 20;
@@ -58,11 +60,13 @@ function buildContextBlock(context) {
 }
 
 function addUsage(total, chunk) {
-  if (!chunk) return total;
-  const next = total || { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-  next.prompt_tokens += chunk.prompt_tokens || 0;
-  next.completion_tokens += chunk.completion_tokens || 0;
-  next.total_tokens = next.prompt_tokens + next.completion_tokens;
+  const next = total || { promptTokens: 0, completionTokens: 0, totalTokens: 0, requestCount: 0 };
+  const number = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : 0;
+  next.promptTokens += number(chunk?.prompt_tokens ?? chunk?.promptTokens);
+  next.completionTokens += number(chunk?.completion_tokens ?? chunk?.completionTokens);
+  next.totalTokens += number(chunk?.total_tokens ?? chunk?.totalTokens)
+    || number(chunk?.prompt_tokens ?? chunk?.promptTokens) + number(chunk?.completion_tokens ?? chunk?.completionTokens);
+  next.requestCount += 1;
   return next;
 }
 
@@ -182,6 +186,35 @@ function resolvedIds(value) {
   return new Set(records.map((record) => record && record.id).filter((id) => typeof id === "string"));
 }
 
+function turnIdFor(value) {
+  if (typeof value === "string" && value.trim()) return value.trim().slice(0, 160);
+  if (globalThis.crypto?.randomUUID) return globalThis.crypto.randomUUID();
+  return "turn-" + Date.now().toString(36) + "-" + Math.random().toString(36).slice(2, 8);
+}
+
+function parseDecision(text) {
+  let value;
+  try {
+    value = JSON.parse(stripFence(text));
+  } catch {
+    throw Object.assign(new Error("The model did not return valid decision JSON."), { code: "parse" });
+  }
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    throw Object.assign(new Error("The model did not return a decision object."), { code: "parse" });
+  }
+  const allowed = new Set(["queue", "memoryCandidates"]);
+  if (Object.keys(value).some((key) => !allowed.has(key)) ||
+    ("queue" in value && !Array.isArray(value.queue)) ||
+    ("memoryCandidates" in value && !Array.isArray(value.memoryCandidates))) {
+    throw Object.assign(new Error("The model returned an invalid decision shape."), { code: "parse" });
+  }
+  return value;
+}
+
+function retryable(code) {
+  return code === "network" || code === "rate" || code === "budget" || code === "TIMEOUT";
+}
+
 export async function runAgent(opts) {
   const config = opts.config;
   const prompts = opts.prompts;
@@ -195,9 +228,43 @@ export async function runAgent(opts) {
   const maxMs = Number.isFinite(budget.maxMs) ? Math.max(0, budget.maxMs) : DEFAULT_BUDGET.maxMs;
   const maxSteps = Number.isFinite(budget.maxSteps) ? Math.max(0, budget.maxSteps) : DEFAULT_BUDGET.maxSteps;
   const externalSignal = opts.signal || null;
+  const turnId = turnIdFor(opts.turnId);
   const controller = new AbortController();
+  const startedAt = Date.now();
   let externallyAborted = false;
   let timedOut = false;
+  let usage = null;
+  let successfulRequests = 0;
+  let pricedRequests = 0;
+  let reportedCost = 0;
+  let costComplete = true;
+  let firstTokenMs = null;
+  let partialReply = "";
+  let currentPhase = "PLANNING";
+  const timing = () => ({ totalMs: Math.max(0, Date.now() - startedAt), firstTokenMs });
+  const billing = () => ({
+    basis: successfulRequests > 0 && costComplete ? "provider_reported" : "unavailable",
+    amountUsd: successfulRequests > 0 && costComplete ? reportedCost : null,
+    complete: successfulRequests > 0 && costComplete,
+    requestCount: successfulRequests,
+    pricedRequestCount: pricedRequests
+  });
+  const emitEvent = (event) => emit({ turnId, ...event });
+  const status = (phase, text, step) => {
+    currentPhase = phase;
+    emitEvent({ type: "status", phase, text, step });
+  };
+  const addRequestUsage = (rawUsage) => {
+    usage = addUsage(usage, rawUsage);
+    successfulRequests += 1;
+    const cost = Number(rawUsage?.cost);
+    if (Number.isFinite(cost) && cost >= 0) {
+      reportedCost += cost;
+      pricedRequests += 1;
+    } else {
+      costComplete = false;
+    }
+  };
   const abortFromUser = () => {
     externallyAborted = true;
     if (!controller.signal.aborted) controller.abort();
@@ -211,13 +278,14 @@ export async function runAgent(opts) {
     if (!controller.signal.aborted) controller.abort();
   }, maxMs);
 
-  let usage = null;
-  const fail = () => ({ ok: false, reply: "", queue: null, usage });
+  const fail = () => ({
+    ok: false, reply: "", queue: null, memoryCandidates: [], usage, billing: billing(), timing: timing()
+  });
   const abortFailure = () => {
     if (externallyAborted || externalSignal?.aborted) {
-      emit({ type: "error", code: "aborted", message: "Stopped." });
+      emitEvent({ type: "error", code: "aborted", message: "Stopped.", retryable: false, partialReply, timing: timing() });
     } else {
-      emit({ type: "error", code: "budget", message: "Search took too long and was stopped." });
+      emitEvent({ type: "error", code: "budget", message: "Search took too long and was stopped.", retryable: true, partialReply, timing: timing() });
     }
     return fail();
   };
@@ -227,7 +295,7 @@ export async function runAgent(opts) {
 
   try {
     if (typeof config.apiKey !== "string" || config.apiKey.trim() === "") {
-      emit({ type: "error", code: "auth", message: "Add an API key in Settings to use the agent." });
+      emitEvent({ type: "error", code: "auth", message: "Add an API key in Settings to use the agent.", retryable: false, partialReply: "", timing: timing() });
       return fail();
     }
 
@@ -246,22 +314,18 @@ export async function runAgent(opts) {
       }
     ];
 
-    emit({ type: "status", text: "Planning search" });
+    status("PLANNING", "Planning", 1);
 
-    let finalText = null;
+    let decisionText = null;
     for (let step = 0; step < maxSteps; step++) {
       ensureActive();
-      const data = await abortable(
-        callChatCompletion(
-          config,
-          { messages, tools: requestTools, tool_choice: "auto" },
-          { fetchImpl, signal: controller.signal }
-        ),
-        controller.signal
+      const data = await streamChatCompletion(
+        config,
+        { messages, tools: requestTools, tool_choice: "auto" },
+        { fetchImpl, signal: controller.signal }
       );
-      usage = addUsage(usage, data.usage);
-
-      const msg = data.choices[0].message;
+      addRequestUsage(data.usage);
+      const msg = data.message;
       messages.push(msg);
 
       if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
@@ -282,7 +346,9 @@ export async function runAgent(opts) {
             args = {};
             result = { error: "tool arguments must be valid JSON object" };
           }
-          emit({ type: "tool_call", name, args });
+          status("SEARCHING CATALOG", "Searching catalog", step + 1);
+          const startedToolAt = Date.now();
+          emitEvent({ type: "tool_call", id: toolCallId, name, args, step: step + 1 });
 
           const handler = tools && tools.handlers && tools.handlers[name];
           if (result) {
@@ -299,87 +365,90 @@ export async function runAgent(opts) {
               result = { error: String((err && err.message) || err) };
             }
           }
-          emit({ type: "tool_result", name, count: resultCount(result) });
+          emitEvent({
+            type: "tool_result",
+            id: toolCallId,
+            name,
+            count: resultCount(result),
+            ok: !result?.error,
+            durationMs: Math.max(0, Date.now() - startedToolAt),
+            step: step + 1
+          });
           messages.push({ role: "tool", tool_call_id: toolCallId, content: toolResultContent(result) });
         }
+        status("ANALYZING MATCHES", "Analyzing matches", step + 1);
         continue;
       }
 
-      finalText = msg.content || "";
+      decisionText = msg.content || "";
       break;
     }
 
-    if (finalText === null) {
-      emit({ type: "error", code: "budget", message: "The model kept searching without answering." });
+    if (decisionText === null) {
+      emitEvent({ type: "error", code: "budget", message: "The model kept searching without answering.", retryable: true, partialReply, timing: timing() });
       return fail();
     }
 
-    emit({ type: "status", text: "Writing a reply" });
-
-    messages.push({ role: "user", content: prompts.rerank });
-    const finalData = await abortable(
-      callChatCompletion(
-        config,
-        { messages },
-        { fetchImpl, signal: controller.signal }
-      ),
-      controller.signal
-    );
-    usage = addUsage(usage, finalData.usage);
-
-    let parsed;
-    try {
-      parsed = JSON.parse(stripFence(finalData.choices[0].message.content));
-    } catch (err) {
-      emit({ type: "error", code: "parse", message: "The model did not return valid JSON." });
-      return fail();
-    }
-    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
-      emit({ type: "error", code: "parse", message: "The model did not return a JSON object." });
-      return fail();
-    }
-
-    const reply = typeof parsed.reply === "string" ? parsed.reply : "";
-    if (reply.trim() === "") {
-      emit({ type: "error", code: "parse", message: "The model response needs a non-empty reply." });
-      return fail();
-    }
-
-    // queue stays null ("leave the display unchanged") unless the model
-    // explicitly included a queue key, even an empty array ("clear it").
+    const decision = parseDecision(decisionText);
     let queue = null;
-    if (Array.isArray(parsed.queue)) {
-      const seen = new Set();
-      const rawIds = [];
-      for (const id of parsed.queue) {
-        if (typeof id !== "string" || id.trim() === "" || seen.has(id)) continue;
-        seen.add(id);
-        rawIds.push(id);
-        if (rawIds.length === MAX_QUEUE_IDS) break;
-      }
-      if (rawIds.length > 0) {
-        const resolved = await abortable(
-          Promise.resolve(tools.resolve(rawIds, controller.signal)),
-          controller.signal
-        );
-        const foundIds = resolvedIds(resolved);
-        queue = rawIds.filter((id) => foundIds.has(id));
-      } else {
+    if (Array.isArray(decision.queue)) {
+      const draft = sanitizeRecommendationQueue({ items: decision.queue });
+      const rawItems = draft?.items || [];
+      if (rawItems.length === 0) {
         queue = [];
+      } else {
+        const resolved = await abortable(Promise.resolve(
+          tools.resolve(rawItems.map((item) => item.id), controller.signal)
+        ), controller.signal);
+        const found = resolvedIds(resolved);
+        queue = rawItems.filter((item) => found.has(item.id));
       }
     }
+    const memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
 
-    emit({ type: "done", reply, queue, usage });
-    return { ok: true, reply, queue, usage };
+    status("WRITING", "Writing", maxSteps + 1);
+    messages.push({ role: "user", content: prompts.rerank });
+    const finalData = await streamChatCompletion(
+      config,
+      { messages },
+      {
+        fetchImpl,
+        signal: controller.signal,
+        onEvent: (event) => {
+          if (event.type !== "content") return;
+          if (firstTokenMs === null) firstTokenMs = Math.max(0, Date.now() - startedAt);
+          partialReply += event.text;
+          emitEvent({ type: "delta", text: event.text });
+        }
+      }
+    );
+    addRequestUsage(finalData.usage);
+
+    const reply = finalData.message.content || "";
+    if (reply.trim() === "") {
+      emitEvent({ type: "error", code: "parse", message: "The model response needs a non-empty reply.", retryable: false, partialReply, timing: timing() });
+      return fail();
+    }
+    const result = { ok: true, reply, queue, memoryCandidates, usage, billing: billing(), timing: timing() };
+    emitEvent({ type: "done", turnId, reply, queue, memoryCandidates, usage, billing: result.billing, timing: result.timing });
+    return result;
   } catch (err) {
     if (externallyAborted || externalSignal?.aborted) {
       return abortFailure();
     } else if (timedOut) {
       return abortFailure();
     } else if (err && err.name === "AbortError") {
-      emit({ type: "error", code: "aborted", message: "Stopped." });
+      emitEvent({ type: "error", code: "aborted", message: "Stopped.", retryable: false, partialReply, timing: timing() });
     } else {
-      emit({ type: "error", code: (err && err.code) || "network", message: err && err.message });
+      const code = (err && err.code) || "network";
+      emitEvent({
+        type: "error",
+        code,
+        message: err?.message || "The request failed.",
+        retryable: retryable(code),
+        partialReply,
+        timing: timing()
+      });
     }
     return fail();
   } finally {

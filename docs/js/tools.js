@@ -65,7 +65,10 @@ export function createTools({ runtime, scope, currentQueueIds = [], seenKeys = [
 
     try {
       if (signal?.aborted) throw abortError();
-      const response = await runtime.runCode({ code: args.code, scope, excludeKeys: normalizedSeenKeys });
+      const response = await runtime.runCode(
+        { code: args.code, scope, excludeKeys: normalizedSeenKeys },
+        signal
+      );
       for (const id of uniqueIds(response && response.observedIds)) observedIds.add(id);
       if (!response || typeof response.result !== "string") {
         return failure("Catalog runtime returned no serialized result.", "runtime");
@@ -89,7 +92,7 @@ export function createTools({ runtime, scope, currentQueueIds = [], seenKeys = [
     if (requested.length === 0) return [];
     if (!runtime || typeof runtime.resolve !== "function") return [];
     if (signal?.aborted) throw abortError();
-    return await runtime.resolve({ ids: requested, scope });
+    return await runtime.resolve({ ids: requested, scope }, signal);
   }
 
   return {
