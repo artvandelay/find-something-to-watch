@@ -36,6 +36,8 @@ assert.equal(prompts.version, 4);
 assert.match(prompts.rerank, /unordered or ordered lists/);
 assert.match(prompts.rerank, /Never emit raw HTML/);
 assert.match(prompts.rerank, /Do not return JSON/);
+assert.match(prompts.planner, /why would I like it/);
+assert.match(prompts.planner, /Omit "queue"/);
 assert.match(prompts.history_plan, /bounded sample/);
 assert.match(prompts.history_plan, /"schema": 1/);
 
@@ -196,7 +198,7 @@ function ok(payload) {
   assert.equal(requests[0].url, "https://fake/v1/chat/completions");
   assert.equal(requests[0].body.model, "m");
   assert.equal(requests[0].body.stream, true);
-  const contextMessage = requests[0].body.messages[1].content;
+  const contextMessage = requests[0].body.messages[2].content;
   assert.match(contextMessage, /Source: Watched\.json \(json; 2 records\)/);
   assert.match(contextMessage, /Other: Unclassified documentary/);
   assert.equal(result.reply, "**Solar Drift** is a *quiet* pick.\n\n- Its `94-minute` runtime fits tonight.");
@@ -356,7 +358,7 @@ function ok(payload) {
   assert.equal(events.at(-1).code, "config");
 }
 
-// Test 6 - catalog manifests are bounded and precede prior conversation turns.
+// Test 6 - catalog manifests are bounded and dangling turns are not forwarded.
 {
   const requests = [];
   const fetchImpl = async (url, init) => {
@@ -371,14 +373,108 @@ function ok(payload) {
     tools,
     context: { catalogManifest: "x".repeat(9000), youmd: "", history: null, mood: "" },
     query: "q",
-    conversation: [{ role: "user", content: "earlier turn" }],
+    conversation: [{ role: "user", content: "unanswered turn" }],
     onEvent: () => {},
     fetchImpl
   });
   assert.equal(result.ok, true);
-  assert.equal(requests[0].messages[2].role, "system");
-  assert.equal(requests[0].messages[2].content.length, "## Catalog manifest\n".length + 8000);
-  assert.equal(requests[0].messages[3].content, "earlier turn");
+  assert.equal(requests[0].messages[1].content.includes("does not include critic reviews"), true);
+  assert.equal(requests[0].messages[3].role, "system");
+  assert.match(requests[0].messages[3].content, /Current recommendations/);
+  assert.equal(requests[0].messages[4].role, "system");
+  assert.equal(requests[0].messages[4].content.length, "## Catalog manifest\n".length + 8000);
+  assert.equal(requests[0].messages[5].content.includes("Viewer's latest message: q"), true);
+  assert.equal(result.contextDiagnostics.conversation.includedTurns, 0);
+  assert.equal(result.contextDiagnostics.conversation.droppedIncompleteMessages, 1);
+}
+
+// Test 6a - prior user and assistant turns both reach the model.
+{
+  const requests = [];
+  const events = [];
+  const fetchImpl = async (url, init) => {
+    requests.push(JSON.parse(init.body));
+    return requests.length === 1
+      ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+      : ok({ choices: [{ message: { role: "assistant", content: "Because it matches your mood." } }] });
+  };
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: {
+      recommendationQueue: {
+        source: { conversationId: "c1", turnId: "t1", query: "surreal indian gem" },
+        items: [{ id: "netflix:1", t: "My Dear Kuttichathan", reason: "Surreal family fantasy." }]
+      },
+      youmd: "",
+      history: null,
+      mood: ""
+    },
+    query: "why would I like it?",
+    conversation: [
+      { role: "user", content: "surreal indian gem" },
+      { role: "assistant", content: "Try My Dear Kuttichathan." }
+    ],
+    onEvent: (event) => events.push(event),
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  const priorContents = requests[0].messages
+    .filter((message) => message.role === "user" || message.role === "assistant")
+    .map((message) => message.content);
+  assert.ok(priorContents.includes("surreal indian gem"));
+  assert.ok(priorContents.includes("Try My Dear Kuttichathan."));
+  assert.match(requests[0].messages[3].content, /My Dear Kuttichathan \(netflix:1\)/);
+  assert.equal(result.queue, null);
+  assert.equal(result.contextDiagnostics.queue.includedItems, 1);
+  assert.equal(result.contextDiagnostics.conversation.includedTurns, 1);
+  assert.equal(result.contextDiagnostics.queue.truncated, false);
+  assert.deepEqual(
+    events.find((event) => event.type === "context")?.diagnostics,
+    result.contextDiagnostics
+  );
+}
+
+// Test 6b - truncation keeps newest complete turns, not partial ones.
+{
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push(JSON.parse(init.body));
+    return requests.length === 1
+      ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+      : ok({ choices: [{ message: { role: "assistant", content: "Done." } }] });
+  };
+  const oldUser = "u".repeat(6000);
+  const oldAssistant = "a".repeat(6000);
+  const recentUser = "r".repeat(6000);
+  const recentAssistant = "s".repeat(6000);
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "follow up",
+    conversation: [
+      { role: "user", content: oldUser },
+      { role: "assistant", content: oldAssistant },
+      { role: "user", content: recentUser },
+      { role: "assistant", content: recentAssistant },
+      { role: "user", content: "dangling failed turn" }
+    ],
+    onEvent: () => {},
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  const priorContents = requests[0].messages
+    .filter((message) => (message.role === "user" || message.role === "assistant")
+      && !String(message.content).includes("Viewer's latest message:"))
+    .map((message) => message.content);
+  assert.ok(!priorContents.includes(oldUser));
+  assert.ok(!priorContents.includes(oldAssistant));
+  assert.deepEqual(priorContents, [recentUser, recentAssistant]);
+  assert.equal(result.contextDiagnostics.conversation.droppedTurns, 1);
+  assert.equal(result.contextDiagnostics.conversation.droppedIncompleteMessages, 1);
 }
 
 // Test 7 - the OpenRouter web tool is advertised only for its exact hostname.
@@ -412,6 +508,48 @@ function ok(payload) {
     );
     assert.equal("tools" in requests[1], false);
   }
+}
+
+// Test 7a - reception guidance differs when OpenRouter web search is enabled.
+{
+  let offRequests = [];
+  const off = await runAgent({
+    config: { ...config, baseUrl: "https://openrouter.ai/api/v1", webSearch: false },
+    prompts,
+    tools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "tell me about the reviews",
+    conversation: [],
+    onEvent: () => {},
+    fetchImpl: async (url, init) => {
+      offRequests.push(JSON.parse(init.body));
+      return offRequests.length === 1
+        ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+        : ok({ choices: [{ message: { role: "assistant", content: "Done." } }] });
+    }
+  });
+  assert.equal(off.ok, true);
+  assert.match(offRequests[0].messages[1].content, /does not include critic reviews/);
+
+  let onRequests = [];
+  const on = await runAgent({
+    config: { ...config, baseUrl: "https://openrouter.ai/api/v1", webSearch: true },
+    prompts,
+    tools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "tell me about the reviews",
+    conversation: [],
+    onEvent: () => {},
+    fetchImpl: async (url, init) => {
+      onRequests.push(JSON.parse(init.body));
+      return onRequests.length === 1
+        ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+        : ok({ choices: [{ message: { role: "assistant", content: "Done." } }] });
+    }
+  });
+  assert.equal(on.ok, true);
+  assert.match(onRequests[0].messages[1].content, /you may use web search during planning/);
+  assert.match(onRequests[0].messages.at(-1).content, /you may use web search during this planning phase/);
 }
 
 // Test 8 - the internal deadline aborts asynchronous tool handlers.

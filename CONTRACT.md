@@ -287,10 +287,12 @@ Trusted resolved cards contain:
 { id, t, y, k, rt, r, p, u, img, s, l, g, reason }
 ```
 
-`createTools({ runtime, scope, currentQueueIds, seenKeys })` exposes one public
-schema and forwards normalized `seenKeys` as `excludeKeys` in every `runCode` request.
+`createTools({ runtime, scope, currentQueue, currentQueueIds, seenKeys })` exposes one
+public schema and forwards normalized `seenKeys` as `excludeKeys` in every `runCode`
+request. `currentQueue` is the resolved metadata array supplied to agent context;
+`currentQueueIds` remains a compatibility input for non-UI callers.
 Only IDs observed in a successful `run_catalog_js` result, or already in
-`currentQueueIds`, can reach `runtime.resolve`; resolution re-applies subscriptions
+either current-queue input, can reach `runtime.resolve`; resolution re-applies subscriptions
 and caps requests at 20 IDs.
 
 The disposable executor is fault containment, not a hostile-code security sandbox.
@@ -373,6 +375,8 @@ user query with collapsed whitespace, capped at 72 characters. Assistant `meta` 
 only for a complete streamed turn and contains only the shapes above.
 For model requests, `agent.js` applies a second transport budget: at most 18,000
 characters of the newest complete prior turns and 8,000 characters of You.md.
+Turn selection drops oldest complete user/assistant pairs first; it never keeps a
+partial turn at the budget boundary.
 
 ### Recommendation queue
 
@@ -416,7 +420,7 @@ and fallback reasons.
 
 `threads.items` stores up to 20 non-empty inactive conversations, newest first, each
 with its full ranked queue. A current conversation is never duplicated in its archive.
-`appendUserMessage`, `completeTurn`, `startNewConversation`,
+`appendUserMessage`, `removeLastPendingUserMessage`, `completeTurn`, `startNewConversation`,
 `activateArchivedConversation`, and `getConversationList` are atomic memory APIs.
 They reject stale conversation IDs and retain playlists, history, subscriptions, and
 LLM configuration when starting or activating a conversation.
@@ -425,6 +429,9 @@ LLM configuration when starting or activating a conversation.
 assistant message, ranked queue, and an optional validated learned-preference record in
 one atomic browser-memory write. The caller persists the user message before starting
 model work and only supplies `meta` for a complete streamed turn.
+`removeLastPendingUserMessage(conversationId, { content, createdAt })` removes only a
+last user message matching that marker. Failed and stopped turns use it to avoid
+dangling model history without racing a newer submission.
 
 ### Learned preferences
 
@@ -748,7 +755,7 @@ runAgent({
   config,               // { baseUrl, apiKey, model, webSearch }
   prompts,               // docs/assets/prompts.json
   tools,                 // createTools(...) result
-  context: { youmd, history, mood, catalogManifest },
+  context: { youmd, history, mood, catalogManifest, recommendationQueue },
   query,                 // this turn's new user message (string)
   conversation,          // prior turns only, [{ role: "user"|"assistant", content }],
                          // i.e. memory's conversation.messages BEFORE this turn is
@@ -756,26 +763,68 @@ runAgent({
                          // planner prompt so multi-turn context reaches the model
   onEvent, signal, fetchImpl, budget // unchanged
 })
-// -> { ok: boolean, reply: string, queue: RankedQueue | null, memoryCandidates, usage, billing, timing }
+// -> { ok: boolean, reply: string, queue: RankedQueue | null, memoryCandidates, usage, billing, timing, contextDiagnostics }
+```
+
+`context.recommendationQueue`, when present, is a bounded snapshot of the current ranked
+decision for pronoun resolution:
+
+```js
+{
+  source: null | { conversationId, turnId, query },
+  items: [{ id, t, reason, rank: "top"|"alternative"|"more" }]
+}
+```
+
+`contextDiagnostics` reports bounded context assembly for developer inspection:
+
+```js
+{
+  conversation: {
+    budgetCharacters: 18000,
+    includedCharacters: number,
+    totalTurns: number,
+    includedTurns: number,
+    droppedTurns: number,
+    droppedCharacters: number
+  },
+  viewerContextCharacters: number,
+  youmdCharacters: number,
+  youmdTruncated: boolean,
+  queue: {
+    suppliedItems: number,
+    includedItems: number,
+    characters: number,
+    truncated: boolean
+  },
+  catalogManifestCharacters: number,
+  totalCharacters: number
+}
 ```
 
 `runAgent` uses `streamChatCompletion` for agent requests. It first runs a bounded
-tool loop with the catalog-manifest system message before prior turns, then appends
-`prompts.rerank` and streams the final no-tools presentation response. Planning emits
+tool loop with system messages for viewer context, dynamic reception guidance, the
+current recommendation queue, and the catalog manifest before prior turns, then appends
+`prompts.rerank` and streams the final no-tools presentation response. Reception
+guidance is catalog-only by default; when `webSearch` is enabled for OpenRouter it
+also permits web search during planning for external reception on factual follow-ups.
 strict internal JSON containing optional ranked queue items and optional learned-memory
 candidates. Final presentation emits direct safe Markdown, not JSON. `ok` is `true`
 only for a successfully parsed final response. Authentication, configuration,
 catalog-runtime, network, abort, budget, and parse failures return `ok: false`;
-callers must not persist those failures as assistant replies.
+callers must not persist those failures as assistant replies. On `ok: false`, the UI
+rolls back the pending user message through `removeLastPendingUserMessage()` so later
+turns are not polluted by unanswered user-only history.
 
 ## Agent event shapes
 
 ```js
+{ type: "context", turnId, diagnostics: contextDiagnostics }
 { type: "status", turnId, phase, text, step }
 { type: "tool_call", turnId, id, name, args, step }
 { type: "tool_result", turnId, id, name, count, ok, durationMs, step }
 { type: "delta", turnId, text }
-{ type: "done", turnId, reply, queue, memoryCandidates, usage, billing, timing }
+{ type: "done", turnId, reply, queue, memoryCandidates, usage, billing, timing, contextDiagnostics }
 { type: "error", turnId, code, message, retryable, partialReply, timing }
 ```
 

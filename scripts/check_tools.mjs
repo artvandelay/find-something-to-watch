@@ -25,7 +25,11 @@ const runtime = fakeRuntime({
 const tools = createTools({
   runtime,
   scope,
-  currentQueueIds: ["queue:1", "queue:1", "", 42],
+  currentQueue: [
+    { id: "queue:1", t: "Current pick" },
+    { id: "queue:1", t: "Duplicate pick" },
+    { id: "", t: "Invalid pick" }
+  ],
   seenKeys: ["watched:1", " watched:1 ", "", 42, "watched:2"]
 });
 

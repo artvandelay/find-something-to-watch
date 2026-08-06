@@ -531,6 +531,34 @@ export function createBrowserMemory({
     });
   }
 
+  async function removeLastPendingUserMessage(conversationId, expected = null) {
+    return serializeWrite(async () => {
+      const { conversation, queue } = await currentConversationAndQueue();
+      if (conversation.id !== conversationId) {
+        throw new BrowserMemoryError("invalid", "That conversation is no longer active.");
+      }
+      const messages = conversation.messages.slice();
+      const last = messages[messages.length - 1];
+      if (!last || last.role !== "user") {
+        return { conversation: clone(conversation), queue: clone(queue) };
+      }
+      if (expected && (last.content !== expected.content || last.createdAt !== expected.createdAt)) {
+        return { conversation: clone(conversation), queue: clone(queue) };
+      }
+      messages.pop();
+      const firstUser = messages.find((message) => message.role === "user");
+      const nextConversation = sanitizeConversation({
+        ...conversation,
+        title: firstUser ? collapsedString(firstUser.content, 72) : "",
+        updatedAt: nowIso(now),
+        messages
+      }, now);
+      if (!nextConversation) throw new BrowserMemoryError("invalid", "Invalid conversation data.");
+      await writeRaw([[MEMORY_KEYS.conversation, nextConversation]]);
+      return { conversation: clone(nextConversation), queue: clone(queue) };
+    });
+  }
+
   async function completeTurn(conversationId, { content, queue = null, meta = undefined, learned = undefined } = {}) {
     return serializeWrite(async () => {
       const current = await currentConversationAndQueue();
@@ -708,6 +736,7 @@ export function createBrowserMemory({
     setPlaylists: (playlists) => set(MEMORY_KEYS.playlists, playlists),
     saveConversationAndQueue,
     appendUserMessage,
+    removeLastPendingUserMessage,
     completeTurn,
     startNewConversation,
     activateArchivedConversation,

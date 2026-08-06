@@ -106,6 +106,7 @@ let controller = null;
 let historyController = null;
 let stateGeneration = 0;
 let activeTurnId = null;
+let activePendingUser = null;
 
 const runtime = createCatalogRuntime({
   onState(nextState) {
@@ -445,13 +446,37 @@ function renderConversation() {
 
 // ---- Agent tools + submission -----------------------------------------------
 
-function makeTools(seenKeys) {
+function makeTools(seenKeys, currentQueue) {
   return createTools({
     runtime,
     scope: currentScope(),
-    currentQueueIds: recommendationQueue.items.map((item) => item.id),
+    currentQueue,
     seenKeys: Array.isArray(seenKeys) ? seenKeys : [],
   });
+}
+
+function recommendationQueueContext(queue) {
+  const safe = sanitizeRecommendationQueue(queue);
+  if (!safe || safe.items.length === 0) return null;
+  return {
+    source: safe.source,
+    items: safe.items.map((item, index) => ({
+      id: item.id,
+      t: recordsById.get(item.id)?.t || item.id,
+      reason: item.reason,
+      rank: index === 0 ? "top" : index < 3 ? "alternative" : "more"
+    }))
+  };
+}
+
+async function rollbackPendingUserTurn(conversationId, expected) {
+  try {
+    const saved = await memory.removeLastPendingUserMessage(conversationId, expected);
+    conversation = saved.conversation;
+    activePendingUser = null;
+  } catch (err) {
+    console.warn("ui: could not roll back the pending user message.", err && err.message ? err.message : err);
+  }
 }
 
 function makeTurnId() {
@@ -467,6 +492,18 @@ function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgr
   return function onEvent(event) {
     if (!event || typeof event !== "object" || event.turnId !== turnId ||
       turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+    if (event.type === "context") {
+      const diagnostics = event.diagnostics || {};
+      const turns = diagnostics.conversation || {};
+      const clipped = turns.droppedTurns > 0 || diagnostics.youmdTruncated === true
+        || diagnostics.queue?.truncated === true;
+      dialogs.appendTrace(
+        "Context: " + (turns.includedTurns || 0) + "/" + (turns.totalTurns || 0)
+          + " complete turns · " + (diagnostics.totalCharacters || 0)
+          + " chars" + (clipped ? " · clipped" : " · complete")
+      );
+      return;
+    }
     if (event.type === "status") {
       dialogs.appendTrace(sanitizeTraceText(event.phase || event.text));
       chat.setTurnStatus(event.phase || event.text || "Working");
@@ -515,9 +552,12 @@ async function onSubmit() {
   chat.clearQuery();
   const turnGeneration = stateGeneration;
   const priorMessages = conversation.messages.slice();
+  let pendingUser = null;
   try {
     const saved = await memory.appendUserMessage(conversation.id, query);
     conversation = saved.conversation;
+    const appended = conversation.messages.at(-1);
+    pendingUser = { content: appended.content, createdAt: appended.createdAt };
     renderConversation();
   } catch (error) {
     showError(error && error.message ? error.message : "Could not save your message.");
@@ -536,6 +576,7 @@ async function onSubmit() {
   const thisController = new AbortController();
   controller = thisController;
   activeTurnId = turnId;
+  activePendingUser = pendingUser;
   chat.setBusy(true);
   setShellBusy(true);
   dialogs.clearTrace();
@@ -570,11 +611,18 @@ async function onSubmit() {
       ? { count: records.length, providers: [...subscriptions] }
       : await runtime.describe({ scope: currentScope() });
     const runner = hasDeterministicAgent() ? window.__OTT_TEST_RUN_AGENT__ : runAgent;
+    const currentQueue = recommendationQueueContext(recommendationQueue);
     const result = await runner({
       config: store.getLlm(),
       prompts,
-      tools: makeTools(seenKeys),
-      context: { youmd, history, mood: "", catalogManifest },
+      tools: makeTools(seenKeys, currentQueue?.items || []),
+      context: {
+        youmd,
+        history,
+        mood: "",
+        catalogManifest,
+        recommendationQueue: currentQueue
+      },
       query,
       conversation: priorMessages,
       onEvent: makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress: markProgress }),
@@ -584,6 +632,7 @@ async function onSubmit() {
 
     if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
     if (!result.ok) {
+      await rollbackPendingUserTurn(conversation.id, pendingUser);
       return;
     }
 
@@ -614,6 +663,7 @@ async function onSubmit() {
       learned: nextLearned
     });
     conversation = saved.conversation;
+    activePendingUser = null;
     recommendationQueue = saved.queue;
     learned = saved.learned ?? nextLearned;
     renderQueue();
@@ -626,6 +676,7 @@ async function onSubmit() {
     });
   } catch (err) {
     if (turnGeneration === stateGeneration && activeTurnId === turnId) {
+      await rollbackPendingUserTurn(conversation.id, pendingUser);
       chat.failTurn({ message: err && err.message ? err.message : "The search failed." });
     }
   } finally {
@@ -640,10 +691,13 @@ async function onSubmit() {
   }
 }
 
-function onStop() {
+async function onStop() {
   if (!controller) return;
+  const conversationId = conversation.id;
+  const pendingUser = activePendingUser;
   chat.failTurn({ message: "Stopped." });
   cancelActiveTurn();
+  await rollbackPendingUserTurn(conversationId, pendingUser);
 }
 
 // ---- New chat / subscriptions / context / backup ---------------------------
@@ -653,6 +707,7 @@ function cancelActiveTurn() {
   if (controller) controller.abort();
   controller = null;
   activeTurnId = null;
+  activePendingUser = null;
   if (chat) {
     chat.setBusy(false);
     refreshSendReadiness();

@@ -217,6 +217,19 @@ assert.deepEqual(
   ["First concurrent message", "Second concurrent message"]
 );
 
+const pending = await memory.appendUserMessage(concurrentConversation.id, "Pending rollback.");
+const pendingMarker = pending.conversation.messages.at(-1);
+const unchanged = await memory.removeLastPendingUserMessage(concurrentConversation.id, {
+  content: "A newer message",
+  createdAt: pendingMarker.createdAt
+});
+assert.equal(unchanged.conversation.messages.at(-1)?.content, "Pending rollback.");
+const rolledBack = await memory.removeLastPendingUserMessage(concurrentConversation.id, {
+  content: pendingMarker.content,
+  createdAt: pendingMarker.createdAt
+});
+assert.equal(rolledBack.conversation.messages.at(-1)?.content, "Second concurrent message");
+
 idb.records.set(MEMORY_KEYS.queue, { ids: "not an array" });
 assert.deepEqual((await memory.getQueue()).items, []);
 assert.equal(memory.getIssues().at(-1).code, "corrupt");

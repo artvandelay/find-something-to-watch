@@ -50,8 +50,17 @@ function abortError() {
   return error;
 }
 
-export function createTools({ runtime, scope, currentQueueIds = [], seenKeys = [] } = {}) {
-  const observedIds = new Set(uniqueIds(currentQueueIds));
+export function createTools({
+  runtime,
+  scope,
+  currentQueue = [],
+  currentQueueIds = [],
+  seenKeys = []
+} = {}) {
+  const queueIds = Array.isArray(currentQueue)
+    ? currentQueue.map((item) => item && item.id)
+    : [];
+  const observedIds = new Set(uniqueIds([...queueIds, ...currentQueueIds]));
   const normalizedSeenKeys = normalizedKeys(seenKeys);
 
   async function runCatalogJs(args, signal) {

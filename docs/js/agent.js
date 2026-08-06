@@ -12,6 +12,40 @@ const MAX_YOUMD_CONTEXT_CHARACTERS = 8000;
 const MAX_CONVERSATION_CONTEXT_CHARACTERS = 18000;
 const MAX_HISTORY_CONTEXT_CHARACTERS = 9600;
 const MAX_CATALOG_MANIFEST_CHARACTERS = 8000;
+const MAX_QUEUE_CONTEXT_ITEMS = 20;
+const MAX_QUEUE_CONTEXT_CHARACTERS = 4000;
+
+function buildReceptionGuidance(webSearchEnabled) {
+  if (webSearchEnabled) {
+    return "## Reception and reviews\n"
+      + "The local catalog exposes synopsis text and TMDB vote signals (r, v), not critic reviews.\n"
+      + "When the viewer asks about critical reception or reviews on a factual follow-up, you may use web search during planning to find external reception or articles.\n"
+      + "Use only information returned by web search or catalog fields. Never invent quotes, awards, or reception.\n"
+      + "Recommendations and queue IDs still must come only from run_catalog_js.";
+  }
+  return "## Reception and reviews\n"
+    + "The local catalog exposes synopsis text and TMDB vote signals (r, v). It does not include critic reviews, newspaper quotes, or external articles.\n"
+    + "When the viewer asks about critical reception or reviews, say clearly that this catalog snapshot does not carry that data and use only the bounded catalog fields you have.\n"
+    + "Never invent quotes, awards, or reception.";
+}
+
+function buildPlannerPrompt(prompts, query, webSearchEnabled) {
+  let text = prompts.planner.replace("{{QUERY}}", String(query || "").slice(0, MAX_QUERY_CHARACTERS));
+  if (webSearchEnabled) {
+    text += "\n\nWhen the viewer asks about critical reception or reviews on an existing pick, you may use web search during this planning phase before returning decision JSON. Omit \"queue\" unless they explicitly ask for new picks or alternatives.";
+  }
+  return text;
+}
+
+function buildRerankPrompt(prompts, webSearchEnabled) {
+  let text = prompts.rerank;
+  if (webSearchEnabled) {
+    text += "\n\nYou may rely on web search results already present in the message history above. If none were retrieved, say the catalog only has synopsis text and TMDB vote signals and do not invent reception.";
+  } else {
+    text += "\n\nThe catalog only has synopsis text and TMDB vote signals (r, v); it does not include critic reviews or external articles. Say clearly when that limits what you can report.";
+  }
+  return text;
+}
 
 // Sent as its own system message. This directly reaches the configured LLM
 // endpoint — see CONTRACT.md and the app's privacy copy for what "local-only"
@@ -59,6 +93,69 @@ function buildContextBlock(context) {
   return out;
 }
 
+function buildQueueContextBlock(context) {
+  const queue = context && context.recommendationQueue;
+  const items = Array.isArray(queue?.items) ? queue.items : [];
+  const instruction = "Resolve pronouns such as \"it\", \"that one\", and \"the last pick\" against this list. Factual follow-ups about an existing pick do not require new recommendations unless the viewer asks for alternatives.";
+  if (items.length === 0) {
+    const content = "## Current recommendations\nNone active yet.\n\n" + instruction;
+    return {
+      content,
+      diagnostics: { suppliedItems: 0, includedItems: 0, characters: content.length, truncated: false }
+    };
+  }
+  const lines = [];
+  const header = "## Current recommendations\n";
+  const sourceQuery = typeof queue?.source?.query === "string" ? queue.source.query.trim().slice(0, 120) : "";
+  const source = sourceQuery ? `\n\nLatest decision query: "${sourceQuery}"` : "";
+  let used = header.length + source.length + instruction.length + 2;
+  for (let i = 0; i < items.length && i < MAX_QUEUE_CONTEXT_ITEMS; i++) {
+    const item = items[i] || {};
+    const id = typeof item.id === "string" ? item.id.trim() : "";
+    if (!id) continue;
+    const title = typeof item.t === "string" && item.t.trim() ? item.t.trim() : id;
+    const rank = i === 0 ? "Top pick" : i < 3 ? "Alternative" : "More";
+    const reason = typeof item.reason === "string" && item.reason.trim() ? item.reason.trim() : "";
+    const line = `${i + 1}. [${rank}] ${title} (${id})${reason ? ": " + reason : ""}`;
+    if (used + line.length + 1 > MAX_QUEUE_CONTEXT_CHARACTERS) break;
+    lines.push(line);
+    used += line.length + 1;
+  }
+  const content = header + (lines.length ? lines.join("\n") : "None active yet.")
+    + source + "\n\n" + instruction;
+  return {
+    content,
+    diagnostics: {
+      suppliedItems: items.length,
+      includedItems: lines.length,
+      characters: content.length,
+      truncated: lines.length < Math.min(items.length, MAX_QUEUE_CONTEXT_ITEMS)
+        || items.length > MAX_QUEUE_CONTEXT_ITEMS
+    }
+  };
+}
+
+function conversationTurns(conversation) {
+  if (!Array.isArray(conversation)) return [];
+  const turns = [];
+  let current = null;
+  for (const message of conversation) {
+    if (!message || (message.role !== "user" && message.role !== "assistant")) continue;
+    if (typeof message.content !== "string" || message.content === "") continue;
+    if (message.role === "user") {
+      if (current?.assistant) turns.push(current);
+      current = {
+        user: message.content.slice(0, MAX_QUERY_CHARACTERS),
+        assistant: null
+      };
+    } else if (current && current.assistant === null) {
+      current.assistant = message.content.slice(0, MAX_QUERY_CHARACTERS);
+    }
+  }
+  if (current?.assistant) turns.push(current);
+  return turns;
+}
+
 function addUsage(total, chunk) {
   const next = total || { promptTokens: 0, completionTokens: 0, totalTokens: 0, requestCount: 0 };
   const number = (value) => Number.isFinite(Number(value)) && Number(value) >= 0 ? Number(value) : 0;
@@ -81,25 +178,59 @@ function stripFence(text) {
 
 // Prior turns from the bounded conversation, converted into real chat
 // messages so the model can follow a multi-turn thread instead of treating
-// every call as a fresh one-shot query.
+// every call as a fresh one-shot query. Drops oldest complete turns first.
 function priorTurnMessages(conversation) {
-  if (!Array.isArray(conversation)) return [];
-  const candidates = [];
-  for (const m of conversation) {
-    if (!m || (m.role !== "user" && m.role !== "assistant")) continue;
-    if (typeof m.content !== "string" || m.content === "") continue;
-    candidates.push({ role: m.role, content: m.content.slice(0, MAX_QUERY_CHARACTERS) });
-  }
-  const out = [];
+  const turns = conversationTurns(conversation);
+  const validMessages = Array.isArray(conversation)
+    ? conversation.filter((message) => message
+      && (message.role === "user" || message.role === "assistant")
+      && typeof message.content === "string" && message.content !== "").length
+    : 0;
+  const selected = [];
   let used = 0;
-  for (let i = candidates.length - 1; i >= 0; i--) {
-    const message = candidates[i];
-    if (used + message.content.length > MAX_CONVERSATION_CONTEXT_CHARACTERS) break;
-    out.unshift(message);
-    used += message.content.length;
+  let droppedTurns = 0;
+  let droppedCharacters = 0;
+  for (let i = turns.length - 1; i >= 0; i--) {
+    const turn = turns[i];
+    const messages = [{ role: "user", content: turn.user }];
+    if (turn.assistant) messages.push({ role: "assistant", content: turn.assistant });
+    const turnLength = messages.reduce((sum, message) => sum + message.content.length, 0);
+    if (used + turnLength > MAX_CONVERSATION_CONTEXT_CHARACTERS) {
+      droppedTurns = i + 1;
+      for (let j = 0; j <= i; j++) {
+        droppedCharacters += turns[j].user.length + (turns[j].assistant ? turns[j].assistant.length : 0);
+      }
+      break;
+    }
+    selected.unshift(...messages);
+    used += turnLength;
   }
-  if (out[0]?.role === "assistant") out.shift();
-  return out;
+  return {
+    messages: selected,
+    diagnostics: {
+      budgetCharacters: MAX_CONVERSATION_CONTEXT_CHARACTERS,
+      includedCharacters: used,
+      totalTurns: turns.length,
+      includedTurns: Math.max(0, turns.length - droppedTurns),
+      droppedTurns,
+      droppedCharacters,
+      droppedIncompleteMessages: Math.max(0, validMessages - turns.length * 2)
+    }
+  };
+}
+
+function buildContextDiagnostics(context, prior, viewerContext, queueContext, catalogContext) {
+  const youmd = typeof context?.youmd === "string" ? context.youmd : "";
+  return {
+    conversation: prior.diagnostics,
+    viewerContextCharacters: viewerContext.length,
+    youmdCharacters: Math.min(youmd.length, MAX_YOUMD_CONTEXT_CHARACTERS),
+    youmdTruncated: youmd.length > MAX_YOUMD_CONTEXT_CHARACTERS,
+    queue: queueContext.diagnostics,
+    catalogManifestCharacters: catalogContext.length,
+    totalCharacters: viewerContext.length + queueContext.content.length
+      + catalogContext.length + prior.diagnostics.includedCharacters
+  };
 }
 
 function buildCatalogManifestBlock(context) {
@@ -278,8 +409,15 @@ export async function runAgent(opts) {
     if (!controller.signal.aborted) controller.abort();
   }, maxMs);
 
-  const fail = () => ({
-    ok: false, reply: "", queue: null, memoryCandidates: [], usage, billing: billing(), timing: timing()
+  const fail = (contextDiagnostics = null) => ({
+    ok: false,
+    reply: "",
+    queue: null,
+    memoryCandidates: [],
+    usage,
+    billing: billing(),
+    timing: timing(),
+    contextDiagnostics
   });
   const abortFailure = () => {
     if (externallyAborted || externalSignal?.aborted) {
@@ -299,18 +437,33 @@ export async function runAgent(opts) {
       return fail();
     }
 
+    const webSearchEnabled = config.webSearch === true && isExactOpenRouter(config.baseUrl);
     const requestTools = localToolSchemas(tools);
-    if (config.webSearch === true && isExactOpenRouter(config.baseUrl)) {
+    if (webSearchEnabled) {
       requestTools.push({ type: "openrouter:web_search" });
     }
+    const prior = priorTurnMessages(conversation);
+    const viewerContext = buildContextBlock(context);
+    const queueContext = buildQueueContextBlock(context);
+    const catalogContext = buildCatalogManifestBlock(context);
+    const contextDiagnostics = buildContextDiagnostics(
+      context,
+      prior,
+      viewerContext,
+      queueContext,
+      catalogContext
+    );
+    emitEvent({ type: "context", diagnostics: contextDiagnostics });
     const messages = [
       { role: "system", content: prompts.system },
-      { role: "system", content: buildContextBlock(context) },
-      { role: "system", content: buildCatalogManifestBlock(context) },
-      ...priorTurnMessages(conversation),
+      { role: "system", content: buildReceptionGuidance(webSearchEnabled) },
+      { role: "system", content: viewerContext },
+      { role: "system", content: queueContext.content },
+      { role: "system", content: catalogContext },
+      ...prior.messages,
       {
         role: "user",
-        content: prompts.planner.replace("{{QUERY}}", String(query || "").slice(0, MAX_QUERY_CHARACTERS))
+        content: buildPlannerPrompt(prompts, query, webSearchEnabled)
       }
     ];
 
@@ -407,7 +560,7 @@ export async function runAgent(opts) {
     const memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
 
     status("WRITING", "Writing", maxSteps + 1);
-    messages.push({ role: "user", content: prompts.rerank });
+    messages.push({ role: "user", content: buildRerankPrompt(prompts, webSearchEnabled) });
     const finalData = await streamChatCompletion(
       config,
       { messages },
@@ -429,8 +582,27 @@ export async function runAgent(opts) {
       emitEvent({ type: "error", code: "parse", message: "The model response needs a non-empty reply.", retryable: false, partialReply, timing: timing() });
       return fail();
     }
-    const result = { ok: true, reply, queue, memoryCandidates, usage, billing: billing(), timing: timing() };
-    emitEvent({ type: "done", turnId, reply, queue, memoryCandidates, usage, billing: result.billing, timing: result.timing });
+    const result = {
+      ok: true,
+      reply,
+      queue,
+      memoryCandidates,
+      usage,
+      billing: billing(),
+      timing: timing(),
+      contextDiagnostics
+    };
+    emitEvent({
+      type: "done",
+      turnId,
+      reply,
+      queue,
+      memoryCandidates,
+      usage,
+      billing: result.billing,
+      timing: result.timing,
+      contextDiagnostics
+    });
     return result;
   } catch (err) {
     if (externallyAborted || externalSignal?.aborted) {

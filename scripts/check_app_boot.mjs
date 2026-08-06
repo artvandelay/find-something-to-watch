@@ -858,6 +858,100 @@ function defaultRecord(id, title) {
   };
 }
 
+async function followUpContextUsesPriorTurnsAndQueue() {
+  const captures = [];
+  const storage = createStorage();
+  const records = [
+    defaultRecord("netflix:first", "First Choice"),
+    defaultRecord("netflix:second", "Second Choice")
+  ];
+  const app = await bootApp({
+    storage,
+    records,
+    agentFixture: async (opts) => {
+      captures.push({
+        conversation: opts.conversation,
+        context: opts.context,
+        query: opts.query
+      });
+      if (captures.length === 1) {
+        return {
+          ok: true,
+          reply: "Try First Choice.",
+          queue: [{ id: "netflix:first", reason: "Surreal fit." }],
+          memoryCandidates: [],
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, requestCount: 1 },
+          billing: { basis: "provider_reported", amountUsd: 0.0042, complete: true, requestCount: 1, pricedRequestCount: 1 },
+          timing: { totalMs: 1200, firstTokenMs: 200 }
+        };
+      }
+      return {
+        ok: true,
+        reply: "Because it matches the surreal mood you asked for.",
+        queue: null,
+        memoryCandidates: [],
+        usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, requestCount: 1 },
+        billing: { basis: "provider_reported", amountUsd: 0.0042, complete: true, requestCount: 1, pricedRequestCount: 1 },
+        timing: { totalMs: 900, firstTokenMs: 180 }
+      };
+    }
+  });
+  try {
+    await completeOnboarding(app);
+    app.$("#query-input").value = "surreal indian gem";
+    await app.click("#send-btn");
+    app.$("#query-input").value = "why would I like it?";
+    await app.click("#send-btn");
+    check("follow-up forwards both prior roles to the agent",
+      captures.length === 2
+        && captures[1].conversation.length === 2
+        && captures[1].conversation[0].content === "surreal indian gem"
+        && captures[1].conversation[1].content === "Try First Choice.",
+      JSON.stringify(captures[1]?.conversation || []));
+    check("follow-up passes the current ranked queue with resolved titles",
+      captures[1].context.recommendationQueue?.items?.[0]?.id === "netflix:first"
+        && captures[1].context.recommendationQueue.items[0].t === "First Choice",
+      JSON.stringify(captures[1]?.context?.recommendationQueue || null));
+    check("clarification follow-up leaves the queue unchanged",
+      app.text("#queue-top-pick")?.includes("First Choice")
+        && captures[1].query === "why would I like it?");
+  } finally {
+    app.restore();
+  }
+}
+
+async function failedTurnRollsBackPendingUserMessage() {
+  const app = await bootApp({
+    agentFixture: async (opts) => {
+      opts.onEvent({
+        type: "error",
+        turnId: opts.turnId,
+        code: "network",
+        message: "Fixture network failure.",
+        retryable: true,
+        partialReply: "",
+        timing: { totalMs: 2500, firstTokenMs: null }
+      });
+      return { ok: false, reply: "", queue: null, memoryCandidates: [] };
+    }
+  });
+  try {
+    await completeOnboarding(app);
+    app.$("#query-input").value = "a thriller";
+    await app.click("#send-btn");
+    const browserMemory = createBrowserMemory();
+    await browserMemory.initialize();
+    check("failed turns do not leave dangling user history",
+      (await browserMemory.getConversation()).messages.length === 0,
+      JSON.stringify((await browserMemory.getConversation()).messages));
+    check("failed turns remain visible inline for retry context",
+      /a thriller/.test(app.text("#chat-transcript") || "")
+        && /Fixture network failure/.test(app.text("#chat-transcript") || ""));
+  } finally {
+    app.restore();
+  }
+}
+
 async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
   let stale = null;
   const stopped = await bootApp({
@@ -878,6 +972,11 @@ async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
       /Stopped\./.test(stopped.text(".chat-turn-error") || "")
         && stopped.$("#stop-btn").hidden
         && !/late stale text/.test(stopped.text("#chat-transcript") || ""));
+    const stoppedMemory = createBrowserMemory();
+    await stoppedMemory.initialize();
+    check("Stop rolls back the pending user message",
+      (await stoppedMemory.getConversation()).messages.length === 0,
+      JSON.stringify((await stoppedMemory.getConversation()).messages));
     check("Stop does not create a global error banner", stopped.$("#error-banner").hidden);
   } finally {
     stopped.restore();
@@ -899,8 +998,13 @@ async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
     await failed.click("#send-btn");
     check("failed streamed turns keep partial text and error inline",
       /Partial fixture reply/.test(failed.text(".chat-turn-response") || "")
-        && /Fixture network failure/.test(failed.text(".chat-turn-error") || "")
-        && failed.$("#error-banner").hidden);
+        && /Fixture network failure/.test(failed.text(".chat-turn-error") || ""));
+    const failedMemory = createBrowserMemory();
+    await failedMemory.initialize();
+    check("failed streamed turns roll back the pending user message",
+      (await failedMemory.getConversation()).messages.length === 0,
+      JSON.stringify((await failedMemory.getConversation()).messages));
+    check("failed streamed turns do not create a global error banner", failed.$("#error-banner").hidden);
   } finally {
     failed.restore();
   }
@@ -972,6 +1076,8 @@ const suites = [
   testModeIsLocalhostOnly,
   searchIndexIdleWaitIsBounded,
   streamedTurnRendersDecisionActivityAndMetrics,
+  followUpContextUsesPriorTurnsAndQueue,
+  failedTurnRollsBackPendingUserMessage,
   stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents,
   slowStreamShowsAttachedStuckState
 ];
