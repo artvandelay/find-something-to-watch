@@ -2,9 +2,9 @@
 
 A single-file Python CLI (`catalog.py`) that dumps the complete streaming
 availability catalog for a region (default `IN`) into SQLite, using TMDB's
-`discover` + `watch/providers` endpoints (a licensed JustWatch integration,
-refreshed daily with ~24h lag). Re-runnable: successive runs give you an
-"added / removed" diff for free via `first_seen` / `last_seen` columns.
+`discover` + `watch/providers` endpoints (refreshed daily with ~24h lag).
+Re-runnable: successive runs give you an "added / removed" diff for free via
+`first_seen` / `last_seen` columns.
 
 Downstream, an agent with your cross-platform watch history reads this DB as
 candidate inventory + availability for a personalized "what to watch"
@@ -50,14 +50,6 @@ A sweep or enrichment run takes an exclusive lock on the DB file
 run, or one where some API calls failed permanently after retries, does not
 record a snapshot row — only a full, clean run does, so `--diff` never
 reports untouched or failed titles as removed.
-
-## Attribution requirement (not optional)
-
-The availability data in this database is **JustWatch data**, served through
-TMDB's API. TMDB's API terms require JustWatch attribution anywhere this data
-is shown. If you build any page that friends (or anyone) see, credit JustWatch
-on it — e.g. "Streaming availability data provided by JustWatch" with a link
-to https://www.justwatch.com.
 
 ## How it works (and why)
 

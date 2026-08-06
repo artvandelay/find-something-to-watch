@@ -11,7 +11,7 @@ All notable changes to this project will be documented here.
 - Worker-backed `run_catalog_js` catalog analysis with subscription-scoped projections, observed-ID
   queue grounding, and disposable-executor fault containment. The executor is not a hostile-code
   security sandbox.
-- Schema-2 TMDB + legacy catalog union with 31,884 deduplicated titles.
+- Schema-2 TMDB catalog snapshot with 31,884 deduplicated titles.
 - Language, genre, provider, year, runtime, kind, and TMDB rating filters.
 - Lazy-loaded synopsis sidecar and vote-weighted BM25 ranking.
 - Direct-to-workspace first visit with a clear Settings-based subscription and API-key gate.

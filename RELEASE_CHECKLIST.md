@@ -4,7 +4,6 @@
 
 - [ ] Confirm **Find Something to Watch** is used consistently in release copy and repository links.
 - [ ] Rotate the TMDB token that appeared in local debugging output.
-- [ ] Confirm redistribution rights for the legacy uNoGS and Streaming Availability records retained in the union.
 - [ ] Run `bash scripts/scan_secrets.sh`.
 - [ ] Run both catalog validator forms.
 - [ ] Run `npm install --ignore-scripts` and `npm run check`.

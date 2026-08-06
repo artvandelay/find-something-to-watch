@@ -452,7 +452,7 @@ def main():
 
     meta = {
         "region": "IN",
-        "source": "tmdb+unogs+streaming_availability",
+        "source": "tmdb",
         "built_at": datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ"),
         "count": len(records),
         "providers": sorted(order),

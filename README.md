@@ -136,9 +136,7 @@ python3 catalog/catalog.py
 # 2. Enrich: backfill imdb_id and runtime (only touches rows missing them)
 python3 catalog/catalog.py --enrich
 
-# 3. Build the shipped assets: unions catalog.db with the legacy uNoGS /
-#    StreamingAvailability dumps under data/ (read from disk only, never
-#    re-fetched) and emits:
+# 3. Build the shipped assets from catalog.db and emit:
 #      docs/assets/catalog.json       — lean records, synopses blanked
 #      docs/assets/catalog.text.json  — synopsis sidecar, lazy-loaded by the app
 #      docs/assets/catalog.meta.json  — the meta object alone
@@ -154,10 +152,6 @@ present in the catalog when the catalog is also given).
 
 See `catalog/README.md` for sweep tuning (sharding, concurrency, change tracking, cron) and
 `CONTRACT.md` for the frozen record and file shapes every consumer relies on.
-
-**No RapidAPI anywhere** — not at build time, not at runtime. The old scripts
-`scripts/fetch_streaming_availability.py` and `scripts/unogs_dump_catalog.py` remain on disk for
-provenance only; they are not part of the build or runtime flow.
 
 ## Checks and stress suites
 
@@ -255,9 +249,8 @@ bash scripts/scan_secrets.sh
   - `docs/js/ui.js` — the slim coordinator; the only module that imports the views
   - `docs/assets/` — built catalog JSON, synopsis sidecar, meta, prompts
 - `catalog/` — TMDB sweep CLI (`catalog.py`) and the SQLite dump it produces (gitignored)
-- `scripts/` — catalog builder/validator, node module checks, stress suites, secret scanner,
-  and the retired RapidAPI fetchers kept for provenance
-- `data/` — legacy uNoGS / StreamingAvailability dumps (gitignored; read-only builder inputs)
+- `scripts/` — catalog builder/validator, node module checks, stress suites, and secret scanner
+- `data/` — local builder inputs (gitignored)
 - `research/` — sourcing analysis notes
 - `CONTRACT.md` — frozen data shapes every module conforms to
 - `CHANGELOG.md` — v0.1.0 release notes
@@ -270,14 +263,13 @@ presentation data. The disposable executor is fault containment, not a hostile-c
 
 ## Data and attribution
 
-The catalog is a point-in-time snapshot built from TMDB (discover + watch/providers, region IN),
-unioned with legacy dumps. Availability changes constantly, so treat anything here as a starting
-point rather than the truth right now. Ratings are TMDB audience scores. No affiliation with any
-streaming service is implied or claimed.
+The catalog is a point-in-time snapshot built from TMDB (discover + watch/providers, region IN).
+Availability changes constantly, so treat anything here as a starting point rather than the truth
+right now. Ratings are TMDB audience scores. No affiliation with any streaming service is implied or
+claimed.
 
 The footer of the app shows TMDB attribution — "This product uses the TMDB API but is not endorsed or
-certified by TMDB" — as required by TMDB's API terms. The underlying availability data is JustWatch
-data served through TMDB; see `catalog/README.md` for that attribution requirement.
+certified by TMDB" — as required by TMDB's API terms.
 
 ## License
 

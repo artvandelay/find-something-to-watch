@@ -7,7 +7,7 @@ Every module in this repo conforms to these shapes. Do not change any name, key,
 ```js
 /**
  * @typedef {Object} Title
- * @property {string} id      "tmdb:m1013577" (movie) | "tmdb:t240983" (tv) | "netflix:81644889" (uNoGS-only leftover)
+ * @property {string} id      "tmdb:m1013577" (movie) | "tmdb:t240983" (tv)
  * @property {string} t       display title
  * @property {number|null} y  release year, 1900..2100, else null
  * @property {"movie"|"series"} k  kind; TMDB media_type "tv" maps to "series"
@@ -37,7 +37,7 @@ id, t, y, k, rt, s, im, r, p, u, img, l, g, v
   "schema": 2,
   "meta": {
     "region": "IN",
-    "source": "tmdb+unogs+streaming_availability",
+    "source": "tmdb",
     "built_at": "2026-08-04T00:00:00Z",
     "count": 0,
     "providers": [],
@@ -148,8 +148,7 @@ Excluded TMDB provider ids (rent/buy storefronts and unmapped channel aliases), 
 2 (Apple TV Store), 3 (Google Play Movies), 192 (YouTube), 100, 444, 475, 546, 551, 554,
 559, 562, 567, 569, 124, 2285, and every remaining "* Amazon Channel" id not listed above.
 
-Netflix deep links: where a uNoGS record and a TMDB record share an imdb_id, u.netflix is the
-uNoGS value https://www.netflix.com/title/{netflixId} instead of the search template.
+Netflix deep links use the search template when a direct title URL is unavailable.
 
 ## Genre vocabulary (27 names, from TMDB /genre/movie/list and /genre/tv/list)
 
