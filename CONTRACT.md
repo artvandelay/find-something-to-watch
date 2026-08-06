@@ -175,7 +175,7 @@ const KEYS = {
 const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "",
-  model: "anthropic/claude-sonnet-4.6",
+  model: "openai/gpt-5.6-terra-pro",
   webSearch: false
 };
 ```
