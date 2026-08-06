@@ -196,6 +196,16 @@ may persist it as `true` only when the configured base URL hostname is exactly
 `{ type: "openrouter:web_search" }` to the model tools, which can add OpenRouter
 search and model cost. Catalog search remains local.
 
+When the base URL hostname is exactly `openrouter.ai`, Settings shows a searchable
+custom model picker instead of a free-text field. The picker is seeded from a
+hand-picked recommended list in `docs/js/openrouter-models.js`, then refreshed from
+OpenRouter's public `GET /api/v1/models?sort=most-popular&supported_parameters=tools`
+endpoint (top 20 tool-capable text models). Each row shows a short name with a
+reasoning badge and `$/1M` input/output price; hovering or focusing a row fills a
+detail pane with description, context window, and pricing. An **Other model ID…**
+action reveals a custom slug field for anything not listed. Non-OpenRouter base URLs
+keep the compatible free-text model input.
+
 ## Shared chat-completions client
 
 `docs/js/llm-client.js` is the only reusable HTTP adapter for model calls:
@@ -954,7 +964,11 @@ focus. A missing ID renders a tombstone. Playlist title buttons and recommendati
 titles open this same dialog.
 
 Dialogs:
-settings-dialog, settings-provider-list, llm-base-url, llm-api-key, llm-model, llm-web-search,
+settings-dialog, settings-provider-list, llm-base-url, llm-api-key, llm-model-picker,
+llm-model-picker-label, llm-model-trigger, llm-model-trigger-name, llm-model-trigger-meta,
+llm-model-panel, llm-model-search, llm-model-list, llm-model-detail, llm-model-other,
+llm-model-custom, llm-model-note, llm-model-openrouter-field,
+llm-model-compat-field, llm-model, llm-web-search,
 export-backup-btn, clear-data-btn,
 settings-feedback, settings-save, settings-close, context-dialog, youmd-input,
 history-file, history-summary, history-remove, context-feedback, context-save,

@@ -1,19 +1,18 @@
 import { toMarkdown, toJson, toCsv, toYouMd } from "../exporters.js";
 import { LEARNED_KINDS } from "../preferences.js";
 import {
+  RECOMMENDED_OPENROUTER_MODELS,
+  buildModelSelectOptions,
+  fetchPopularOpenRouterModels,
+  isOpenRouterBaseUrl
+} from "../openrouter-models.js";
+import { createModelPicker } from "./model-picker.js";
+import {
   downloadText,
   isAbsoluteHttpUrl,
   renderProviderOptions,
   selectedProviders
 } from "./dom.js";
-
-function isOpenRouterUrl(value) {
-  try {
-    return new URL(String(value || "")).hostname === "openrouter.ai";
-  } catch {
-    return false;
-  }
-}
 
 /**
  * Secondary UI: settings (subscriptions + LLM key + local-data backups),
@@ -26,10 +25,76 @@ export function createDialogs(el, deps) {
   let historyImportController = null;
   let savedHistorySummary = "No history imported.";
   let learnedDraft = null;
+  let modelPickerController = null;
+  let modelPickerRefreshTimer = null;
+  let modelPickerCache = null;
+  const modelPicker = createModelPicker(el);
+  const defaultModelPickerNote = el.llmModelNote.textContent;
 
   function feedback(node, message = "") {
     node.textContent = message;
     node.hidden = message === "";
+  }
+
+  function cancelModelPickerFetch() {
+    if (!modelPickerController) return;
+    modelPickerController.abort();
+    modelPickerController = null;
+  }
+
+  function cancelModelPickerRefresh() {
+    window.clearTimeout(modelPickerRefreshTimer);
+    modelPickerRefreshTimer = null;
+    cancelModelPickerFetch();
+  }
+
+  function setModelPickerMode(baseUrl) {
+    const openRouter = isOpenRouterBaseUrl(baseUrl);
+    el.llmModelOpenrouterField.hidden = !openRouter;
+    el.llmModelCompatField.hidden = openRouter;
+    if (!openRouter) modelPicker.close();
+  }
+
+  function readModelSetting() {
+    if (!el.llmModelOpenrouterField.hidden) return modelPicker.getValue();
+    return el.llmModel.value.trim();
+  }
+
+  function renderModelPicker(savedModel, { popular = [], catalogById = null } = {}) {
+    const groups = buildModelSelectOptions(RECOMMENDED_OPENROUTER_MODELS, popular, { catalogById });
+    modelPicker.setGroups(groups, { selectedModel: savedModel });
+  }
+
+  async function refreshModelPicker({ baseUrl, savedModel }) {
+    cancelModelPickerFetch();
+    setModelPickerMode(baseUrl);
+    if (!isOpenRouterBaseUrl(baseUrl)) {
+      el.llmModel.value = savedModel || "";
+      return;
+    }
+
+    renderModelPicker(savedModel);
+    el.llmModelNote.textContent = defaultModelPickerNote;
+
+    if (modelPickerCache) {
+      renderModelPicker(savedModel, modelPickerCache);
+      return;
+    }
+
+    const controller = new AbortController();
+    modelPickerController = controller;
+    const { popular, catalogById } = await fetchPopularOpenRouterModels({
+      baseUrl,
+      limit: 20,
+      signal: controller.signal
+    });
+    if (controller.signal.aborted || modelPickerController !== controller) return;
+    modelPickerController = null;
+    if (popular.length > 0) modelPickerCache = { popular, catalogById };
+    renderModelPicker(savedModel, { popular, catalogById });
+    if (popular.length === 0) {
+      el.llmModelNote.textContent = "Showing recommended models. Could not refresh OpenRouter prices.";
+    }
   }
 
   function cancelHistoryImport() {
@@ -48,12 +113,14 @@ export function createDialogs(el, deps) {
         const llm = deps.store.getLlm();
         el.llmBaseUrl.value = llm.baseUrl || "";
         el.llmApiKey.value = llm.apiKey || "";
-        el.llmModel.value = llm.model || "";
+        setModelPickerMode(llm.baseUrl);
+        renderModelPicker(llm.model || "");
         el.llmWebSearch.checked = llm.webSearch === true;
-        el.llmWebSearch.disabled = !isOpenRouterUrl(el.llmBaseUrl.value);
+        el.llmWebSearch.disabled = !isOpenRouterBaseUrl(el.llmBaseUrl.value);
         if (el.llmWebSearch.disabled) el.llmWebSearch.checked = false;
         feedback(el.settingsFeedback);
         el.settingsDialog.showModal();
+        void refreshModelPicker({ baseUrl: llm.baseUrl, savedModel: llm.model || "" });
       } catch (err) {
         deps.onError(err && err.message ? err.message : "Could not open settings.");
       }
@@ -69,9 +136,16 @@ export function createDialogs(el, deps) {
       const llm = {
         baseUrl: el.llmBaseUrl.value.trim(),
         apiKey: el.llmApiKey.value.trim(),
-        model: el.llmModel.value.trim(),
-        webSearch: isOpenRouterUrl(el.llmBaseUrl.value) && el.llmWebSearch.checked
+        model: readModelSetting(),
+        webSearch: isOpenRouterBaseUrl(el.llmBaseUrl.value) && el.llmWebSearch.checked
       };
+      if (llm.apiKey && !llm.model) {
+        feedback(el.settingsFeedback, "Choose a model or enter a custom model ID before saving.");
+        if (isOpenRouterBaseUrl(llm.baseUrl) && modelPicker.isCustomMode()) el.llmModelCustom.focus();
+        else if (isOpenRouterBaseUrl(llm.baseUrl)) el.llmModelTrigger.focus();
+        else el.llmModel.focus();
+        return;
+      }
       if (llm.apiKey && !isAbsoluteHttpUrl(llm.baseUrl)) {
         feedback(el.settingsFeedback, "Enter an absolute HTTP(S) model base URL before saving the API key.");
         el.llmBaseUrl.focus();
@@ -92,11 +166,29 @@ export function createDialogs(el, deps) {
       }
     });
 
-    el.settingsClose.addEventListener("click", () => el.settingsDialog.close());
+    el.settingsClose.addEventListener("click", () => {
+      el.settingsDialog.close();
+    });
+    el.settingsDialog.addEventListener("close", () => {
+      cancelModelPickerRefresh();
+      modelPicker.close();
+    });
     el.llmBaseUrl.addEventListener("input", () => {
-      const enabled = isOpenRouterUrl(el.llmBaseUrl.value);
+      const enabled = isOpenRouterBaseUrl(el.llmBaseUrl.value);
       el.llmWebSearch.disabled = !enabled;
       if (!enabled) el.llmWebSearch.checked = false;
+      const baseUrl = el.llmBaseUrl.value;
+      const savedModel = readModelSetting();
+      cancelModelPickerRefresh();
+      setModelPickerMode(baseUrl);
+      if (!enabled) {
+        el.llmModel.value = savedModel;
+        return;
+      }
+      modelPickerRefreshTimer = window.setTimeout(() => {
+        modelPickerRefreshTimer = null;
+        void refreshModelPicker({ baseUrl, savedModel });
+      }, 300);
     });
   }
 

@@ -94,7 +94,7 @@ function createStreamAccumulator(onEvent) {
   };
 }
 
-export function createChatCompletionsUrl(baseUrl) {
+export function createModelApiUrl(baseUrl, path) {
   let base;
   try {
     base = new URL(String(baseUrl || "").trim());
@@ -107,7 +107,11 @@ export function createChatCompletionsUrl(baseUrl) {
   base.search = "";
   base.hash = "";
   if (!base.pathname.endsWith("/")) base.pathname += "/";
-  return new URL("chat/completions", base.href).href;
+  return new URL(path, base.href).href;
+}
+
+export function createChatCompletionsUrl(baseUrl) {
+  return createModelApiUrl(baseUrl, "chat/completions");
 }
 
 export async function callChatCompletion(

@@ -234,9 +234,36 @@
           <label for="llm-api-key">API key</label>
           <input id="llm-api-key" name="llm-api-key" type="password" autocomplete="off">
         </div>
-        <div class="field">
+        <div class="field" id="llm-model-openrouter-field">
+          <label id="llm-model-picker-label" for="llm-model-trigger">Model</label>
+          <div id="llm-model-picker" class="model-picker">
+            <button type="button" id="llm-model-trigger" class="model-picker-trigger"
+              aria-labelledby="llm-model-picker-label" aria-haspopup="listbox"
+              aria-expanded="false" aria-controls="llm-model-panel">
+              <span class="model-picker-trigger-main">
+                <span id="llm-model-trigger-name" class="model-picker-trigger-name">Choose a model</span>
+                <span id="llm-model-trigger-meta" class="model-picker-trigger-meta"></span>
+              </span>
+              <span class="model-picker-chevron" aria-hidden="true">▾</span>
+            </button>
+            <div id="llm-model-panel" class="model-picker-panel" hidden>
+              <input id="llm-model-search" type="search" placeholder="Search models"
+                autocomplete="off" aria-label="Search models">
+              <div class="model-picker-columns">
+                <div id="llm-model-list" class="model-picker-list" role="listbox"
+                  aria-labelledby="llm-model-picker-label"></div>
+                <aside id="llm-model-detail" class="model-picker-detail" aria-live="polite"></aside>
+              </div>
+              <button type="button" id="llm-model-other" class="model-picker-other">Other model ID…</button>
+            </div>
+          </div>
+          <input id="llm-model-custom" name="llm-model-custom" type="text"
+            placeholder="provider/model-id" autocomplete="off" hidden>
+          <p id="llm-model-note" class="note">Prices are $/1M tokens (input/output). Reasoning badges mean the model can think step-by-step.</p>
+        </div>
+        <div class="field" id="llm-model-compat-field" hidden>
           <label for="llm-model">Model</label>
-          <input id="llm-model" name="llm-model" type="text" placeholder="openai/gpt-4o-mini">
+          <input id="llm-model" name="llm-model" type="text" placeholder="provider/model-id" autocomplete="off">
         </div>
         <div class="field">
           <label for="llm-web-search">

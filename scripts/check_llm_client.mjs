@@ -2,6 +2,7 @@ import assert from "node:assert/strict";
 import {
   callChatCompletion,
   createChatCompletionsUrl,
+  createModelApiUrl,
   streamChatCompletion
 } from "../docs/js/llm-client.js";
 
@@ -16,6 +17,10 @@ assert.equal(
 assert.equal(
   createChatCompletionsUrl("https://example.test"),
   "https://example.test/chat/completions"
+);
+assert.equal(
+  createModelApiUrl("https://openrouter.ai/api/v1/?ignored=1#fragment", "models"),
+  "https://openrouter.ai/api/v1/models"
 );
 
 for (const value of ["", "/api/v1", "//example.test/api", "ftp://example.test/v1", "data:text/plain,x"]) {

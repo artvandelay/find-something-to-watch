@@ -2,6 +2,7 @@
 // under Node for tests. Only final presentation text reaches streaming consumers.
 
 import { streamChatCompletion } from "./llm-client.js";
+import { isOpenRouterBaseUrl } from "./openrouter-models.js";
 import { sanitizeRecommendationQueue } from "./recommendations.js";
 import { validatePreferenceCandidates } from "./preferences.js";
 
@@ -270,14 +271,6 @@ function abortable(promise, signal) {
   });
 }
 
-function isExactOpenRouter(baseUrl) {
-  try {
-    return new URL(String(baseUrl || "")).hostname === "openrouter.ai";
-  } catch {
-    return false;
-  }
-}
-
 function localToolSchemas(tools) {
   const handlers = (tools && tools.handlers) || {};
   const schemas = Array.isArray(tools && tools.schemas) ? tools.schemas : [];
@@ -437,7 +430,7 @@ export async function runAgent(opts) {
       return fail();
     }
 
-    const webSearchEnabled = config.webSearch === true && isExactOpenRouter(config.baseUrl);
+    const webSearchEnabled = config.webSearch === true && isOpenRouterBaseUrl(config.baseUrl);
     const requestTools = localToolSchemas(tools);
     if (webSearchEnabled) {
       requestTools.push({ type: "openrouter:web_search" });

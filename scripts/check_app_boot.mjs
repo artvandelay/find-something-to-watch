@@ -681,6 +681,58 @@ async function workerUnavailableKeepsShellAndKeyGate() {
   }
 }
 
+async function settingsModelPickerSupportsOpenRouterDropdown() {
+  const app = await bootApp();
+  try {
+    await completeOnboarding(app);
+    await app.click("#settings-btn");
+    await app.settle();
+
+    check("OpenRouter settings expose the model picker",
+      app.$("#llm-model-picker") !== null && app.$("#llm-model-openrouter-field").hidden === false);
+    check("the default model is preselected",
+      /GPT-5\.6 Terra Pro/.test(app.text("#llm-model-trigger-name") || ""));
+
+    await app.click("#llm-model-trigger");
+    await app.settle();
+    check("opening the picker shows search and a model list",
+      app.$("#llm-model-panel").hidden === false
+        && !!app.$("#llm-model-search")
+        && app.$$(".model-picker-option").length > 0);
+
+    const sonnet = [...app.$$(".model-picker-option")]
+      .find((node) => node.dataset.modelId === "anthropic/claude-sonnet-4.6");
+    check("recommended models are listed as picker options", !!sonnet);
+    sonnet.click();
+    await app.settle();
+    await app.click("#settings-save");
+    let stored = JSON.parse(app.window.localStorage.getItem("ottbyok.llm") || "{}");
+    check("saving a picker model persists the slug",
+      stored.model === "anthropic/claude-sonnet-4.6", JSON.stringify(stored));
+
+    await app.click("#settings-btn");
+    await app.settle();
+    await app.click("#llm-model-trigger");
+    await app.settle();
+    await app.click("#llm-model-other");
+    await app.settle();
+    app.$("#llm-model-custom").value = "vendor/custom-model";
+    app.$("#llm-model-custom").dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.click("#settings-save");
+    stored = JSON.parse(app.window.localStorage.getItem("ottbyok.llm") || "{}");
+    check("saving a custom model persists the typed slug",
+      stored.model === "vendor/custom-model", JSON.stringify(stored));
+
+    app.$("#llm-base-url").value = "https://model.example.test/v1";
+    app.$("#llm-base-url").dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.settle();
+    check("non-OpenRouter URLs fall back to the free-text model field",
+      app.$("#llm-model-compat-field").hidden === false && app.$("#llm-model-openrouter-field").hidden === true);
+  } finally {
+    app.restore();
+  }
+}
+
 async function settingsWebSearchIsScopedToOpenRouter() {
   const app = await bootApp();
   try {
@@ -1071,6 +1123,7 @@ const suites = [
   chatIsGatedWithoutKey,
   conversationsAndLearnedMemoryPersist,
   workerUnavailableKeepsShellAndKeyGate,
+  settingsModelPickerSupportsOpenRouterDropdown,
   settingsWebSearchIsScopedToOpenRouter,
   developerSurfaceIsHidden,
   testModeIsLocalhostOnly,
