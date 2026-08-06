@@ -6,6 +6,7 @@ import { runAgent } from "./agent.js";
 import { createCatalogRuntime } from "./catalog-runtime.js";
 import { createStore, DEFAULT_LLM } from "./store.js";
 import { createBrowserMemory } from "./memory.js";
+import { generateConversationTitle } from "./conversation-title.js";
 import {
   DEFAULT_RECOMMENDATION_REASON,
   allowsRewatch,
@@ -47,7 +48,7 @@ const DOM_IDS = [
   "onboarding-title", "onboarding-progress", "onboarding-llm-api-key",
   "onboarding-history-file", "onboarding-history-summary", "onboarding-history-status",
   "onboarding-history-remove", "onboarding-back", "onboarding-next",
-  "shell", "sidebar-toggle", "sidebar", "sidebar-collapse", "backdrop", "new-chat-btn",
+  "shell", "sidebar-toggle", "sidebar", "sidebar-collapse", "sidebar-collapse-icon", "backdrop", "new-chat-btn",
   "conversation-list", "conversation-list-items", "subscriptions-summary", "subscriptions-edit",
   "playlists-btn", "context-btn", "settings-btn", "catalog-status",
   "workspace", "chat-region", "chat-transcript", "chat-key-error", "chat-note",
@@ -96,8 +97,6 @@ let prompts = null;
 let records = [];
 let recordsById = new Map();
 let catalogMeta = null;
-/** Full snapshot provider order for Settings — never the subscription-scoped manifest list. */
-let snapshotProviderOrder = DEFAULT_PROVIDER_ORDER;
 let displayCatalogReady = false;
 let richIndexReady = false;
 let catalogRuntimeState = "BOOTING";
@@ -283,9 +282,8 @@ async function fetchJson(url) {
 }
 
 function providerOrder() {
-  return Array.isArray(snapshotProviderOrder) && snapshotProviderOrder.length > 0
-    ? snapshotProviderOrder
-    : DEFAULT_PROVIDER_ORDER;
+  const order = catalogMeta && Array.isArray(catalogMeta.provider_order) ? catalogMeta.provider_order : null;
+  return order && order.length > 0 ? order : DEFAULT_PROVIDER_ORDER;
 }
 
 function cancelActiveHistoryImport() {
@@ -876,6 +874,28 @@ function userFacingMilestone(phase, text) {
   return raw || "Working";
 }
 
+async function labelNewConversation(query, { conversationId, signal, turnGeneration, turnId } = {}) {
+  if (!conversationId || conversation.messages.length !== 1) return;
+  let title = "";
+  try {
+    if (hasDeterministicAgent()) {
+      title = String(query).split(/\s+/).slice(0, 7).join(" ");
+    } else {
+      title = await generateConversationTitle(store.getLlm(), query, { signal });
+    }
+  } catch (error) {
+    if (error?.name === "AbortError" || signal?.aborted) throw error;
+    dialogs.appendTrace("Conversation title unavailable");
+    return;
+  }
+  if (!title || turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+  const saved = await memory.renameConversation(conversationId, title);
+  if (saved.conversation.id !== conversationId || turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+  conversation = saved.conversation;
+  await refreshConversationList();
+  dialogs.appendTrace("Conversation titled: " + sanitizeTraceText(title));
+}
+
 function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress, onFirstVisibleToken }) {
   return function onEvent(event) {
     if (!event || typeof event !== "object" || event.turnId !== turnId ||
@@ -976,7 +996,7 @@ async function onSubmit() {
   setShellBusy(true);
   dialogs.clearTrace();
   chat.startTurn();
-  chat.setTurnStatus(userFacingMilestone("PLANNING"));
+  chat.setTurnStatus("Naming this chat");
   const startedAt = Date.now();
   let lastMeaningfulElapsed = 0;
   const activityTimer = window.setInterval(() => {
@@ -996,6 +1016,16 @@ async function onSubmit() {
   let catalogManifest = { count: records.length, providers: [...subscriptions] };
 
   try {
+    // The label is intentionally resolved before catalog/model work. It gives the
+    // sidebar a useful name at the beginning of a potentially long first turn.
+    await labelNewConversation(query, {
+      conversationId: conversation.id,
+      signal: thisController.signal,
+      turnGeneration,
+      turnId
+    });
+    if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+    chat.setTurnStatus(userFacingMilestone("PLANNING"));
     // IndexedDB personalization and the subscription-scoped catalog manifest are
     // independent; start both immediately and join only when building agent context.
     const contextTiming = turnTiming.start("indexeddb_context");
@@ -1253,42 +1283,30 @@ async function onDeleteConversation(conversationId) {
 
 async function onSubscriptionsChange(newProviders) {
   cancelActiveTurn();
-  const providers = Array.from(new Set(Array.isArray(newProviders) ? newProviders : []));
-  // This write is the user action. It must succeed or fail independently of
-  // refreshing the catalog and reseeding cards below.
-  profile = await memory.setProfile({ ...profile, providers, onboardingComplete: true });
+  profile = await memory.setProfile({ ...profile, providers: newProviders, onboardingComplete: true });
   subscriptions = new Set(profile.providers);
+  invalidateCatalogManifestCache();
+  updateRuntimeCatalogMetadata();
   sidebar.renderSubscriptions(profile.providers);
   renderPlaylists();
   titleDetailsView?.refresh();
-  refreshSendReadiness();
-
-  try {
-    invalidateCatalogManifestCache();
-    updateRuntimeCatalogMetadata();
-    await refreshSeenKeys();
-    if (conversation.messages.length === 0) {
-      // Empty chats should rebuild the seed for the new subscription scope.
-      await seedRecommendationQueue({ force: true });
+  await refreshSeenKeys();
+  if (conversation.messages.length === 0) {
+    // Empty chats should rebuild the seed for the new subscription scope.
+    await seedRecommendationQueue({ force: true });
+  } else {
+    const available = filterQueueItems(recommendationQueue.items);
+    if (available.length !== recommendationQueue.items.length) {
+      await persistQueue({
+        ...recommendationQueue,
+        items: available,
+        source: available.length ? recommendationQueue.source : null
+      });
     } else {
-      const available = filterQueueItems(recommendationQueue.items);
-      if (available.length !== recommendationQueue.items.length) {
-        await persistQueue({
-          ...recommendationQueue,
-          items: available,
-          source: available.length ? recommendationQueue.source : null
-        });
-      } else {
-        renderQueue();
-      }
+      renderQueue();
     }
-  } catch (error) {
-    // The subscription choice is already safely stored. Keep Settings' save
-    // result independent from a temporary catalog or rendering failure.
-    console.warn("ui: subscription refresh failed after saving.", error && error.message ? error.message : error);
-    renderQueue();
   }
-  return profile;
+  refreshSendReadiness();
 }
 
 function exportMeta() {
@@ -1389,10 +1407,6 @@ async function loadCatalog() {
   recordsById = new Map();
   for (const rec of records) recordsById.set(rec.id, rec);
   catalogMeta = catalogDoc.meta || {};
-  const loadedOrder = Array.isArray(catalogMeta.provider_order)
-    ? catalogMeta.provider_order.filter((slug) => typeof slug === "string" && slug)
-    : [];
-  snapshotProviderOrder = loadedOrder.length > 0 ? loadedOrder : [...DEFAULT_PROVIDER_ORDER];
   // Main thread keeps display/resolve projections only; the Worker owns search indexing.
   displayCatalogReady = records.length > 0;
 }
@@ -1412,13 +1426,7 @@ function updateRuntimeCatalogMetadata() {
   void getCatalogManifest()
     .then((manifest) => {
       if (manifest && manifest.meta && typeof manifest.meta === "object") {
-        // Manifest meta is subscription-scoped (providers/order can shrink to the
-        // current selection). Keep the full snapshot order for Settings choices.
-        catalogMeta = {
-          ...catalogMeta,
-          ...manifest.meta,
-          provider_order: snapshotProviderOrder
-        };
+        catalogMeta = { ...catalogMeta, ...manifest.meta };
         updateCatalogStatusLine();
       }
     })

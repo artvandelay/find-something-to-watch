@@ -173,7 +173,8 @@ assert.deepEqual((await memory.getQueue()).items.map((item) => item.id), ["tmdb:
 assert.deepEqual((await memory.getPlaylists()).playlists[0].titleIds, ["tmdb:playlist"]);
 
 const active = await memory.getConversation();
-await memory.appendUserMessage(active.id, "I always avoid horror.");
+const pendingFirstTurn = await memory.appendUserMessage(active.id, "I always avoid horror.");
+assert.equal(pendingFirstTurn.conversation.title, "");
 const completed = await memory.completeTurn(active.id, {
   content: "Try a comedy.",
   queue: {

@@ -195,9 +195,13 @@ export function createSidebarView(el, deps) {
     const effective = !mobileQuery.matches && collapsed;
     el.shell.classList.toggle("sidebar-collapsed", effective);
     el.sidebarCollapse.setAttribute("aria-expanded", effective ? "false" : "true");
-    const label = effective ? "Expand sidebar" : "Collapse sidebar";
+    const label = effective ? "Expand navigation" : "Collapse navigation";
     el.sidebarCollapse.setAttribute("aria-label", label);
     el.sidebarCollapse.title = label;
+    el.sidebarCollapseIcon?.setAttribute(
+      "d",
+      effective ? "M4 4h7v16H4zM14 9l3 3-3 3" : "M4 4h7v16H4zM18 9l-3 3 3 3"
+    );
   }
 
   function openSidebar() {

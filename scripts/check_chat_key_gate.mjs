@@ -36,7 +36,7 @@ try {
   assert.equal(app.requested.some((url) => /chat\/completions/.test(url)), false);
 
   await app.click("#settings-btn");
-  app.$("#settings-provider-list [data-provider-slug=netflix]").click();
+  app.$("#settings-provider-list input[value=netflix]").click();
   app.$("#llm-api-key").value = "test-key";
   await app.click("#settings-save");
 

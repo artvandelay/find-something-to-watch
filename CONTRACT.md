@@ -437,6 +437,11 @@ They reject stale conversation IDs and retain playlists, history, subscriptions,
 LLM configuration when starting or activating a conversation.
 `renameConversation(conversationId, title)` updates the active conversation or an archived
 thread title (collapsed, 72 characters maximum).
+For a new conversation, the UI first requests a title before it starts catalog or main-model
+work. OpenRouter uses `openai/gpt-5-nano` for this one-line request; other compatible
+endpoints use the configured model. The title is plain text, capped at seven words and 72
+characters, and replaces the temporary “New conversation” label only when the request
+succeeds. A failed or cancelled title request never prevents the recommendation turn.
 `deleteConversation(conversationId)` permanently removes a conversation; deleting the active
 one activates the newest archive when present, otherwise starts a fresh empty conversation.
 
@@ -1005,11 +1010,6 @@ playlist-create-view, playlist-create-name, playlist-create, playlist-feedback
 The two local-data controls (`export-backup-btn`, `clear-data-btn`) live in
 `#settings-dialog` under a `Local data` fieldset and are wired by
 `docs/js/views/dialogs.js`, not by the sidebar view.
-`#settings-dialog` keeps Save/Close in a pinned footer. `#settings-provider-list`
-always offers the full curated provider set from the catalog snapshot order (not the
-subscription-scoped manifest projection), through a searchable multi-select with
-selected-provider chips; it does not use the onboarding checkbox grid. Saving provider
-choices completes the browser-memory write before catalog reseeding or rendering work.
 
 The playlists dialog has exactly four mutually exclusive views, and shows one at a
 time: `#playlist-picker` (compact save-to-playlist checklist opened from a card's `+`

@@ -245,7 +245,7 @@ function sanitizeConversation(value, now) {
   return {
     schema: MEMORY_SCHEMA_VERSION,
     id: collapsedString(value.id, 160) || newConversationId(),
-    title: collapsedString(value.title || firstUser?.content, 72),
+    title: collapsedString(value.title, 72),
     createdAt,
     updatedAt: isIsoDate(value.updatedAt) ? value.updatedAt : nowIso(now),
     messages: trimmed
@@ -561,7 +561,6 @@ export function createBrowserMemory({
         .slice(-MEMORY_LIMITS.conversationMessages);
       const nextConversation = {
         ...conversation,
-        title: conversation.title || collapsedString(text, 72),
         updatedAt: timestamp,
         messages
       };
@@ -585,10 +584,9 @@ export function createBrowserMemory({
         return { conversation: clone(conversation), queue: clone(queue) };
       }
       messages.pop();
-      const firstUser = messages.find((message) => message.role === "user");
       const nextConversation = sanitizeConversation({
         ...conversation,
-        title: firstUser ? collapsedString(firstUser.content, 72) : "",
+        title: conversation.title,
         updatedAt: nowIso(now),
         messages
       }, now);

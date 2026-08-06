@@ -11,9 +11,7 @@ import {
   downloadText,
   isAbsoluteHttpUrl,
   renderProviderOptions,
-  renderSubscriptionPicker,
-  selectedProviders,
-  selectedSubscriptionProviders
+  selectedProviders
 } from "./dom.js";
 
 /**
@@ -110,7 +108,7 @@ export function createDialogs(el, deps) {
   async function openSettings() {
     try {
       const profile = await deps.getProfile();
-      renderSubscriptionPicker(el.settingsProviderList, deps.providerOrder(), profile.providers);
+      renderProviderOptions(el.settingsProviderList, deps.providerOrder(), profile.providers);
       const llm = deps.store.getLlm();
       el.llmBaseUrl.value = llm.baseUrl || "";
       el.llmApiKey.value = llm.apiKey || "";
@@ -121,8 +119,8 @@ export function createDialogs(el, deps) {
       if (el.llmWebSearch.disabled) el.llmWebSearch.checked = false;
       feedback(el.settingsFeedback);
       el.settingsDialog.showModal();
-      const providerTrigger = el.settingsProviderList.querySelector(".subscription-picker-trigger");
-      if (providerTrigger) providerTrigger.focus();
+      const firstProvider = el.settingsProviderList.querySelector("input[type='checkbox']");
+      if (firstProvider) firstProvider.focus();
       void refreshModelPicker({ baseUrl: llm.baseUrl, savedModel: llm.model || "" });
     } catch (err) {
       deps.onError(err && err.message ? err.message : "Could not open settings.");
@@ -136,7 +134,7 @@ export function createDialogs(el, deps) {
 
     el.settingsSave.addEventListener("click", async () => {
       feedback(el.settingsFeedback);
-      const providers = selectedSubscriptionProviders(el.settingsProviderList);
+      const providers = selectedProviders(el.settingsProviderList);
       if (providers.length === 0) {
         feedback(el.settingsFeedback, "Select at least one subscription before saving.");
         return;

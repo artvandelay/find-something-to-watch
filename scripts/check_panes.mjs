@@ -11,12 +11,6 @@ import {
 let passed = 0;
 let failed = 0;
 
-function toggleSubscription(app, provider) {
-  const option = app.$("#settings-provider-list [data-provider-slug=" + provider + "]");
-  if (!option) throw new Error("Missing subscription option: " + provider);
-  option.click();
-}
-
 function check(name, condition, detail) {
   if (condition) {
     passed += 1;
@@ -29,7 +23,7 @@ function check(name, condition, detail) {
 
 async function completeOnboarding(app, provider = "netflix") {
   await app.click("#settings-btn");
-  toggleSubscription(app, provider);
+  app.$("#settings-provider-list input[value=" + provider + "]").click();
   app.$("#llm-api-key").value = "sk-test";
   await app.click("#settings-save");
 }
