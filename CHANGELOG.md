@@ -36,6 +36,11 @@ All notable changes to this project will be documented here.
 
 ### Changed
 
+- Settings keeps the full curated subscription list available after save (subscription-scoped
+  catalog metadata no longer hides unselected services), persists provider changes before
+  catalog refresh work, and uses a searchable multi-select with removable provider chips
+  instead of a large checkbox grid. The model picker’s “Other model ID” control sits in a
+  proper panel footer instead of overlapping the list.
 - Settings remains the place to edit subscriptions after chat starts; the sidebar now has
   an Edit control, and subscription changes reseed or rescope the picks rail.
 - Conversations can be renamed or deleted from the sidebar, with deletes confirmed and the

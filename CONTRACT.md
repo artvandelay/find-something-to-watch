@@ -1005,6 +1005,11 @@ playlist-create-view, playlist-create-name, playlist-create, playlist-feedback
 The two local-data controls (`export-backup-btn`, `clear-data-btn`) live in
 `#settings-dialog` under a `Local data` fieldset and are wired by
 `docs/js/views/dialogs.js`, not by the sidebar view.
+`#settings-dialog` keeps Save/Close in a pinned footer. `#settings-provider-list`
+always offers the full curated provider set from the catalog snapshot order (not the
+subscription-scoped manifest projection), through a searchable multi-select with
+selected-provider chips; it does not use the onboarding checkbox grid. Saving provider
+choices completes the browser-memory write before catalog reseeding or rendering work.
 
 The playlists dialog has exactly four mutually exclusive views, and shows one at a
 time: `#playlist-picker` (compact save-to-playlist checklist opened from a card's `+`

@@ -96,6 +96,8 @@ let prompts = null;
 let records = [];
 let recordsById = new Map();
 let catalogMeta = null;
+/** Full snapshot provider order for Settings — never the subscription-scoped manifest list. */
+let snapshotProviderOrder = DEFAULT_PROVIDER_ORDER;
 let displayCatalogReady = false;
 let richIndexReady = false;
 let catalogRuntimeState = "BOOTING";
@@ -281,8 +283,9 @@ async function fetchJson(url) {
 }
 
 function providerOrder() {
-  const order = catalogMeta && Array.isArray(catalogMeta.provider_order) ? catalogMeta.provider_order : null;
-  return order && order.length > 0 ? order : DEFAULT_PROVIDER_ORDER;
+  return Array.isArray(snapshotProviderOrder) && snapshotProviderOrder.length > 0
+    ? snapshotProviderOrder
+    : DEFAULT_PROVIDER_ORDER;
 }
 
 function cancelActiveHistoryImport() {
@@ -1250,30 +1253,42 @@ async function onDeleteConversation(conversationId) {
 
 async function onSubscriptionsChange(newProviders) {
   cancelActiveTurn();
-  profile = await memory.setProfile({ ...profile, providers: newProviders, onboardingComplete: true });
+  const providers = Array.from(new Set(Array.isArray(newProviders) ? newProviders : []));
+  // This write is the user action. It must succeed or fail independently of
+  // refreshing the catalog and reseeding cards below.
+  profile = await memory.setProfile({ ...profile, providers, onboardingComplete: true });
   subscriptions = new Set(profile.providers);
-  invalidateCatalogManifestCache();
-  updateRuntimeCatalogMetadata();
   sidebar.renderSubscriptions(profile.providers);
   renderPlaylists();
   titleDetailsView?.refresh();
-  await refreshSeenKeys();
-  if (conversation.messages.length === 0) {
-    // Empty chats should rebuild the seed for the new subscription scope.
-    await seedRecommendationQueue({ force: true });
-  } else {
-    const available = filterQueueItems(recommendationQueue.items);
-    if (available.length !== recommendationQueue.items.length) {
-      await persistQueue({
-        ...recommendationQueue,
-        items: available,
-        source: available.length ? recommendationQueue.source : null
-      });
-    } else {
-      renderQueue();
-    }
-  }
   refreshSendReadiness();
+
+  try {
+    invalidateCatalogManifestCache();
+    updateRuntimeCatalogMetadata();
+    await refreshSeenKeys();
+    if (conversation.messages.length === 0) {
+      // Empty chats should rebuild the seed for the new subscription scope.
+      await seedRecommendationQueue({ force: true });
+    } else {
+      const available = filterQueueItems(recommendationQueue.items);
+      if (available.length !== recommendationQueue.items.length) {
+        await persistQueue({
+          ...recommendationQueue,
+          items: available,
+          source: available.length ? recommendationQueue.source : null
+        });
+      } else {
+        renderQueue();
+      }
+    }
+  } catch (error) {
+    // The subscription choice is already safely stored. Keep Settings' save
+    // result independent from a temporary catalog or rendering failure.
+    console.warn("ui: subscription refresh failed after saving.", error && error.message ? error.message : error);
+    renderQueue();
+  }
+  return profile;
 }
 
 function exportMeta() {
@@ -1374,6 +1389,10 @@ async function loadCatalog() {
   recordsById = new Map();
   for (const rec of records) recordsById.set(rec.id, rec);
   catalogMeta = catalogDoc.meta || {};
+  const loadedOrder = Array.isArray(catalogMeta.provider_order)
+    ? catalogMeta.provider_order.filter((slug) => typeof slug === "string" && slug)
+    : [];
+  snapshotProviderOrder = loadedOrder.length > 0 ? loadedOrder : [...DEFAULT_PROVIDER_ORDER];
   // Main thread keeps display/resolve projections only; the Worker owns search indexing.
   displayCatalogReady = records.length > 0;
 }
@@ -1393,7 +1412,13 @@ function updateRuntimeCatalogMetadata() {
   void getCatalogManifest()
     .then((manifest) => {
       if (manifest && manifest.meta && typeof manifest.meta === "object") {
-        catalogMeta = { ...catalogMeta, ...manifest.meta };
+        // Manifest meta is subscription-scoped (providers/order can shrink to the
+        // current selection). Keep the full snapshot order for Settings choices.
+        catalogMeta = {
+          ...catalogMeta,
+          ...manifest.meta,
+          provider_order: snapshotProviderOrder
+        };
         updateCatalogStatusLine();
       }
     })

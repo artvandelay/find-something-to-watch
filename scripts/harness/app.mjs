@@ -61,8 +61,8 @@ export async function bootApp({
       region: "IN",
       built_at: "2026-08-04",
       count: (records || defaultRecords()).length,
-      provider_order: ["netflix", "prime", "hotstar"],
-      providers: { netflix: 2, prime: 2, hotstar: 1 }
+      provider_order: ["netflix", "prime", "hotstar", "zee5", "sonyliv", "appletv", "mubi", "plex"],
+      providers: { netflix: 2, prime: 2, hotstar: 1, zee5: 1, sonyliv: 1, appletv: 1, mubi: 1, plex: 1 }
     },
     records: records || defaultRecords()
   };
