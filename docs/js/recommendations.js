@@ -94,3 +94,18 @@ export function recommendationSourceLabel(queue) {
   const safeQueue = sanitizeRecommendationQueue(queue);
   return safeQueue?.source?.query ? `For “${safeQueue.source.query}”` : "";
 }
+
+/** True when a reason is worth showing — not empty and not the catalog filler fallback. */
+export function isUsefulReason(reason) {
+  const text = collapseWhitespace(reason, RECOMMENDATION_LIMITS.reasonCharacters);
+  return Boolean(text) && text !== DEFAULT_RECOMMENDATION_REASON;
+}
+
+/** Detect an explicit rewatch ask so watched titles may stay in the decision. */
+export function allowsRewatch(query) {
+  const text = String(query || "").toLowerCase();
+  return /\brewatch\b/.test(text)
+    || /\bwatch(?:ing)? again\b/.test(text)
+    || /\bseen (?:it|this|them) again\b/.test(text)
+    || /\balready watched\b/.test(text) && /\bagain\b/.test(text);
+}

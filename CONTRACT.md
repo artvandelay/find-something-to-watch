@@ -431,9 +431,14 @@ and fallback reasons.
 `threads.items` stores up to 20 non-empty inactive conversations, newest first, each
 with its full ranked queue. A current conversation is never duplicated in its archive.
 `appendUserMessage`, `removeLastPendingUserMessage`, `completeTurn`, `startNewConversation`,
-`activateArchivedConversation`, and `getConversationList` are atomic memory APIs.
+`activateArchivedConversation`, `renameConversation`, `deleteConversation`, and
+`getConversationList` are atomic memory APIs.
 They reject stale conversation IDs and retain playlists, history, subscriptions, and
 LLM configuration when starting or activating a conversation.
+`renameConversation(conversationId, title)` updates the active conversation or an archived
+thread title (collapsed, 72 characters maximum).
+`deleteConversation(conversationId)` permanently removes a conversation; deleting the active
+one activates the newest archive when present, otherwise starts a fresh empty conversation.
 
 `completeTurn(conversationId, { content, queue, meta, learned })` writes the completed
 assistant message, ranked queue, and an optional validated learned-preference record in
@@ -471,6 +476,11 @@ missing or mismatched evidence, or malformed fields are rejected. The model owns
 semantic judgment and must omit ordinary requests (for example, “horror recommendations”),
 temporary requests, and sensitive inferences. Local validation performs no keyword-based
 semantic inference. Evidence itself is never persisted.
+Pick-card feedback may also upsert a durable like/avoid fact from a title’s primary genre
+(or title theme when genre is unavailable) without model evidence; that path still uses
+known kinds/polarities and the same 80-character value cap. “Already seen” appends a
+normalized title key to local watch-history `seen` so future picks and tools exclude it.
+“Not tonight” only removes the title from the current queue.
 Manually authored You.md remains separate. The generated “Learned from chats” context
 is inspectable, editable, disableable, and clearable by the user.
 
@@ -860,7 +870,7 @@ completion, total token counts, and request count. Billing is:
 
 `amountUsd` is the aggregate of `usage.cost` only if every successful request reports a
 valid nonnegative provider cost. The UI says `$0.0042 reported` only for complete
-provider-reported billing; otherwise it says `Cost unavailable`. It never estimates
+provider-reported billing; otherwise it omits the cost segment. It never estimates
 cost from text or token counts.
 
 ## Rerank prompt response schema (docs/assets/prompts.json, version 4)
@@ -911,12 +921,14 @@ set in Settings; You.md and optional watch history are managed in Profile & cont
 
 Shell (three vertical panels: sidebar, chat column, picks rail):
 shell, sidebar-toggle, sidebar, sidebar-collapse, backdrop, new-chat-btn,
-conversation-list, conversation-list-items, subscriptions-summary, playlists-btn, context-btn, settings-btn,
-catalog-status, workspace
+conversation-list, conversation-list-items, subscriptions-summary, subscriptions-edit,
+playlists-btn, context-btn, settings-btn, catalog-status, workspace
 
 `#catalog-status` is the quiet footer line under the picks rail, not a sidebar block.
 `#conversation-list` contains the active conversation and up to 20 archived
-conversations as keyboard-accessible controls in newest-first order.
+conversations as keyboard-accessible controls in newest-first order. Each row exposes
+rename and delete actions. `#subscriptions-edit` opens Settings so subscriptions remain
+editable after onboarding.
 
 Chat column:
 chat-region, chat-transcript, chat-key-error, chat-note, query-form, query-input,
@@ -927,29 +939,35 @@ message content is capped at `--chat-measure` (about 70ch) and centered.
 Without a stored API key, `#chat-key-error` directs the visitor to Settings and the
 send control remains disabled.
 Each active assistant turn renders an attached placeholder/activity row directly under
-its triggering user message. The row exposes phase changes through a polite status
-announcement, exposes Stop while active, displays elapsed time only after one second,
-and says `TAKING LONGER THAN USUAL` after 20 seconds without meaningful progress. It
-collapses successful activity to a compact catalog/match/time summary. It must not
-announce every elapsed-second tick.
+its triggering user message. While the turn runs, the row shows a checklist of user-facing
+milestones (services → catalog search → comparing matches → writing/answering), exposes
+Stop, displays elapsed time only after one second, and surfaces
+`Still working — this is taking longer than usual` after 20 seconds without meaningful
+progress. A polite status announcement mirrors the active milestone for assistive tech.
+Successful activity collapses the checklist to a compact catalog/match/time summary.
+It must not announce every elapsed-second tick.
 
 The attached activity exposes streamed text as literal text while a reply is in
 progress; it renders the completed reply through the safe Markdown converter only
 after success. Stop and failure messages remain inline with the attached activity.
-The final metrics footer contains total latency, total tokens, and either
-`$0.0042 reported` for complete provider-reported billing or `Cost unavailable`.
+Token counts and provider-reported cost stay out of the chat activity. They are written
+to the developer Trace as `Metrics: …` with total latency, total tokens, and
+`$0.0042 reported` when billing is complete and provider-reported. Unpriced turns omit
+the cost segment instead of repeating `Cost unavailable`.
 
 Picks rail:
 pane-separator, queue-region, queue-collapse, queue-restore, queue-status,
-queue-viewport, queue-track, queue-empty, queue-source, queue-top-pick,
+queue-feedback, queue-viewport, queue-track, queue-empty, queue-source, queue-top-pick,
 queue-alternatives, queue-more
 
 The rail scrolls vertically. `#queue-source` renders the bounded source query for the
-latest queue update. `#queue-top-pick` contains rank one, `#queue-alternatives`
+latest queue update. `#queue-feedback` briefly confirms taste actions and newly learned
+preferences. `#queue-top-pick` contains rank one, `#queue-alternatives`
 contains ranks two and three, and `#queue-more` is a collapsed control/container for
 ranks four through 20. Recommendation cards retain poster, title, metadata, synopsis,
-provider links, and a `+` save button; the title is a real details trigger. Save and
-provider actions are independent interactive descendants and never open details.
+provider links, a `+` save button, and taste actions (`More like this`, `Not for me`,
+`Already seen`, `Not tonight`); the title is a real details trigger. Save, provider,
+and feedback actions are independent interactive descendants and never open details.
 On desktop, `#pane-separator` supports pointer and keyboard resizing,
 `#queue-collapse` hides the rail, and `#queue-restore` restores it. The stored layout
 is ignored by the stacked mobile presentation.

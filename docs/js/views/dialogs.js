@@ -105,25 +105,31 @@ export function createDialogs(el, deps) {
 
   // ---- Settings: subscriptions + LLM key/model/baseUrl ----
 
+  async function openSettings() {
+    try {
+      const profile = await deps.getProfile();
+      renderProviderOptions(el.settingsProviderList, deps.providerOrder(), profile.providers);
+      const llm = deps.store.getLlm();
+      el.llmBaseUrl.value = llm.baseUrl || "";
+      el.llmApiKey.value = llm.apiKey || "";
+      setModelPickerMode(llm.baseUrl);
+      renderModelPicker(llm.model || "");
+      el.llmWebSearch.checked = llm.webSearch === true;
+      el.llmWebSearch.disabled = !isOpenRouterBaseUrl(el.llmBaseUrl.value);
+      if (el.llmWebSearch.disabled) el.llmWebSearch.checked = false;
+      feedback(el.settingsFeedback);
+      el.settingsDialog.showModal();
+      const firstProvider = el.settingsProviderList.querySelector("input[type='checkbox']");
+      if (firstProvider) firstProvider.focus();
+      void refreshModelPicker({ baseUrl: llm.baseUrl, savedModel: llm.model || "" });
+    } catch (err) {
+      deps.onError(err && err.message ? err.message : "Could not open settings.");
+    }
+  }
+
   function wireSettings() {
-    el.settingsBtn.addEventListener("click", async () => {
-      try {
-        const profile = await deps.getProfile();
-        renderProviderOptions(el.settingsProviderList, deps.providerOrder(), profile.providers);
-        const llm = deps.store.getLlm();
-        el.llmBaseUrl.value = llm.baseUrl || "";
-        el.llmApiKey.value = llm.apiKey || "";
-        setModelPickerMode(llm.baseUrl);
-        renderModelPicker(llm.model || "");
-        el.llmWebSearch.checked = llm.webSearch === true;
-        el.llmWebSearch.disabled = !isOpenRouterBaseUrl(el.llmBaseUrl.value);
-        if (el.llmWebSearch.disabled) el.llmWebSearch.checked = false;
-        feedback(el.settingsFeedback);
-        el.settingsDialog.showModal();
-        void refreshModelPicker({ baseUrl: llm.baseUrl, savedModel: llm.model || "" });
-      } catch (err) {
-        deps.onError(err && err.message ? err.message : "Could not open settings.");
-      }
+    el.settingsBtn.addEventListener("click", () => {
+      void openSettings();
     });
 
     el.settingsSave.addEventListener("click", async () => {
@@ -448,5 +454,5 @@ export function createDialogs(el, deps) {
   wireExports();
   wireDeveloper();
 
-  return { appendTrace, clearTrace, openDeveloper, setBusy };
+  return { appendTrace, clearTrace, openDeveloper, openSettings, setBusy };
 }

@@ -1,4 +1,4 @@
-import { buildIndex, seedQueue } from "./catalog.js";
+import { normalizeTitle, seedQueue } from "./catalog.js";
 import { parseWatchHistoryExport, summarize } from "./history.js";
 import { createHistoryPlanInferer } from "./history-model.js";
 import { createTools } from "./tools.js";
@@ -8,10 +8,11 @@ import { createStore, DEFAULT_LLM } from "./store.js";
 import { createBrowserMemory } from "./memory.js";
 import {
   DEFAULT_RECOMMENDATION_REASON,
+  allowsRewatch,
   defaultRecommendationQueue,
   sanitizeRecommendationQueue
 } from "./recommendations.js";
-import { mergeLearnedPreferences, renderLearnedContext } from "./preferences.js";
+import { mergeLearnedPreferences, renderLearnedContext, upsertLearnedPreference } from "./preferences.js";
 import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER } from "./providers.js";
 import {
   addToPlaylist,
@@ -47,12 +48,12 @@ const DOM_IDS = [
   "onboarding-history-file", "onboarding-history-summary", "onboarding-history-status",
   "onboarding-history-remove", "onboarding-back", "onboarding-next",
   "shell", "sidebar-toggle", "sidebar", "sidebar-collapse", "backdrop", "new-chat-btn",
-  "conversation-list", "conversation-list-items", "subscriptions-summary", "playlists-btn", "context-btn",
-  "settings-btn", "catalog-status",
+  "conversation-list", "conversation-list-items", "subscriptions-summary", "subscriptions-edit",
+  "playlists-btn", "context-btn", "settings-btn", "catalog-status",
   "workspace", "chat-region", "chat-transcript", "chat-key-error", "chat-note",
   "query-form", "query-input", "send-btn", "stop-btn",
   "pane-separator", "queue-region", "queue-collapse", "queue-restore",
-  "queue-status", "queue-source", "queue-viewport", "queue-track", "queue-empty",
+  "queue-status", "queue-feedback", "queue-source", "queue-viewport", "queue-track", "queue-empty",
   "queue-top-pick", "queue-alternatives", "queue-more",
   "title-details-dialog", "title-details-close", "title-details-title", "title-details-content",
   "attribution",
@@ -95,10 +96,12 @@ let prompts = null;
 let records = [];
 let recordsById = new Map();
 let catalogMeta = null;
-let index = null;
+let displayCatalogReady = false;
 let richIndexReady = false;
 let catalogRuntimeState = "BOOTING";
 let catalogRuntimeError = null;
+let cachedCatalogManifest = null;
+let cachedCatalogManifestKey = null;
 
 let profile = null;
 let subscriptions = new Set();
@@ -106,6 +109,7 @@ let conversation = null;
 let recommendationQueue = defaultRecommendationQueue();
 let learned = null;
 let playlists = null;
+let seenKeysCache = [];
 
 let controller = null;
 let historyController = null;
@@ -113,9 +117,125 @@ let stateGeneration = 0;
 let activeTurnId = null;
 let activePendingUser = null;
 
+const MAX_TIMING_PHASES = 24;
+const AGENT_TIMING_PHASES = new Set(["model_request", "catalog_tool"]);
+
+function createTurnTiming(turnId) {
+  const perf = window.performance;
+  const origin = typeof perf?.now === "function" ? perf.now() : Date.now();
+  const phases = [];
+  let droppedPhases = 0;
+  let firstVisibleTokenMs = null;
+  let sequence = 0;
+  const now = () => typeof perf?.now === "function" ? perf.now() : Date.now();
+  const mark = (name) => {
+    const id = `turn:${turnId}:${sequence++}:${name}`;
+    try {
+      perf?.mark?.(id);
+    } catch {
+      // Timing must remain optional when Performance APIs are unavailable.
+    }
+    return id;
+  };
+  const add = (name, atMs = now() - origin, durationMs = 0) => {
+    if (phases.length >= MAX_TIMING_PHASES) {
+      droppedPhases += 1;
+      return;
+    }
+    phases.push({
+      name,
+      atMs: Math.max(0, Math.round(atMs)),
+      durationMs: Math.max(0, Math.round(durationMs)),
+      order: sequence++
+    });
+  };
+  const submitMark = mark("submit");
+  add("submit", 0);
+  return {
+    elapsed: () => Math.max(0, now() - origin),
+    start(name) {
+      return { name, atMs: now() - origin, mark: mark(name + ":start") };
+    },
+    end(entry) {
+      const endMark = mark(entry.name + ":end");
+      let durationMs = Math.max(0, now() - origin - entry.atMs);
+      try {
+        const measureName = `turn:${turnId}:${sequence++}:${entry.name}:duration`;
+        perf?.measure?.(measureName, entry.mark, endMark);
+        const measured = perf?.getEntriesByName?.(measureName).at(-1)?.duration;
+        if (Number.isFinite(measured)) durationMs = measured;
+        perf?.clearMeasures?.(measureName);
+      } catch {
+        // Keep the fallback duration when measure() cannot run.
+      } finally {
+        try {
+          perf?.clearMarks?.(entry.mark);
+          perf?.clearMarks?.(endMark);
+        } catch {
+          // Performance buffers are best effort only.
+        }
+      }
+      add(entry.name, entry.atMs, durationMs);
+    },
+    point(name) {
+      const atMs = now() - origin;
+      const pointMark = mark(name);
+      try {
+        perf?.clearMarks?.(pointMark);
+      } catch {
+        // Performance buffers are best effort only.
+      }
+      add(name, atMs);
+      if (name === "first_visible_token" && firstVisibleTokenMs === null) {
+        firstVisibleTokenMs = Math.max(0, Math.round(atMs));
+      }
+    },
+    mergeAgent(timing, agentStartedAt) {
+      for (const phase of Array.isArray(timing?.phases) ? timing.phases : []) {
+        if (!AGENT_TIMING_PHASES.has(phase?.name) || !Number.isFinite(phase.atMs) ||
+          !Number.isFinite(phase.durationMs)) continue;
+        add(
+          phase.name,
+          agentStartedAt + Math.max(0, phase.atMs),
+          Math.max(0, phase.durationMs)
+        );
+      }
+      if (Number.isFinite(timing?.droppedPhases) && timing.droppedPhases > 0) {
+        droppedPhases += Math.floor(timing.droppedPhases);
+      }
+    },
+    finish() {
+      const completeMark = mark("complete_turn");
+      try {
+        perf?.clearMarks?.(completeMark);
+      } catch {
+        // Performance buffers are best effort only.
+      }
+      add("complete_turn");
+      try {
+        perf?.clearMarks?.(submitMark);
+      } catch {
+        // Performance buffers are best effort only.
+      }
+      const totalMs = Math.max(0, Math.round(now() - origin));
+      return {
+        totalMs,
+        firstTokenMs: firstVisibleTokenMs,
+        phases: phases
+          .sort((left, right) => left.atMs - right.atMs || left.order - right.order)
+          .map(({ name, atMs, durationMs }) => ({ name, atMs, durationMs })),
+        droppedPhases
+      };
+    }
+  };
+}
+
 const runtime = createCatalogRuntime({
   onState(nextState) {
     catalogRuntimeState = nextState;
+    if (nextState === "BOOTING" || nextState === "RESTARTING") {
+      invalidateCatalogManifestCache();
+    }
     if (nextState === "READY_BASIC" || nextState === "READY_RICH") {
       catalogRuntimeError = null;
     }
@@ -153,7 +273,9 @@ function clearError() {
 }
 
 async function fetchJson(url) {
-  const res = await fetch(url, { cache: "no-cache" });
+  // Static catalog assets are versioned by deploy; keep normal HTTP cache semantics
+  // so warm loads reuse transfer instead of forcing a full re-download.
+  const res = await fetch(url, { cache: "default" });
   if (!res.ok) throw new Error("Request for " + url + " failed with status " + res.status + ".");
   return await res.json();
 }
@@ -214,8 +336,10 @@ async function importHistoryFile(file, { signal = null, onStatus = null } = {}) 
 function updateCatalogStatusLine() {
   const count = typeof (catalogMeta && catalogMeta.count) === "number" ? catalogMeta.count : records.length;
   const builtAt = String((catalogMeta && catalogMeta.built_at) || "").slice(0, 10);
-  let line = count.toLocaleString("en-IN") + " titles · snapshot " + builtAt;
-  if (!index) line += " · preparing search index…";
+  let line = count.toLocaleString("en-IN") + " titles";
+  if (builtAt) line += " · snapshot " + builtAt;
+  line += " · availability may have changed";
+  if (!displayCatalogReady) line += " · preparing catalog…";
   else if (!richIndexReady) line += " · refining with synopses…";
   if (catalogRuntimeError) line += " · catalog analysis unavailable";
   queueView.setCatalogStatus(line);
@@ -224,7 +348,7 @@ function updateCatalogStatusLine() {
       ? "Catalog analysis is unavailable. Chat will be available when it recovers."
       : "";
     chat.setNote(runtimeNote || (!richIndexReady
-      ? "Search is still refining with full synopses — results may be less precise for a moment."
+      ? "Catalog analysis is still refining with full synopses — results may be less precise for a moment."
       : ""));
     refreshSendReadiness();
   }
@@ -233,10 +357,13 @@ function updateCatalogStatusLine() {
 function refreshSendReadiness() {
   const hasKey = store.hasKey();
   chat.setKeyAvailable(hasKey);
-  chat.setSendReady(hasKey && Boolean(index));
+  chat.setSendReady(hasKey && displayCatalogReady);
 }
 
-/** Navigation and destructive local-data controls are locked during a turn. */
+/**
+ * Destructive conversation/profile controls stay locked during a turn.
+ * Non-destructive navigation (scroll, collapse, title details) stays available.
+ */
 function setShellBusy(busy) {
   if (sidebar) sidebar.setBusy(busy);
   if (dialogs) dialogs.setBusy(busy);
@@ -244,6 +371,36 @@ function setShellBusy(busy) {
 
 function currentScope() {
   return { subscriptions: [...subscriptions] };
+}
+
+function catalogManifestCacheKey(scope = currentScope()) {
+  const subscriptions = Array.isArray(scope.subscriptions) ? scope.subscriptions : [];
+  return subscriptions
+    .filter((value) => typeof value === "string" && value)
+    .slice()
+    .sort()
+    .join("\0");
+}
+
+function invalidateCatalogManifestCache() {
+  cachedCatalogManifest = null;
+  cachedCatalogManifestKey = null;
+}
+
+async function getCatalogManifest({ signal = null } = {}) {
+  if (hasDeterministicAgent()) {
+    return { count: records.length, providers: [...subscriptions] };
+  }
+  const key = catalogManifestCacheKey();
+  if (cachedCatalogManifest && cachedCatalogManifestKey === key) {
+    return cachedCatalogManifest;
+  }
+  const manifest = await runtime.describe({ scope: currentScope() }, signal);
+  if (catalogManifestCacheKey() === key) {
+    cachedCatalogManifest = manifest;
+    cachedCatalogManifestKey = key;
+  }
+  return manifest;
 }
 
 function runtimeIsReady() {
@@ -255,21 +412,10 @@ function hasDeterministicAgent() {
 }
 
 function runWhenIdle(run) {
-  // A search index is required before the composer becomes usable. Browsers may
+  // Sidecar merge is deferred so first paint stays responsive. Browsers may
   // defer idle callbacks indefinitely while a page is busy, so bound the wait.
   if (typeof window.requestIdleCallback === "function") window.requestIdleCallback(run, { timeout: 250 });
   else setTimeout(run, 0);
-}
-
-function scheduleIndex() {
-  runWhenIdle(() => {
-    try {
-      index = buildIndex(records);
-    } catch (err) {
-      showError("Could not prepare the search index. " + (err && err.message ? err.message : ""));
-    }
-    updateCatalogStatusLine();
-  });
 }
 
 function scheduleSidecar() {
@@ -287,13 +433,9 @@ function scheduleSidecar() {
             merged += 1;
           }
         }
+        // Display projections stay on the main thread; search indexing belongs
+        // to the catalog Worker only — do not rebuild a second BM25 index here.
         if (merged > 0) {
-          await new Promise((resolve) => {
-            runWhenIdle(() => {
-              index = buildIndex(records);
-              resolve();
-            });
-          });
           renderQueue();
           titleDetailsView?.refresh();
         }
@@ -310,16 +452,45 @@ function scheduleSidecar() {
 
 // ---- Hydration / rendering --------------------------------------------------
 
-function hydrate(id, reason = "") {
+function seenKeySet(keys = seenKeysCache) {
+  return new Set((Array.isArray(keys) ? keys : []).filter((key) => typeof key === "string" && key));
+}
+
+function titleIsWatched(title, seen = seenKeySet()) {
+  if (seen.size === 0) return false;
+  const key = normalizeTitle(title);
+  return Boolean(key) && seen.has(key);
+}
+
+async function refreshSeenKeys() {
+  try {
+    seenKeysCache = (await memory.getHistory())?.seen ?? [];
+  } catch {
+    seenKeysCache = [];
+  }
+  return seenKeysCache;
+}
+
+function hydrate(id, reason = "", { includeWatched = false } = {}) {
   const full = recordsById.get(id);
   if (!full) return null;
   const scoped = intersectProviders(full, subscriptions);
   if (scoped.p.length === 0) return null; // no longer available on current subscriptions
+  if (!includeWatched && titleIsWatched(scoped.t)) return null;
   return {
     id: scoped.id, t: scoped.t, y: scoped.y, k: scoped.k, rt: scoped.rt, r: scoped.r,
     p: scoped.p, l: scoped.l, g: scoped.g, u: scoped.u, img: scoped.img, s: scoped.s || "",
     reason
   };
+}
+
+function filterQueueItems(items, { includeWatched = false } = {}) {
+  return (Array.isArray(items) ? items : [])
+    .map((item) => {
+      const hydrated = hydrate(item.id, item.reason, { includeWatched });
+      return hydrated ? { id: hydrated.id, reason: item.reason || "" } : null;
+    })
+    .filter(Boolean);
 }
 
 function resolveTitleDetails(id) {
@@ -364,15 +535,21 @@ function resolveTitleDetails(id) {
   };
 }
 
-function hydratedQueue() {
-  return recommendationQueue.items.map((item) => hydrate(item.id, item.reason)).filter(Boolean);
+function hydratedQueue({ includeWatched = false } = {}) {
+  return recommendationQueue.items
+    .map((item) => hydrate(item.id, item.reason, { includeWatched }))
+    .filter(Boolean);
 }
 
 function renderQueue() {
   const list = hydratedQueue();
-  queueView.render(list, richIndexReady || index
-    ? "Nothing queued for your current subscriptions yet."
-    : "Still preparing the catalog…", recommendationQueue.source);
+  let emptyText = "Still preparing the catalog…";
+  if (displayCatalogReady) {
+    emptyText = subscriptions.size === 0
+      ? "Choose subscriptions in Settings to fill your picks."
+      : "Nothing queued for your current subscriptions yet.";
+  }
+  queueView.render(list, emptyText, recommendationQueue.source);
 }
 
 function renderPlaylists() {
@@ -419,34 +596,89 @@ async function onPlaylistExport(format, playlistId) {
   downloadText(playlistFilename(playlist, extension), mime, content);
 }
 
-async function seedQueueIfEmpty() {
-  if (conversation.messages.length > 0 || recommendationQueue.items.length > 0 || records.length === 0) return;
-  let seenKeys = [];
-  try {
-    seenKeys = (await memory.getHistory())?.seen ?? [];
-  } catch (err) {
-    showError("Watch history is unavailable, so the initial picks may include watched titles.");
-  }
-  const ids = seedQueue(records, { providers: subscriptions, excludeKeys: seenKeys, limit: 20 });
-  recommendationQueue = {
-    ...defaultRecommendationQueue(),
-    items: ids.map((id) => ({ id, reason: DEFAULT_RECOMMENDATION_REASON }))
-  };
+async function persistQueue(nextQueue) {
+  recommendationQueue = nextQueue;
   try {
     const saved = await memory.saveConversationAndQueue(conversation, recommendationQueue);
     conversation = saved.conversation;
     recommendationQueue = saved.queue;
   } catch (err) {
-    console.warn("ui: could not persist the seeded queue.", err && err.message ? err.message : err);
+    console.warn("ui: could not persist the recommendation queue.", err && err.message ? err.message : err);
   }
   renderQueue();
 }
 
+async function seedRecommendationQueue({ force = false } = {}) {
+  if (records.length === 0 || subscriptions.size === 0) {
+    if (force && recommendationQueue.items.length > 0) {
+      await persistQueue(defaultRecommendationQueue());
+    } else {
+      renderQueue();
+    }
+    return;
+  }
+  if (!force && (conversation.messages.length > 0 || recommendationQueue.items.length > 0)) return;
+
+  const seenKeys = await refreshSeenKeys();
+  let ids = [];
+  // Prefer the Worker seed projection when the catalog host is ready; otherwise
+  // use the local display fallback so first paint is never blocked on Worker boot.
+  if (runtimeIsReady()) {
+    try {
+      const cards = await runtime.seedQueue({
+        scope: currentScope(),
+        excludeKeys: seenKeys,
+        limit: 20
+      });
+      ids = cards.map((card) => card && card.id).filter((id) => typeof id === "string" && id);
+    } catch (err) {
+      console.warn("ui: worker seed unavailable; using local display fallback.", err && err.message ? err.message : err);
+    }
+  }
+  if (ids.length === 0) {
+    ids = seedQueue(records, { providers: subscriptions, excludeKeys: seenKeys, limit: 20 });
+  }
+  // Keep the stored fallback reason for schema compatibility; the picks rail hides filler copy.
+  await persistQueue({
+    ...defaultRecommendationQueue(),
+    items: ids.map((id) => ({ id, reason: DEFAULT_RECOMMENDATION_REASON }))
+  });
+}
+
+async function seedQueueIfEmpty() {
+  await seedRecommendationQueue({ force: false });
+}
+
+async function pruneUnavailableAndWatched({ reseedsIfEmpty = true, includeWatched = false } = {}) {
+  const nextItems = filterQueueItems(recommendationQueue.items, { includeWatched });
+  const changed = nextItems.length !== recommendationQueue.items.length
+    || nextItems.some((item, index) => item.id !== recommendationQueue.items[index]?.id);
+  if (changed) {
+    await persistQueue({
+      ...recommendationQueue,
+      items: nextItems,
+      source: nextItems.length ? recommendationQueue.source : null
+    });
+  } else {
+    renderQueue();
+  }
+  if (reseedsIfEmpty && recommendationQueue.items.length === 0 && conversation.messages.length === 0) {
+    await seedRecommendationQueue({ force: true });
+  }
+}
+
 function renderConversation() {
   chat.renderConversation(conversation.messages);
-  void memory.getConversationList()
-    .then((list) => sidebar.renderConversationList(list))
-    .catch((error) => console.warn("ui: could not render conversations.", error));
+  void refreshConversationList();
+}
+
+async function refreshConversationList() {
+  try {
+    const list = await memory.getConversationList();
+    sidebar.renderConversationList(list);
+  } catch (error) {
+    console.warn("ui: could not render conversations.", error);
+  }
 }
 
 // ---- Agent tools + submission -----------------------------------------------
@@ -493,7 +725,155 @@ function sanitizeTraceText(value) {
   return String(value || "").replace(/[\r\n\t]+/g, " ").slice(0, 240);
 }
 
-function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress }) {
+function appendTimingTrace(timing) {
+  const phases = Array.isArray(timing?.phases) ? timing.phases : [];
+  if (phases.length === 0) return;
+  const detail = phases
+    .map((phase) => phase.name + (phase.durationMs > 0 ? " " + phase.durationMs + "ms" : ""))
+    .join(" → ");
+  dialogs.appendTrace(sanitizeTraceText("Timing: " + detail));
+}
+
+function formatTelemetryLine({ timing, usage, billing } = {}) {
+  const items = [];
+  if (Number.isFinite(timing?.totalMs)) items.push((timing.totalMs / 1000).toFixed(1) + "s");
+  if (Number.isFinite(usage?.totalTokens)) items.push(usage.totalTokens + " tokens");
+  if (billing?.basis === "provider_reported" && billing.complete === true &&
+    Number.isFinite(billing.amountUsd)) {
+    items.push("$" + billing.amountUsd.toFixed(4) + " reported");
+  }
+  return items.join(" · ");
+}
+
+function appendTelemetryTrace({ timing, usage, billing } = {}) {
+  const line = formatTelemetryLine({ timing, usage, billing });
+  if (line) dialogs.appendTrace("Metrics: " + line);
+}
+
+function preferenceFromTitle(rec, polarity) {
+  const genre = Array.isArray(rec?.g) ? rec.g.find((value) => typeof value === "string" && value.trim()) : "";
+  if (genre) {
+    return { kind: "genre", polarity, value: String(genre).trim().slice(0, 80) };
+  }
+  const title = typeof rec?.t === "string" ? rec.t.trim().slice(0, 80) : "";
+  if (title) return { kind: "theme", polarity, value: title };
+  return null;
+}
+
+function describeLearnedChange(before, after) {
+  if (!after?.items?.length) return "";
+  const prior = new Map((before?.items || []).map((item) => [item.id, item]));
+  const newest = [...after.items]
+    .filter((item) => {
+      const old = prior.get(item.id);
+      return !old || old.polarity !== item.polarity;
+    })
+    .sort((left, right) => String(right.lastConfirmedAt || "").localeCompare(String(left.lastConfirmedAt || "")))[0];
+  if (!newest) return "";
+  const verb = newest.polarity === "avoid" ? "less" : "more";
+  return "Got it — " + verb + " " + newest.value;
+}
+
+async function removeTitleFromQueue(titleId) {
+  const nextItems = (recommendationQueue.items || []).filter((item) => item.id !== titleId);
+  if (nextItems.length === recommendationQueue.items.length) {
+    renderQueue();
+    return;
+  }
+  await persistQueue({
+    ...recommendationQueue,
+    items: nextItems,
+    source: nextItems.length ? recommendationQueue.source : null
+  });
+}
+
+async function markTitleSeen(rec) {
+  const title = typeof rec?.t === "string" ? rec.t.trim() : "";
+  const key = normalizeTitle(title);
+  if (!key) return;
+  const now = new Date().toISOString();
+  const existing = await memory.getHistory();
+  if (!existing) {
+    await memory.setHistory({
+      schema: 2,
+      importedAt: now,
+      sources: [{ name: "Marked in picks", kind: "manual" }],
+      series: rec?.k === "tv" ? [{ name: title, episodes: 1, lastWatched: null }] : [],
+      movies: rec?.k === "tv" ? [] : [{ title, lastWatched: null }],
+      other: [],
+      seen: [key]
+    });
+  } else {
+    const seen = new Set(Array.isArray(existing.seen) ? existing.seen : []);
+    seen.add(key);
+    const movies = Array.isArray(existing.movies) ? existing.movies.slice() : [];
+    const series = Array.isArray(existing.series) ? existing.series.slice() : [];
+    const inMovies = movies.some((entry) => normalizeTitle(entry?.title) === key);
+    const inSeries = series.some((entry) => normalizeTitle(entry?.name) === key);
+    if (!inMovies && !inSeries) {
+      if (rec?.k === "tv") series.push({ name: title, episodes: 1, lastWatched: null });
+      else movies.push({ title, lastWatched: null });
+    }
+    await memory.setHistory({
+      ...existing,
+      movies,
+      series,
+      seen: Array.from(seen).sort()
+    });
+  }
+  await refreshSeenKeys();
+}
+
+async function onPickFeedback(titleId, action, rec) {
+  try {
+    if (action === "like" || action === "pass") {
+      if (profile?.memoryEnabled === false) {
+        queueView?.setFeedbackNote("Turn on learned preferences in Profile & context to save this.");
+        return;
+      }
+      const candidate = preferenceFromTitle(rec, action === "like" ? "like" : "avoid");
+      if (!candidate) {
+        queueView?.setFeedbackNote("Could not learn from that title.");
+        return;
+      }
+      const before = learned || await memory.getLearned();
+      const next = upsertLearnedPreference(before, candidate);
+      learned = await memory.setLearned(next);
+      const note = describeLearnedChange(before, learned) ||
+        (action === "like" ? "Got it — more like that." : "Got it — less of that.");
+      queueView?.setFeedbackNote(note);
+      if (action === "pass") await removeTitleFromQueue(titleId);
+      return;
+    }
+    if (action === "seen") {
+      await markTitleSeen(rec);
+      await removeTitleFromQueue(titleId);
+      queueView?.setFeedbackNote("Marked as seen — will not recommend it again.");
+      return;
+    }
+    if (action === "tonight") {
+      await removeTitleFromQueue(titleId);
+      queueView?.setFeedbackNote("Skipped for tonight.");
+    }
+  } catch (error) {
+    showError(error && error.message ? error.message : "Could not save that feedback.");
+  }
+}
+
+function userFacingMilestone(phase, text) {
+  const raw = String(text || phase || "").trim();
+  const key = String(phase || text || "").trim().toUpperCase();
+  if (key === "PLANNING" || /checking your services/i.test(raw)) return "Checking your services";
+  if (key === "SEARCHING CATALOG" || /searching/i.test(raw)) return "Searching the catalog";
+  if (key === "ANALYZING MATCHES" || /comparing matches/i.test(raw)) return "Comparing matches";
+  if (key === "WRITING" || /writing your picks|answering/i.test(raw)) {
+    return /answering/i.test(raw) ? "Answering about your pick" : "Writing your picks";
+  }
+  if (/taking longer/i.test(raw)) return "Still working — this is taking longer than usual";
+  return raw || "Working";
+}
+
+function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress, onFirstVisibleToken }) {
   return function onEvent(event) {
     if (!event || typeof event !== "object" || event.turnId !== turnId ||
       turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
@@ -502,34 +882,38 @@ function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgr
       const turns = diagnostics.conversation || {};
       const clipped = turns.droppedTurns > 0 || diagnostics.youmdTruncated === true
         || diagnostics.queue?.truncated === true;
+      const turnClass = typeof diagnostics.turnClass === "string" ? diagnostics.turnClass : "";
       dialogs.appendTrace(
         "Context: " + (turns.includedTurns || 0) + "/" + (turns.totalTurns || 0)
           + " complete turns · " + (diagnostics.totalCharacters || 0)
           + " chars" + (clipped ? " · clipped" : " · complete")
+          + (turnClass ? " · " + turnClass : "")
+          + (Number.isFinite(diagnostics.plannerBudget) ? " · planner≤" + diagnostics.plannerBudget : "")
       );
       return;
     }
     if (event.type === "status") {
       dialogs.appendTrace(sanitizeTraceText(event.phase || event.text));
-      chat.setTurnStatus(event.phase || event.text || "Working");
+      chat.setTurnStatus(userFacingMilestone(event.phase, event.text));
       onMeaningfulProgress();
       return;
     }
     if (event.type === "tool_call") {
       dialogs.appendTrace("Catalog tool requested");
-      chat.setTurnStatus("SEARCHING CATALOG");
+      chat.setTurnStatus(userFacingMilestone("SEARCHING CATALOG"));
       onMeaningfulProgress();
       return;
     }
     if (event.type === "tool_result") {
       dialogs.appendTrace("Catalog tool returned " + (Number.isFinite(event.count) ? event.count : 0) + " results");
       chat.addToolResult(event.count);
-      chat.setTurnStatus("ANALYZING MATCHES");
+      chat.setTurnStatus(userFacingMilestone("ANALYZING MATCHES"));
       onMeaningfulProgress();
       return;
     }
     if (event.type === "delta") {
       chat.appendDelta(event.text);
+      onFirstVisibleToken();
       onMeaningfulProgress();
       return;
     }
@@ -547,6 +931,17 @@ async function onSubmit() {
   }
   const query = chat.getQuery();
   if (!query) return;
+  const turnId = makeTurnId();
+  const turnTiming = createTurnTiming(turnId);
+  let agentStartedAt = null;
+  let completedTiming = null;
+  const finalizeTiming = (agentTiming = null) => {
+    if (completedTiming) return completedTiming;
+    if (agentTiming && agentStartedAt !== null) turnTiming.mergeAgent(agentTiming, agentStartedAt);
+    completedTiming = turnTiming.finish();
+    appendTimingTrace(completedTiming);
+    return completedTiming;
+  };
 
   clearError();
   if (!runtimeIsReady() && !hasDeterministicAgent()) {
@@ -570,14 +965,6 @@ async function onSubmit() {
     return;
   }
 
-  let seenKeys = [];
-  try {
-    seenKeys = (await memory.getHistory())?.seen ?? [];
-  } catch (err) {
-    showError("Personalization data is unavailable; this search may include watched titles.");
-  }
-
-  const turnId = makeTurnId();
   const thisController = new AbortController();
   controller = thisController;
   activeTurnId = turnId;
@@ -586,6 +973,7 @@ async function onSubmit() {
   setShellBusy(true);
   dialogs.clearTrace();
   chat.startTurn();
+  chat.setTurnStatus(userFacingMilestone("PLANNING"));
   const startedAt = Date.now();
   let lastMeaningfulElapsed = 0;
   const activityTimer = window.setInterval(() => {
@@ -593,7 +981,7 @@ async function onSubmit() {
     const elapsed = Math.max(0, Date.now() - startedAt);
     if (elapsed >= 1000) {
       const slow = elapsed - lastMeaningfulElapsed >= 20000;
-      if (slow) chat.setTurnStatus("TAKING LONGER THAN USUAL");
+      if (slow) chat.setTurnStatus(userFacingMilestone("TAKING LONGER THAN USUAL"));
       chat.setTurnElapsed(elapsed, { slow });
     }
   }, 250);
@@ -601,26 +989,77 @@ async function onSubmit() {
 
   let youmd = "";
   let history = null;
-  try {
-    const [manualYoumd, savedHistory, savedLearned, savedProfile] = await Promise.all([
-      memory.getYouMd(), memory.getHistory(), memory.getLearned(), memory.getProfile()
-    ]);
-    youmd = manualYoumd + (savedProfile.memoryEnabled === false ? "" : `\n\n${renderLearnedContext(savedLearned)}`);
-    history = savedHistory;
-  } catch (err) {
-    showError("Personalization data is unavailable; continuing without saved context.");
-  }
+  let seenKeys = [];
+  let catalogManifest = { count: records.length, providers: [...subscriptions] };
 
   try {
-    const catalogManifest = hasDeterministicAgent()
-      ? { count: records.length, providers: [...subscriptions] }
-      : await runtime.describe({ scope: currentScope() });
+    // IndexedDB personalization and the subscription-scoped catalog manifest are
+    // independent; start both immediately and join only when building agent context.
+    const contextTiming = turnTiming.start("indexeddb_context");
+    const manifestTiming = turnTiming.start("catalog_manifest");
+    const contextPromise = Promise.all([
+      memory.getYouMd(),
+      memory.getHistory(),
+      memory.getLearned(),
+      memory.getProfile()
+    ]).then((values) => {
+      turnTiming.end(contextTiming);
+      return values;
+    }, (error) => {
+      turnTiming.end(contextTiming);
+      throw error;
+    });
+    const manifestPromise = getCatalogManifest({ signal: thisController.signal })
+      .then((value) => {
+        turnTiming.end(manifestTiming);
+        return value;
+      }, (error) => {
+        turnTiming.end(manifestTiming);
+        throw error;
+      });
+
+    const [contextResult, manifestResult] = await Promise.allSettled([contextPromise, manifestPromise]);
+    if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+
+    if (contextResult.status === "fulfilled") {
+      const [manualYoumd, savedHistory, savedLearned, savedProfile] = contextResult.value;
+      youmd = manualYoumd + (savedProfile.memoryEnabled === false ? "" : `\n\n${renderLearnedContext(savedLearned)}`);
+      history = savedHistory;
+      seenKeys = savedHistory?.seen ?? [];
+      seenKeysCache = seenKeys;
+    } else {
+      showError("Personalization data is unavailable; continuing without saved context.");
+    }
+
+    if (manifestResult.status === "fulfilled") {
+      catalogManifest = manifestResult.value;
+    } else if (manifestResult.reason && manifestResult.reason.name === "AbortError") {
+      await rollbackPendingUserTurn(conversation.id, pendingUser);
+      {
+        const timing = finalizeTiming();
+        appendTelemetryTrace({ timing });
+        chat.failTurn({ message: "Stopped.", timing });
+      }
+      return;
+    } else if (!hasDeterministicAgent()) {
+      showError("Catalog analysis context is unavailable; continuing with a minimal manifest.");
+    }
+
+    if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
     const runner = hasDeterministicAgent() ? window.__OTT_TEST_RUN_AGENT__ : runAgent;
-    const currentQueue = recommendationQueueContext(recommendationQueue);
+    const includeWatched = allowsRewatch(query);
+    const scopedQueue = {
+      ...recommendationQueue,
+      items: filterQueueItems(recommendationQueue.items, { includeWatched })
+    };
+    const currentQueue = recommendationQueueContext(scopedQueue);
+    agentStartedAt = turnTiming.elapsed();
+    turnTiming.point("agent_start");
+    let firstVisibleTokenRecorded = false;
     const result = await runner({
       config: store.getLlm(),
       prompts,
-      tools: makeTools(seenKeys, currentQueue?.items || []),
+      tools: makeTools(includeWatched ? [] : seenKeys, currentQueue?.items || []),
       context: {
         youmd,
         history,
@@ -630,38 +1069,61 @@ async function onSubmit() {
       },
       query,
       conversation: priorMessages,
-      onEvent: makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress: markProgress }),
+      onEvent: makeEventHandler({
+        turnId,
+        turnGeneration,
+        startedAt,
+        onMeaningfulProgress: markProgress,
+        onFirstVisibleToken: () => {
+          if (firstVisibleTokenRecorded) return;
+          firstVisibleTokenRecorded = true;
+          turnTiming.point("first_visible_token");
+        }
+      }),
       signal: thisController.signal,
       turnId
     });
 
     if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+    const timing = finalizeTiming(result.timing);
+    const metricsTiming = result.timing && Number.isFinite(result.timing.totalMs) ? result.timing : timing;
     if (!result.ok) {
+      appendTelemetryTrace({ timing: metricsTiming, usage: result.usage, billing: result.billing });
+      chat.failTurn({ message: "The turn did not complete.", timing: metricsTiming });
       await rollbackPendingUserTurn(conversation.id, pendingUser);
+      chat.restoreQueryIfEmpty(query);
       return;
     }
 
     const replyText = result.reply || prompts.no_results || "I couldn't come up with anything this time.";
     let nextQueue = recommendationQueue;
     if (Array.isArray(result.queue)) {
-      nextQueue = sanitizeRecommendationQueue({
+      const includeWatched = allowsRewatch(query);
+      const grounded = sanitizeRecommendationQueue({
         source: {
           conversationId: conversation.id,
           turnId,
           query
         },
         items: result.queue
-      }) || recommendationQueue;
+      });
+      if (grounded) {
+        nextQueue = {
+          ...grounded,
+          items: filterQueueItems(grounded.items, { includeWatched })
+        };
+      }
     }
+    const priorLearned = learned || await memory.getLearned();
     const nextLearned = Array.isArray(result.memoryCandidates) && profile?.memoryEnabled !== false
-      ? mergeLearnedPreferences(learned || await memory.getLearned(), result.memoryCandidates, query)
-      : learned;
+      ? mergeLearnedPreferences(priorLearned, result.memoryCandidates, query)
+      : priorLearned;
     const saved = await memory.completeTurn(conversation.id, {
       content: replyText,
       queue: nextQueue,
       meta: {
         status: "complete",
-        timing: result.timing,
+        timing,
         usage: result.usage,
         billing: result.billing
       },
@@ -672,17 +1134,24 @@ async function onSubmit() {
     recommendationQueue = saved.queue;
     learned = saved.learned ?? nextLearned;
     renderQueue();
+    appendTelemetryTrace({ timing: metricsTiming, usage: result.usage, billing: result.billing });
     chat.completeTurn({
       reply: replyText,
-      timing: result.timing,
-      usage: result.usage,
-      billing: result.billing,
+      timing: metricsTiming,
       catalogCount: typeof catalogMeta?.count === "number" ? catalogMeta.count : records.length
     });
+    const learnedNote = describeLearnedChange(priorLearned, learned);
+    if (learnedNote) queueView?.setFeedbackNote(learnedNote);
   } catch (err) {
     if (turnGeneration === stateGeneration && activeTurnId === turnId) {
       await rollbackPendingUserTurn(conversation.id, pendingUser);
-      chat.failTurn({ message: err && err.message ? err.message : "The search failed." });
+      const timing = finalizeTiming();
+      appendTelemetryTrace({ timing });
+      chat.failTurn({
+        message: err && err.message ? err.message : "The search failed.",
+        timing
+      });
+      chat.restoreQueryIfEmpty(query);
     }
   } finally {
     window.clearInterval(activityTimer);
@@ -700,9 +1169,10 @@ async function onStop() {
   if (!controller) return;
   const conversationId = conversation.id;
   const pendingUser = activePendingUser;
-  chat.failTurn({ message: "Stopped." });
+  chat.failTurn({ message: "Stopped.", status: "Stopped" });
   cancelActiveTurn();
   await rollbackPendingUserTurn(conversationId, pendingUser);
+  chat.restoreQueryIfEmpty(pendingUser?.content);
 }
 
 // ---- New chat / subscriptions / context / backup ---------------------------
@@ -742,24 +1212,67 @@ async function onActivateConversation(conversationId) {
     const saved = await memory.activateArchivedConversation(conversationId);
     conversation = saved.conversation;
     recommendationQueue = saved.queue;
+    await refreshSeenKeys();
     renderConversation();
-    renderQueue();
+    await pruneUnavailableAndWatched({
+      reseedsIfEmpty: conversation.messages.length === 0,
+      includeWatched: false
+    });
     clearError();
   } catch (error) {
     showError(error && error.message ? error.message : "Could not open that conversation.");
   }
 }
 
+async function onRenameConversation(conversationId, title) {
+  cancelActiveTurn();
+  const saved = await memory.renameConversation(conversationId, title);
+  conversation = saved.conversation;
+  await refreshConversationList();
+  clearError();
+}
+
+async function onDeleteConversation(conversationId) {
+  cancelActiveTurn();
+  const saved = await memory.deleteConversation(conversationId);
+  conversation = saved.conversation;
+  recommendationQueue = saved.queue;
+  await refreshSeenKeys();
+  renderConversation();
+  if (conversation.messages.length === 0) {
+    await seedQueueIfEmpty();
+  } else {
+    await pruneUnavailableAndWatched({ reseedsIfEmpty: false });
+  }
+  updateCatalogStatusLine();
+  clearError();
+}
+
 async function onSubscriptionsChange(newProviders) {
   cancelActiveTurn();
   profile = await memory.setProfile({ ...profile, providers: newProviders, onboardingComplete: true });
   subscriptions = new Set(profile.providers);
+  invalidateCatalogManifestCache();
   updateRuntimeCatalogMetadata();
   sidebar.renderSubscriptions(profile.providers);
-  renderQueue();
   renderPlaylists();
   titleDetailsView?.refresh();
-  await seedQueueIfEmpty();
+  await refreshSeenKeys();
+  if (conversation.messages.length === 0) {
+    // Empty chats should rebuild the seed for the new subscription scope.
+    await seedRecommendationQueue({ force: true });
+  } else {
+    const available = filterQueueItems(recommendationQueue.items);
+    if (available.length !== recommendationQueue.items.length) {
+      await persistQueue({
+        ...recommendationQueue,
+        items: available,
+        source: available.length ? recommendationQueue.source : null
+      });
+    } else {
+      renderQueue();
+    }
+  }
   refreshSendReadiness();
 }
 
@@ -778,6 +1291,12 @@ async function onSaveContextMemory(payload) {
   subscriptions = new Set(profile.providers);
   sidebar.renderSubscriptions(profile.providers);
   titleDetailsView?.refresh();
+  if (payload.history !== undefined) {
+    await refreshSeenKeys();
+    await pruneUnavailableAndWatched({
+      reseedsIfEmpty: conversation.messages.length === 0
+    });
+  }
   return saved;
 }
 
@@ -811,12 +1330,15 @@ async function reloadFromMemory() {
   recommendationQueue = await memory.getQueue();
   learned = await memory.getLearned();
   playlists = await memory.getPlaylists();
+  await refreshSeenKeys();
   sidebar.renderSubscriptions(profile.providers);
   renderConversation();
-  renderQueue();
   renderPlaylists();
   titleDetailsView?.refresh();
-  await seedQueueIfEmpty();
+  await pruneUnavailableAndWatched({
+    reseedsIfEmpty: conversation.messages.length === 0
+  });
+  if (recommendationQueue.items.length === 0) await seedQueueIfEmpty();
 }
 
 // ---- Onboarding --------------------------------------------------------------
@@ -852,6 +1374,8 @@ async function loadCatalog() {
   recordsById = new Map();
   for (const rec of records) recordsById.set(rec.id, rec);
   catalogMeta = catalogDoc.meta || {};
+  // Main thread keeps display/resolve projections only; the Worker owns search indexing.
+  displayCatalogReady = records.length > 0;
 }
 
 function initializeCatalogRuntime() {
@@ -866,7 +1390,7 @@ function reportCatalogRuntimeFailure(error) {
 }
 
 function updateRuntimeCatalogMetadata() {
-  void runtime.describe({ scope: currentScope() })
+  void getCatalogManifest()
     .then((manifest) => {
       if (manifest && manifest.meta && typeof manifest.meta === "object") {
         catalogMeta = { ...catalogMeta, ...manifest.meta };
@@ -904,7 +1428,12 @@ async function init() {
     providerLabel,
     onNewChat,
     onActivateConversation,
+    onRenameConversation,
+    onDeleteConversation,
+    onRefreshConversations: refreshConversationList,
+    onOpenSettings: () => dialogs.openSettings(),
     onOpenPlaylists: () => playlistsView.openManager(),
+    onError: showError,
     getCollapsed: () => store.getSidebarCollapsed(),
     setCollapsed: (collapsed) => store.setSidebarCollapsed(collapsed)
   });
@@ -921,7 +1450,8 @@ async function init() {
   queueView = createQueueView(el, {
     watchCta,
     onOpenPlaylistPicker: (titleId, title) => playlistsView.openPicker(titleId, title),
-    onOpenTitleDetails: (titleId, trigger) => titleDetailsView.open(titleId, trigger)
+    onOpenTitleDetails: (titleId, trigger) => titleDetailsView.open(titleId, trigger),
+    onFeedback: onPickFeedback
   });
 
   playlistsView = createPlaylistsView(el, {
@@ -974,7 +1504,6 @@ async function init() {
       await showShell();
     }
 
-    scheduleIndex();
     scheduleSidecar();
   } catch (err) {
     showError(err && err.message ? err.message : String(err));

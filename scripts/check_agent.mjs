@@ -1,6 +1,6 @@
 import assert from "node:assert/strict";
 import { readFile } from "node:fs/promises";
-import { runAgent } from "../docs/js/agent.js";
+import { classifyTurn, runAgent } from "../docs/js/agent.js";
 
 const tools = {
   schemas: [{
@@ -145,12 +145,27 @@ function ok(payload) {
   });
   assert.ok(done.timing.totalMs >= 0);
   assert.ok(done.timing.firstTokenMs !== null && done.timing.firstTokenMs >= 0);
+  const timingPhases = done.timing.phases;
+  assert.equal(timingPhases[0].name, "agent_start");
+  assert.equal(timingPhases.at(-1).name, "complete_turn");
+  assert.equal(timingPhases.filter((phase) => phase.name === "model_request").length, 3);
+  assert.equal(timingPhases.filter((phase) => phase.name === "catalog_tool").length, 1);
+  assert.ok(timingPhases.every((phase) => Number.isFinite(phase.atMs) && phase.atMs >= 0
+    && Number.isFinite(phase.durationMs) && phase.durationMs >= 0));
+  assert.ok(
+    timingPhases.findIndex((phase) => phase.name === "model_request")
+      < timingPhases.findIndex((phase) => phase.name === "catalog_tool")
+      && timingPhases.findIndex((phase) => phase.name === "catalog_tool")
+        < timingPhases.findIndex((phase) => phase.name === "first_token")
+  );
   assert.equal(done.usage.requestCount, 3);
-  assert.ok(events.some((event) => event.type === "status" && event.phase === "PLANNING"));
-  assert.ok(events.some((event) => event.type === "status" && event.phase === "SEARCHING CATALOG"));
-  assert.ok(events.some((event) => event.type === "status" && event.phase === "ANALYZING MATCHES"));
-  assert.ok(events.some((event) => event.type === "status" && event.phase === "WRITING"));
+  assert.equal(done.turnClass, "normal");
+  assert.ok(events.some((event) => event.type === "status" && /Checking your services/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Searching the catalog/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Comparing matches/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Writing your picks/i.test(event.phase)));
   assert.ok(events.some((event) => event.type === "delta" && event.text === "Try Space Heist tonight."));
+  assert.equal(events.find((event) => event.type === "context")?.diagnostics?.plannerBudget, 4);
 }
 
 // Test 1a - agent uses the shared client and preserves safe Markdown replies.
@@ -388,15 +403,13 @@ function ok(payload) {
   assert.equal(result.contextDiagnostics.conversation.droppedIncompleteMessages, 1);
 }
 
-// Test 6a - prior user and assistant turns both reach the model.
+// Test 6a - direct follow-ups stream in one request and keep queue context.
 {
   const requests = [];
   const events = [];
   const fetchImpl = async (url, init) => {
     requests.push(JSON.parse(init.body));
-    return requests.length === 1
-      ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
-      : ok({ choices: [{ message: { role: "assistant", content: "Because it matches your mood." } }] });
+    return ok({ choices: [{ message: { role: "assistant", content: "Because it matches your mood." } }] });
   };
   const result = await runAgent({
     config,
@@ -420,6 +433,10 @@ function ok(payload) {
     fetchImpl
   });
   assert.equal(result.ok, true);
+  assert.equal(result.turnClass, "direct");
+  assert.equal(requests.length, 1);
+  assert.equal(result.billing.requestCount, 1);
+  assert.equal("tools" in requests[0], false);
   const priorContents = requests[0].messages
     .filter((message) => message.role === "user" || message.role === "assistant")
     .map((message) => message.content);
@@ -430,10 +447,42 @@ function ok(payload) {
   assert.equal(result.contextDiagnostics.queue.includedItems, 1);
   assert.equal(result.contextDiagnostics.conversation.includedTurns, 1);
   assert.equal(result.contextDiagnostics.queue.truncated, false);
+  assert.equal(result.contextDiagnostics.turnClass, "direct");
+  assert.equal(result.contextDiagnostics.plannerBudget, 0);
   assert.deepEqual(
     events.find((event) => event.type === "context")?.diagnostics,
     result.contextDiagnostics
   );
+  assert.ok(events.some((event) => event.type === "status" && /Answering about your pick/i.test(event.phase)));
+}
+
+// Test 6a2 - turn classification and complex budget.
+{
+  assert.equal(classifyTurn("Malayalam thrillers"), "normal");
+  assert.equal(classifyTurn("why would I like it?", {
+    recommendationQueue: { items: [{ id: "x", t: "X" }] }
+  }), "direct");
+  assert.equal(classifyTurn("compare Malayalam drama versus Hindi crime across my services"), "complex");
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push(JSON.parse(init.body));
+    return requests.length === 1
+      ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+      : ok({ choices: [{ message: { role: "assistant", content: "Compared." } }] });
+  };
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "compare Malayalam drama versus Hindi crime across my services",
+    conversation: [],
+    onEvent: () => {},
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.turnClass, "complex");
+  assert.equal(result.contextDiagnostics.plannerBudget, 8);
 }
 
 // Test 6b - truncation keeps newest complete turns, not partial ones.
@@ -475,6 +524,42 @@ function ok(payload) {
   assert.deepEqual(priorContents, [recentUser, recentAssistant]);
   assert.equal(result.contextDiagnostics.conversation.droppedTurns, 1);
   assert.equal(result.contextDiagnostics.conversation.droppedIncompleteMessages, 1);
+}
+
+// Test 6c - older assistant prose is compacted while recent turns stay full.
+{
+  const requests = [];
+  const fetchImpl = async (url, init) => {
+    requests.push(JSON.parse(init.body));
+    return requests.length === 1
+      ? ok({ choices: [{ message: { role: "assistant", content: "{}" } }] })
+      : ok({ choices: [{ message: { role: "assistant", content: "Done." } }] });
+  };
+  const oldAssistant = "Older recommendation prose. ".repeat(40);
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: { youmd: "likes comedy", history: null, mood: "" },
+    query: "another comedy",
+    conversation: [
+      { role: "user", content: "first ask" },
+      { role: "assistant", content: oldAssistant },
+      { role: "user", content: "second ask" },
+      { role: "assistant", content: "Short recent answer." },
+      { role: "user", content: "third ask" },
+      { role: "assistant", content: "Newest short answer." }
+    ],
+    onEvent: () => {},
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  assert.ok(result.contextDiagnostics.conversation.compactedAssistantTurns >= 1);
+  const older = requests[0].messages.find((message) => message.role === "assistant"
+    && String(message.content).includes("Older recommendation"));
+  assert.ok(older);
+  assert.ok(older.content.length < oldAssistant.length);
+  assert.ok(requests[0].messages.some((message) => message.content === "Newest short answer."));
 }
 
 // Test 7 - the OpenRouter web tool is advertised only for its exact hostname.

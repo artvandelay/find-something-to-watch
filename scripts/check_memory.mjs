@@ -196,6 +196,24 @@ assert.equal(restored.conversation.id, active.id);
 assert.deepEqual(restored.queue.items.map((item) => item.id), ["tmdb:comedy"]);
 const list = await memory.getConversationList();
 assert.equal(list.active.id, active.id);
+
+const renamed = await memory.renameConversation(active.id, "  Friday picks  ");
+assert.equal(renamed.conversation.title, "Friday picks");
+assert.equal((await memory.getConversation()).title, "Friday picks");
+await memory.startNewConversation();
+const archivedRename = await memory.renameConversation(active.id, "Archive label");
+assert.equal(archivedRename.threads.items.find((item) => item.id === active.id)?.title, "Archive label");
+const deletedArchive = await memory.deleteConversation(active.id);
+assert.equal(deletedArchive.threads.items.some((item) => item.id === active.id), false);
+const currentId = (await memory.getConversation()).id;
+await memory.appendUserMessage(currentId, "Keep this one");
+await memory.completeTurn(currentId, { content: "Okay.", queue: { items: [{ id: "tmdb:keep" }] } });
+const newer = await memory.startNewConversation();
+assert.equal(newer.threads.items.some((item) => item.id === currentId), true);
+const deletedActive = await memory.deleteConversation(newer.conversation.id);
+assert.equal(deletedActive.conversation.id, currentId);
+assert.deepEqual(deletedActive.queue.items.map((item) => item.id), ["tmdb:keep"]);
+
 await memory.saveContextMemory({
   profile: { ...(await memory.getProfile()), memoryEnabled: false },
   learned: {

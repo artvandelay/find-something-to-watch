@@ -27,13 +27,29 @@ All notable changes to this project will be documented here.
   equal-weight recommendations.
 - Archived conversations with their ranked decisions, plus structured learned entertainment preferences
   that users can inspect, edit, disable, or clear separately from You.md.
-- Streaming turn phases, attached activity, Stop and slow-turn states, and latency/token metrics with
-  provider-reported cost or an explicit unavailable state.
+- Streaming turn phases, attached activity checklist, Stop and slow-turn states, and
+  latency/token metrics with provider-reported cost (developer Trace only).
+- Pick-card taste feedback: more like this, not for me, already seen, and not tonight, with a
+  visible confirmation when preferences are learned.
 - Offline hostile-input, catalog-integrity, and search-performance stress suites.
 - Live OpenRouter agent stress harness.
 
 ### Changed
 
+- Settings remains the place to edit subscriptions after chat starts; the sidebar now has
+  an Edit control, and subscription changes reseed or rescope the picks rail.
+- Conversations can be renamed or deleted from the sidebar, with deletes confirmed and the
+  active chat swapped to another thread or a new empty one.
+- Seeded and agent picks hide titles already in imported watch history unless the ask is an
+  explicit rewatch; filler “Selected from your catalog…” reasons no longer clutter cards.
+- Picks rail polish: poster-forward Top pick, quieter alternatives, calmer empty states, and
+  taste feedback on each card.
+- Chat activity now shows a checking-off milestone timeline instead of a single status line,
+  and buries token/cost telemetry in the developer Trace.
+- Perceived responsiveness: parallel IndexedDB/manifest prep, Worker-owned catalog
+  indexing with HTTP cache semantics, turn classes (`direct` / `normal` / `complex`),
+  editable composer during turns, rAF-batched streaming, and user-facing milestones.
+  See `docs/LATENCY.md`.
 - Ratings now use TMDB audience scores.
 - Posters are shipped for titles with at least 10 TMDB votes; other titles use initials fallbacks.
 - Provider labels, accessibility contrast, focus states, and loading states were updated.

@@ -68,10 +68,12 @@ export async function bootApp({
   };
 
   const requested = [];
+  const fetchOptions = [];
   let resolveDeferredSidecar = null;
-  window.fetch = async (input) => {
+  window.fetch = async (input, init = {}) => {
     const href = String(input);
     requested.push(href);
+    fetchOptions.push({ href, cache: init.cache || "default" });
     if (href.includes("prompts.json")) return jsonResponse(prompts);
     if (href.includes("catalog.json")) return jsonResponse(catalog);
     if (href.includes("catalog.text.json")) {
@@ -110,6 +112,7 @@ export async function bootApp({
     window,
     document: window.document,
     requested,
+    fetchOptions,
     downloads,
     idleRequests,
     catalog,

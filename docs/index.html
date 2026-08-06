@@ -117,8 +117,11 @@
           </div>
 
           <div class="sidebar-bottom">
-            <div class="sidebar-block">
-              <h2>Subscriptions</h2>
+            <div class="sidebar-block subscriptions-block">
+              <div class="subscriptions-head">
+                <h2>Subscriptions</h2>
+                <button id="subscriptions-edit" type="button">Edit</button>
+              </div>
               <p id="subscriptions-summary" aria-live="polite"></p>
             </div>
 
@@ -135,7 +138,7 @@
                 </svg>
                 <span class="nav-label">Profile &amp; context</span>
               </button>
-              <button id="settings-btn" type="button" aria-label="Settings" title="Settings">
+              <button id="settings-btn" type="button" aria-label="Settings" title="Settings — subscriptions and model">
                 <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
                   <circle cx="12" cy="12" r="3" fill="none" stroke="currentColor" stroke-width="1.8"/>
                   <path d="M12 3v3M12 18v3M21 12h-3M6 12H3M18.4 5.6l-2.1 2.1M7.7 16.3l-2.1 2.1M18.4 18.4l-2.1-2.1M7.7 7.7 5.6 5.6" fill="none" stroke="currentColor" stroke-width="1.8"/>
@@ -190,6 +193,7 @@
                 </svg>
               </button>
             </div>
+            <p id="queue-feedback" class="queue-feedback" role="status" aria-live="polite" hidden></p>
             <p id="queue-source" class="queue-source" hidden></p>
             <div id="queue-viewport">
               <div id="queue-track">
@@ -259,7 +263,7 @@
           </div>
           <input id="llm-model-custom" name="llm-model-custom" type="text"
             placeholder="provider/model-id" autocomplete="off" hidden>
-          <p id="llm-model-note" class="note">Prices are $/1M tokens (input/output). Reasoning badges mean the model can think step-by-step.</p>
+          <p id="llm-model-note" class="note">Prices are $/1M tokens (input/output). Reasoning badges mean the model can think step-by-step. Model speed is a trade-off you choose: faster models usually answer sooner, but this app cannot guarantee provider queue time or token throughput for an arbitrary bring-your-own-key endpoint.</p>
         </div>
         <div class="field" id="llm-model-compat-field" hidden>
           <label for="llm-model">Model</label>

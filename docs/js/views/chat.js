@@ -4,11 +4,21 @@
  */
 import { parseMarkdown, renderMarkdown } from "./markdown.js";
 
+const NEAR_BOTTOM_PX = 96;
+
+const TURN_STEPS = Object.freeze([
+  { id: "services", match: /checking your services/i, label: "Checking your services" },
+  { id: "search", match: /searching the catalog/i, label: "Searching the catalog" },
+  { id: "compare", match: /comparing matches/i, label: "Comparing matches" },
+  { id: "write", match: /writing your picks|answering about your pick/i, label: "Writing your picks" }
+]);
+
 export function createChatView(el, deps) {
   let busy = false;
   let keyAvailable = false;
   let sendReady = false;
   let activeTurn = null;
+  let streamFrame = 0;
 
   function renderMessage(role, content) {
     const wrap = document.createElement("div");
@@ -27,18 +37,58 @@ export function createChatView(el, deps) {
     return wrap;
   }
 
+  function isNearBottom() {
+    const node = el.chatTranscript;
+    return node.scrollHeight - node.scrollTop - node.clientHeight <= NEAR_BOTTOM_PX;
+  }
+
   function scrollToEnd() {
     el.chatTranscript.scrollTop = el.chatTranscript.scrollHeight;
   }
 
+  function cancelStreamFrame() {
+    if (!streamFrame) return;
+    if (typeof cancelAnimationFrame === "function") cancelAnimationFrame(streamFrame);
+    streamFrame = 0;
+  }
+
+  function flushStreamFrame() {
+    streamFrame = 0;
+    if (!activeTurn) return;
+    activeTurn.response.hidden = false;
+    activeTurn.response.textContent = activeTurn.partial;
+    if (activeTurn.stickToBottom) scrollToEnd();
+  }
+
   function renderConversation(messages) {
+    cancelStreamFrame();
     activeTurn = null;
     el.chatTranscript.textContent = "";
     if (messages.length === 0) {
       const empty = document.createElement("p");
       empty.className = "note chat-empty";
-      empty.textContent = "Ask for something to watch — your subscriptions and taste shape the picks.";
+      empty.textContent = "Ask for something to watch. Your subscriptions and taste shape the picks.";
       el.chatTranscript.appendChild(empty);
+
+      const examples = document.createElement("div");
+      examples.className = "chat-examples";
+      examples.setAttribute("aria-label", "Example prompts");
+      for (const prompt of [
+        "A smart thriller under two hours",
+        "A funny show for tonight",
+        "Something new to me with no violence"
+      ]) {
+        const button = document.createElement("button");
+        button.type = "button";
+        button.className = "chat-example";
+        button.textContent = prompt;
+        button.addEventListener("click", () => {
+          setQuery(prompt);
+          el.queryInput.focus();
+        });
+        examples.appendChild(button);
+      }
+      el.chatTranscript.appendChild(examples);
       return;
     }
     for (const m of messages) renderMessage(m.role, m.content);
@@ -57,24 +107,46 @@ export function createChatView(el, deps) {
     wrap.className = "chat-turn-activity";
     wrap.setAttribute("aria-label", "Assistant activity");
 
+    const head = document.createElement("div");
+    head.className = "chat-turn-head";
+
     const status = document.createElement("p");
-    status.className = "chat-turn-status";
+    status.className = "chat-turn-status visually-hidden";
     status.setAttribute("role", "status");
     status.setAttribute("aria-live", "polite");
-    wrap.appendChild(status);
+    head.appendChild(status);
 
     const elapsed = document.createElement("span");
     elapsed.className = "chat-turn-elapsed";
     elapsed.setAttribute("aria-hidden", "true");
     elapsed.hidden = true;
-    wrap.appendChild(elapsed);
+    head.appendChild(elapsed);
 
     const stop = document.createElement("button");
     stop.type = "button";
     stop.className = "chat-turn-stop";
     stop.textContent = "Stop";
     stop.addEventListener("click", () => deps.onStop());
-    wrap.appendChild(stop);
+    head.appendChild(stop);
+    wrap.appendChild(head);
+
+    const steps = document.createElement("ol");
+    steps.className = "chat-turn-steps";
+    steps.setAttribute("aria-hidden", "true");
+    const stepNodes = TURN_STEPS.map((step, index) => {
+      const item = document.createElement("li");
+      item.className = "chat-turn-step" + (index === 0 ? " is-active" : " is-pending");
+      item.dataset.step = step.id;
+      item.textContent = step.label;
+      steps.appendChild(item);
+      return item;
+    });
+    wrap.appendChild(steps);
+
+    const slowNote = document.createElement("p");
+    slowNote.className = "chat-turn-slow";
+    slowNote.hidden = true;
+    wrap.appendChild(slowNote);
 
     const response = document.createElement("div");
     response.className = "chat-turn-response";
@@ -87,25 +159,60 @@ export function createChatView(el, deps) {
     error.hidden = true;
     wrap.appendChild(error);
 
-    const metrics = document.createElement("p");
-    metrics.className = "chat-turn-metrics";
-    metrics.hidden = true;
-    wrap.appendChild(metrics);
-
-    return { wrap, status, elapsed, stop, response, error, metrics, partial: "", toolCounts: [] };
+    return {
+      wrap,
+      status,
+      elapsed,
+      stop,
+      steps,
+      stepNodes,
+      slowNote,
+      response,
+      error,
+      partial: "",
+      toolCounts: [],
+      stickToBottom: true,
+      stepIndex: 0
+    };
   }
 
   function startTurn() {
+    cancelStreamFrame();
     if (el.chatTranscript.querySelector(".chat-empty")) el.chatTranscript.textContent = "";
     activeTurn = createActivity();
     el.chatTranscript.appendChild(activeTurn.wrap);
-    setTurnStatus("PLANNING");
+    setTurnStatus("Checking your services");
     scrollToEnd();
   }
 
   function setTurnStatus(text) {
     if (!activeTurn) return;
-    activeTurn.status.textContent = String(text || "").trim();
+    const label = String(text || "").trim();
+    activeTurn.status.textContent = label;
+
+    if (/taking longer/i.test(label)) {
+      activeTurn.slowNote.hidden = false;
+      activeTurn.slowNote.textContent = label;
+      return;
+    }
+
+    activeTurn.slowNote.hidden = true;
+    const index = TURN_STEPS.findIndex((step) => step.match.test(label));
+    if (index < 0) return;
+
+    if (/answering about your pick/i.test(label)) {
+      activeTurn.stepNodes[3].textContent = "Answering about your pick";
+    } else if (/writing your picks/i.test(label)) {
+      activeTurn.stepNodes[3].textContent = "Writing your picks";
+    }
+
+    activeTurn.stepIndex = Math.max(activeTurn.stepIndex, index);
+    for (let i = 0; i < activeTurn.stepNodes.length; i++) {
+      const node = activeTurn.stepNodes[i];
+      node.classList.toggle("is-done", i < activeTurn.stepIndex);
+      node.classList.toggle("is-active", i === activeTurn.stepIndex);
+      node.classList.toggle("is-pending", i > activeTurn.stepIndex);
+    }
   }
 
   function setTurnElapsed(milliseconds, { slow = false } = {}) {
@@ -122,63 +229,67 @@ export function createChatView(el, deps) {
 
   function appendDelta(text) {
     if (!activeTurn || typeof text !== "string" || text === "") return;
+    if (!activeTurn.partial) activeTurn.stickToBottom = isNearBottom();
+    else if (!isNearBottom()) activeTurn.stickToBottom = false;
     activeTurn.partial += text;
-    activeTurn.response.hidden = false;
-    activeTurn.response.textContent = activeTurn.partial;
-    scrollToEnd();
-  }
-
-  function formatMetrics({ timing, usage, billing } = {}) {
-    const items = [];
-    if (Number.isFinite(timing?.totalMs)) items.push((timing.totalMs / 1000).toFixed(1) + "s");
-    if (Number.isFinite(usage?.totalTokens)) items.push(usage.totalTokens + " tokens");
-    if (billing?.basis === "provider_reported" && billing.complete === true &&
-      Number.isFinite(billing.amountUsd)) {
-      items.push("$" + billing.amountUsd.toFixed(4) + " reported");
+    if (streamFrame) return;
+    if (typeof requestAnimationFrame === "function") {
+      streamFrame = requestAnimationFrame(flushStreamFrame);
     } else {
-      items.push("Cost unavailable");
+      flushStreamFrame();
     }
-    return items.join(" · ");
   }
 
-  function completeTurn({ reply, timing, usage, billing, catalogCount = null } = {}) {
+  function finishActivityShell({ complete = false, error = false } = {}) {
     if (!activeTurn) return;
+    for (const node of activeTurn.stepNodes) {
+      if (complete) {
+        node.classList.remove("is-active", "is-pending");
+        node.classList.add("is-done");
+      }
+    }
+    activeTurn.steps.hidden = true;
+    activeTurn.slowNote.hidden = true;
+    activeTurn.status.classList.remove("visually-hidden");
+    activeTurn.stop.hidden = true;
+    activeTurn.elapsed.hidden = true;
+    if (complete) activeTurn.wrap.classList.add("is-complete");
+    if (error) activeTurn.wrap.classList.add("is-error");
+  }
+
+  function completeTurn({ reply, timing, catalogCount = null } = {}) {
+    if (!activeTurn) return;
+    cancelStreamFrame();
     activeTurn.response.hidden = false;
     activeTurn.response.textContent = "";
     activeTurn.response.appendChild(renderMarkdown(parseMarkdown(reply || ""), document));
-    activeTurn.stop.hidden = true;
-    activeTurn.elapsed.hidden = true;
     const matches = activeTurn.toolCounts.reduce((total, count) => total + count, 0);
     const summary = [];
     if (Number.isFinite(catalogCount) && catalogCount >= 0) summary.push(catalogCount.toLocaleString("en-IN") + " titles");
     if (matches > 0) summary.push(matches + " matches");
     if (Number.isFinite(timing?.totalMs)) summary.push((timing.totalMs / 1000).toFixed(1) + "s");
+    finishActivityShell({ complete: true });
     activeTurn.status.textContent = summary.join(" · ") || "Complete";
-    activeTurn.metrics.textContent = formatMetrics({ timing, usage, billing });
-    activeTurn.metrics.hidden = false;
-    activeTurn.wrap.classList.add("is-complete");
-    scrollToEnd();
+    if (activeTurn.stickToBottom || isNearBottom()) scrollToEnd();
     activeTurn = null;
   }
 
-  function failTurn({ message, partialReply = "", timing } = {}) {
+  function failTurn({ message, partialReply = "", timing, status = "Could not complete" } = {}) {
     if (!activeTurn) return;
+    cancelStreamFrame();
     const partial = String(partialReply || activeTurn.partial || "");
     if (partial) {
       activeTurn.response.hidden = false;
       activeTurn.response.textContent = partial;
     }
-    activeTurn.stop.hidden = true;
-    activeTurn.elapsed.hidden = true;
-    activeTurn.status.textContent = "Stopped";
+    finishActivityShell({ error: true });
+    activeTurn.status.textContent = status;
     activeTurn.error.textContent = String(message || "The turn did not complete.");
     activeTurn.error.hidden = false;
     if (Number.isFinite(timing?.totalMs)) {
-      activeTurn.metrics.textContent = (timing.totalMs / 1000).toFixed(1) + "s";
-      activeTurn.metrics.hidden = false;
+      activeTurn.status.textContent = status + " · " + (timing.totalMs / 1000).toFixed(1) + "s";
     }
-    activeTurn.wrap.classList.add("is-error");
-    scrollToEnd();
+    if (activeTurn.stickToBottom || isNearBottom()) scrollToEnd();
     activeTurn = null;
   }
 
@@ -192,10 +303,13 @@ export function createChatView(el, deps) {
     const restoreFocus = !nextBusy && document.activeElement === el.stopBtn;
     busy = nextBusy;
     el.chatRegion.setAttribute("aria-busy", busy ? "true" : "false");
+    // Keep the composer editable during a turn so the next draft can be written
+    // while this one runs; only submission is disabled until the turn ends.
+    el.queryInput.disabled = false;
     el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
-    el.queryInput.disabled = busy;
     el.stopBtn.hidden = !busy;
     el.sendBtn.hidden = busy;
+    el.queryForm.classList.toggle("is-turn-active", busy);
     if (restoreFocus) el.queryInput.focus();
   }
 
@@ -223,14 +337,20 @@ export function createChatView(el, deps) {
     el.queryInput.value = String(value || "");
   }
 
+  function restoreQueryIfEmpty(value) {
+    if (getQuery() !== "") return;
+    setQuery(value);
+  }
+
   el.queryForm.addEventListener("submit", (event) => {
     event.preventDefault();
+    if (busy || el.sendBtn.disabled) return;
     deps.onSubmit();
   });
   el.queryInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
-    if (!el.sendBtn.disabled) el.queryForm.requestSubmit();
+    if (!busy && !el.sendBtn.disabled) el.queryForm.requestSubmit();
   });
   el.stopBtn.addEventListener("click", () => deps.onStop());
 
@@ -250,6 +370,7 @@ export function createChatView(el, deps) {
     setKeyAvailable,
     getQuery,
     clearQuery,
-    setQuery
+    setQuery,
+    restoreQueryIfEmpty
   };
 }

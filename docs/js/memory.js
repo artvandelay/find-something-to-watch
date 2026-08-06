@@ -38,6 +38,19 @@ export const MEMORY_LIMITS = Object.freeze({
   issues: 20
 });
 
+const TIMING_PHASE_NAMES = new Set([
+  "submit",
+  "indexeddb_context",
+  "catalog_manifest",
+  "agent_start",
+  "model_request",
+  "catalog_tool",
+  "first_visible_token",
+  "complete_turn"
+]);
+const MAX_TIMING_PHASES = 24;
+const MAX_TIMING_MS = 24 * 60 * 60 * 1000;
+
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const PROVIDER_SET = new Set(PROVIDER_SLUGS);
 
@@ -161,6 +174,36 @@ function sanitizeProfile(value, now) {
   };
 }
 
+function sanitizeTiming(value) {
+  const timing = isPlainObject(value) ? value : {};
+  const phases = [];
+  for (const raw of Array.isArray(timing.phases) ? timing.phases : []) {
+    if (phases.length >= MAX_TIMING_PHASES || !isPlainObject(raw) ||
+      !TIMING_PHASE_NAMES.has(raw.name) ||
+      !Number.isFinite(raw.atMs) || raw.atMs < 0 || raw.atMs > MAX_TIMING_MS ||
+      !Number.isFinite(raw.durationMs) || raw.durationMs < 0 || raw.durationMs > MAX_TIMING_MS) {
+      continue;
+    }
+    phases.push({
+      name: raw.name,
+      atMs: Math.round(raw.atMs),
+      durationMs: Math.round(raw.durationMs)
+    });
+  }
+  return {
+    totalMs: Number.isFinite(timing.totalMs) && timing.totalMs >= 0
+      ? Math.min(MAX_TIMING_MS, Math.round(timing.totalMs))
+      : 0,
+    firstTokenMs: Number.isFinite(timing.firstTokenMs) && timing.firstTokenMs >= 0
+      ? Math.min(MAX_TIMING_MS, Math.round(timing.firstTokenMs))
+      : null,
+    phases,
+    droppedPhases: Number.isFinite(timing.droppedPhases) && timing.droppedPhases >= 0
+      ? Math.min(MAX_TIMING_PHASES, Math.floor(timing.droppedPhases))
+      : 0
+  };
+}
+
 function sanitizeConversation(value, now) {
   if (!isPlainObject(value) || !Array.isArray(value.messages)) return null;
   const messages = [];
@@ -174,15 +217,11 @@ function sanitizeConversation(value, now) {
       createdAt: isIsoDate(message.createdAt) ? message.createdAt : nowIso(now)
     };
     if (message.role === "assistant" && isPlainObject(message.meta) && message.meta.status === "complete") {
-      const timing = isPlainObject(message.meta.timing) ? message.meta.timing : {};
       const usage = isPlainObject(message.meta.usage) ? message.meta.usage : {};
       const billing = isPlainObject(message.meta.billing) ? message.meta.billing : {};
       safe.meta = {
         status: "complete",
-        timing: {
-          totalMs: Number.isFinite(timing.totalMs) && timing.totalMs >= 0 ? timing.totalMs : 0,
-          firstTokenMs: Number.isFinite(timing.firstTokenMs) && timing.firstTokenMs >= 0 ? timing.firstTokenMs : null
-        },
+        timing: sanitizeTiming(message.meta.timing),
         usage: {
           promptTokens: Number.isFinite(usage.promptTokens) && usage.promptTokens >= 0 ? usage.promptTokens : 0,
           completionTokens: Number.isFinite(usage.completionTokens) && usage.completionTokens >= 0 ? usage.completionTokens : 0,
@@ -664,6 +703,123 @@ export function createBrowserMemory({
     };
   }
 
+  async function renameConversation(conversationId, title) {
+    return serializeWrite(async () => {
+      const nextTitle = collapsedString(title, 72);
+      if (!nextTitle) throw new BrowserMemoryError("invalid", "Enter a conversation name.");
+      const [current, threads] = await Promise.all([
+        currentConversationAndQueue(),
+        get(MEMORY_KEYS.threads)
+      ]);
+      const timestamp = nowIso(now);
+      if (current.conversation.id === conversationId) {
+        const conversation = sanitizeConversation({
+          ...current.conversation,
+          title: nextTitle,
+          updatedAt: timestamp
+        }, now);
+        if (!conversation) throw new BrowserMemoryError("invalid", "Invalid conversation data.");
+        await writeRaw([[MEMORY_KEYS.conversation, conversation]]);
+        return {
+          conversation: clone(conversation),
+          queue: clone(current.queue),
+          threads: clone(threads)
+        };
+      }
+      const index = threads.items.findIndex((item) => item.id === conversationId);
+      if (index < 0) throw new BrowserMemoryError("invalid", "That conversation is unavailable.");
+      const target = threads.items[index];
+      const renamed = sanitizeConversation({
+        ...target,
+        title: nextTitle,
+        updatedAt: timestamp
+      }, now);
+      const queue = sanitizeQueue(target.queue, now);
+      if (!renamed || !queue) throw new BrowserMemoryError("invalid", "Invalid conversation data.");
+      const items = threads.items.slice();
+      items[index] = { ...renamed, queue };
+      const nextThreads = {
+        schema: MEMORY_SCHEMA_VERSION,
+        updatedAt: timestamp,
+        items: items
+          .sort((a, b) => Date.parse(b.updatedAt) - Date.parse(a.updatedAt))
+          .slice(0, MEMORY_LIMITS.inactiveConversations)
+      };
+      await writeRaw([[MEMORY_KEYS.threads, nextThreads]]);
+      return {
+        conversation: clone(current.conversation),
+        queue: clone(current.queue),
+        threads: clone(nextThreads)
+      };
+    });
+  }
+
+  async function deleteConversation(conversationId) {
+    return serializeWrite(async () => {
+      const [current, threads] = await Promise.all([
+        currentConversationAndQueue(),
+        get(MEMORY_KEYS.threads)
+      ]);
+      const timestamp = nowIso(now);
+      if (current.conversation.id === conversationId) {
+        const remaining = threads.items.filter((item) => item.id !== conversationId);
+        if (remaining.length > 0) {
+          const target = remaining[0];
+          const conversation = { ...target, updatedAt: timestamp };
+          delete conversation.queue;
+          const queue = sanitizeQueue(target.queue, now) || queueDefault();
+          const nextThreads = {
+            schema: MEMORY_SCHEMA_VERSION,
+            updatedAt: timestamp,
+            items: remaining.slice(1)
+          };
+          await writeRaw([
+            [MEMORY_KEYS.conversation, conversation],
+            [MEMORY_KEYS.queue, queue],
+            [MEMORY_KEYS.threads, nextThreads]
+          ]);
+          return {
+            conversation: clone(conversation),
+            queue: clone(queue),
+            threads: clone(nextThreads)
+          };
+        }
+        const conversation = conversationDefault(now);
+        const queue = queueDefault();
+        const nextThreads = {
+          schema: MEMORY_SCHEMA_VERSION,
+          updatedAt: timestamp,
+          items: []
+        };
+        await writeRaw([
+          [MEMORY_KEYS.conversation, conversation],
+          [MEMORY_KEYS.queue, queue],
+          [MEMORY_KEYS.threads, nextThreads]
+        ]);
+        return {
+          conversation: clone(conversation),
+          queue: clone(queue),
+          threads: clone(nextThreads)
+        };
+      }
+      const items = threads.items.filter((item) => item.id !== conversationId);
+      if (items.length === threads.items.length) {
+        throw new BrowserMemoryError("invalid", "That conversation is unavailable.");
+      }
+      const nextThreads = {
+        schema: MEMORY_SCHEMA_VERSION,
+        updatedAt: timestamp,
+        items
+      };
+      await writeRaw([[MEMORY_KEYS.threads, nextThreads]]);
+      return {
+        conversation: clone(current.conversation),
+        queue: clone(current.queue),
+        threads: clone(nextThreads)
+      };
+    });
+  }
+
   async function saveContextMemory({ youmd, history, profile, learned } = {}) {
     return serializeWrite(async () => {
       const entries = [];
@@ -740,6 +896,8 @@ export function createBrowserMemory({
     completeTurn,
     startNewConversation,
     activateArchivedConversation,
+    renameConversation,
+    deleteConversation,
     getConversationList,
     saveContextMemory,
     getSnapshot,

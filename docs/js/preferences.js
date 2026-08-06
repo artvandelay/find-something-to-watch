@@ -89,6 +89,20 @@ export function validatePreferenceCandidates(candidates, query) {
   return valid;
 }
 
+function applyLearnedCandidate(items, candidate, now) {
+  const key = `${candidate.kind}\u0000${candidate.value.toLocaleLowerCase()}`;
+  const index = items.findIndex((item) => `${item.kind}\u0000${item.value.toLocaleLowerCase()}` === key);
+  if (index >= 0) {
+    const polarityChanged = items[index].polarity !== candidate.polarity;
+    if (polarityChanged) items[index].polarity = candidate.polarity;
+    items[index].lastConfirmedAt = now;
+    return polarityChanged;
+  }
+  if (items.length >= LEARNED_PREFERENCE_LIMITS.items) return false;
+  items.push({ id: defaultId(), ...candidate, createdAt: now, lastConfirmedAt: now });
+  return true;
+}
+
 export function mergeLearnedPreferences(current, candidates, query, { now = new Date().toISOString() } = {}) {
   const base = sanitizeLearnedPreferences(current, { now }) || defaultLearnedPreferences();
   const incoming = validatePreferenceCandidates(candidates, query);
@@ -96,24 +110,34 @@ export function mergeLearnedPreferences(current, candidates, query, { now = new 
   let changed = false;
 
   for (const candidate of incoming) {
-    const key = `${candidate.kind}\u0000${candidate.value.toLocaleLowerCase()}`;
-    const index = items.findIndex((item) => `${item.kind}\u0000${item.value.toLocaleLowerCase()}` === key);
-    if (index >= 0) {
-      if (items[index].polarity !== candidate.polarity) {
-        items[index].polarity = candidate.polarity;
-        changed = true;
-      }
-      items[index].lastConfirmedAt = now;
-      continue;
-    }
-    if (items.length >= LEARNED_PREFERENCE_LIMITS.items) break;
-    items.push({ id: defaultId(), ...candidate, createdAt: now, lastConfirmedAt: now });
-    changed = true;
+    if (applyLearnedCandidate(items, candidate, now)) changed = true;
   }
 
   return {
     schema: LEARNED_PREFERENCES_SCHEMA_VERSION,
     updatedAt: changed || incoming.length ? now : base.updatedAt,
+    revision: changed ? base.revision + 1 : base.revision,
+    items
+  };
+}
+
+/**
+ * UI-authored durable preference (pick feedback). Skips model evidence rules;
+ * still constrained to known kinds, polarities, and value length.
+ */
+export function upsertLearnedPreference(current, candidate, { now = new Date().toISOString() } = {}) {
+  const base = sanitizeLearnedPreferences(current, { now }) || defaultLearnedPreferences();
+  const kind = typeof candidate?.kind === "string" ? candidate.kind : "";
+  const polarity = candidate?.polarity;
+  const value = compact(candidate?.value, LEARNED_PREFERENCE_LIMITS.valueCharacters);
+  if (!KIND_SET.has(kind) || (polarity !== "like" && polarity !== "avoid") || !value) {
+    return base;
+  }
+  const items = base.items.map((item) => ({ ...item }));
+  const changed = applyLearnedCandidate(items, { kind, polarity, value }, now);
+  return {
+    schema: LEARNED_PREFERENCES_SCHEMA_VERSION,
+    updatedAt: changed ? now : base.updatedAt,
     revision: changed ? base.revision + 1 : base.revision,
     items
   };

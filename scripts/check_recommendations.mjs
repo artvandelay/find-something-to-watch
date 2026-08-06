@@ -1,8 +1,10 @@
 import assert from "node:assert/strict";
 import {
   DEFAULT_RECOMMENDATION_REASON,
+  allowsRewatch,
   defaultRecommendationQueue,
   hydrateRecommendations,
+  isUsefulReason,
   recommendationQueuesEqual,
   recommendationSourceLabel,
   sanitizeRecommendationQueue
@@ -37,5 +39,9 @@ assert.deepEqual(
   [{ id: "tmdb:one", t: "One", reason: "It is concise." }]
 );
 assert.equal(sanitizeRecommendationQueue(null), null);
+assert.equal(isUsefulReason(DEFAULT_RECOMMENDATION_REASON), false);
+assert.equal(isUsefulReason("A calm comedy with short runtime."), true);
+assert.equal(allowsRewatch("I want to rewatch Seinfeld"), true);
+assert.equal(allowsRewatch("something short and funny"), false);
 
 console.log("check_recommendations OK");

@@ -1,8 +1,10 @@
 // Live OpenRouter stress harness for the agent loop. Makes real API calls.
-// Usage: node scripts/stress_agent_live.mjs [--limit N]
+// Usage:
+//   node scripts/stress_agent_live.mjs [--limit N]
+//   node scripts/stress_agent_live.mjs --matrix
 // Key resolution: process.env.OPENROUTER_API_KEY first, then the .env file at
 // the repo root. The key is never printed. Missing key exits non-zero so the
-// script is safe to wire into CI.
+// script is safe to wire into CI. See docs/LATENCY.md for targets.
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
@@ -14,6 +16,7 @@ import { executeCatalogCode, prepareExecutionEnvironment } from "../docs/js/cata
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "..");
 const MAX_PROMPT_TOKENS = 20000;
+const MATRIX_MAX_PROMPT_TOKENS = 120000;
 const MAX_QUERY_MS = 60000;
 const STRESS_SUBSCRIPTIONS = new Set(["netflix", "prime", "hotstar"]);
 
@@ -27,6 +30,40 @@ function parseLimit(argv) {
   }
   return n;
 }
+
+function wantsMatrix(argv) {
+  return argv.includes("--matrix");
+}
+
+const MATRIX_CASES = [
+  {
+    name: "short-follow-up",
+    query: "why would I like it?",
+    conversation: [
+      { role: "user", content: "surreal indian gem" },
+      { role: "assistant", content: "Try My Dear Kuttichathan." }
+    ],
+    recommendationQueue: {
+      source: { conversationId: "live", turnId: "t1", query: "surreal indian gem" },
+      items: [{ id: "netflix:placeholder", t: "My Dear Kuttichathan", reason: "Surreal fit." }]
+    },
+    expectTurnClass: "direct"
+  },
+  {
+    name: "fresh-recommendation",
+    query: "Malayalam thrillers",
+    conversation: [],
+    recommendationQueue: null,
+    expectTurnClass: "normal"
+  },
+  {
+    name: "complex-compare",
+    query: "compare a slow-burn Malayalam drama versus a Hindi crime series across my services",
+    conversation: [],
+    recommendationQueue: null,
+    expectTurnClass: "complex"
+  }
+];
 
 async function readKeyFromEnvFile(file) {
   let text;
@@ -195,13 +232,15 @@ function createObservedTools(runtime, subscriptions) {
   return { tools, observed };
 }
 
-const limit = parseLimit(process.argv.slice(2));
+const argv = process.argv.slice(2);
+const limit = parseLimit(argv);
+const matrixMode = wantsMatrix(argv);
 const envFile = path.join(ROOT, ".env");
 const apiKey = (process.env.OPENROUTER_API_KEY || "").trim()
   || await readKeyFromEnvFile(envFile);
 
 if (!apiKey) {
-  console.log("OPENROUTER_API_KEY not set in .env; skipping live stress");
+  console.log("OPENROUTER_API_KEY not set in .env; skipping live stress (deterministic checks still apply)");
   process.exit(1);
 }
 
@@ -247,24 +286,40 @@ const QUERIES = [
   "surprise me with something weird"
 ];
 
-const queries = limit === null ? QUERIES : QUERIES.slice(0, limit);
-console.log("live stress: " + queries.length + " queries against " + config.baseUrl
-  + " model " + config.model + " (" + runtime.records.length + " catalog records)");
-console.log("runtime: " + runtime.kind + " | subscriptions: "
-  + [...STRESS_SUBSCRIPTIONS].join(", "));
+function firstTokenMs(events, result) {
+  if (Number.isFinite(result?.timing?.firstTokenMs)) return result.timing.firstTokenMs;
+  const delta = events.find((event) => event.type === "delta");
+  return delta && Number.isFinite(delta.atMs) ? delta.atMs : null;
+}
 
-const SOFT_CODES = new Set(["credit", "rate"]);
-const rows = [];
-let passed = 0;
-let softFails = 0;
-let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
-let usageSeen = false;
-const wallStart = Date.now();
+function requestCount(result, events) {
+  if (Number.isFinite(result?.billing?.requestCount)) return result.billing.requestCount;
+  if (Number.isFinite(result?.usage?.requestCount)) return result.usage.requestCount;
+  return events.filter((event) => event.type === "status").length;
+}
 
-for (const query of queries) {
+async function runCase({
+  query,
+  conversation = [],
+  recommendationQueue = null,
+  label = query,
+  maxPromptTokens = MAX_PROMPT_TOKENS
+} = {}) {
   const events = [];
   const start = Date.now();
   const fixture = createObservedTools(runtime, STRESS_SUBSCRIPTIONS);
+  // Resolve a real catalog id for matrix follow-ups when a placeholder was supplied.
+  let queueContext = recommendationQueue;
+  if (queueContext?.items?.[0]?.id === "netflix:placeholder") {
+    const sample = runtime.records.find((record) =>
+      record.p.some((slug) => STRESS_SUBSCRIPTIONS.has(slug)));
+    if (sample) {
+      queueContext = {
+        ...queueContext,
+        items: [{ id: sample.id, t: sample.t, reason: queueContext.items[0].reason }]
+      };
+    }
+  }
   let result;
   let thrown = null;
   try {
@@ -272,9 +327,14 @@ for (const query of queries) {
       config,
       prompts,
       tools: fixture.tools,
-      context: { youmd: "", history: null, mood: "" },
+      context: {
+        youmd: "",
+        history: null,
+        mood: "",
+        recommendationQueue: queueContext
+      },
       query,
-      conversation: [],
+      conversation,
       onEvent: (e) => events.push(e),
       signal: null,
       fetchImpl: globalThis.fetch
@@ -284,20 +344,23 @@ for (const query of queries) {
     result = { reply: "", queue: null, usage: null };
   }
   const ms = Date.now() - start;
-
   const errorEvent = events.find((e) => e.type === "error");
   const soft = !thrown && errorEvent && SOFT_CODES.has(errorEvent.code);
   const queue = result.queue || [];
-  const badIds = queue.filter((id) => !runtime.catalogIds.has(id));
-  const unobservedQueueIds = queue.filter((id) => !fixture.observed.records.has(id));
-  const unscopedQueueIds = queue.filter((id) => {
+  const badIds = queue.filter((item) => {
+    const id = typeof item === "string" ? item : item?.id;
+    return id && !runtime.catalogIds.has(id);
+  });
+  const queueIds = queue.map((item) => typeof item === "string" ? item : item?.id).filter(Boolean);
+  const unobservedQueueIds = queueIds.filter((id) => !fixture.observed.records.has(id));
+  const unscopedQueueIds = queueIds.filter((id) => {
     const record = fixture.observed.records.get(id);
     return record && !record.p.some((slug) => STRESS_SUBSCRIPTIONS.has(slug));
   });
-  const promptTokens = Number(result.usage && result.usage.prompt_tokens);
+  const promptTokens = Number(result.usage && (result.usage.prompt_tokens ?? result.usage.promptTokens));
   const budgetViolations = [];
-  if (Number.isFinite(promptTokens) && promptTokens > MAX_PROMPT_TOKENS) {
-    budgetViolations.push("prompt tokens " + promptTokens + " > " + MAX_PROMPT_TOKENS);
+  if (Number.isFinite(promptTokens) && promptTokens > maxPromptTokens) {
+    budgetViolations.push("prompt tokens " + promptTokens + " > " + maxPromptTokens);
   }
   if (Number.isFinite(ms) && ms > MAX_QUERY_MS) {
     budgetViolations.push("time " + ms + " ms > " + MAX_QUERY_MS + " ms");
@@ -306,23 +369,22 @@ for (const query of queries) {
     typeof result.reply === "string" && result.reply.trim() !== "" && badIds.length === 0 &&
     unobservedQueueIds.length === 0 && unscopedQueueIds.length === 0 &&
     fixture.observed.scopeViolations.length === 0 && budgetViolations.length === 0;
-
-  if (ok) passed++;
-  if (soft) softFails++;
-
-  if (result.usage) {
-    usageSeen = true;
-    totalUsage.prompt_tokens += result.usage.prompt_tokens || 0;
-    totalUsage.completion_tokens += result.usage.completion_tokens || 0;
-    totalUsage.total_tokens += result.usage.total_tokens || 0;
-  }
-
-  rows.push({
+  return {
+    label,
     query,
-    status: ok ? "PASS" : (soft ? "SOFT(" + errorEvent.code + ")" : "FAIL"),
-    queue: queue.length,
+    ok,
+    soft,
+    errorEvent,
+    thrown,
+    queue: queueIds.length,
     ms,
-    tokens: result.usage ? String(result.usage.total_tokens) : "-",
+    ttft: firstTokenMs(events, result),
+    requests: requestCount(result, events),
+    turnClass: result.turnClass || events.find((event) => event.type === "context")?.diagnostics?.turnClass || "-",
+    tokens: result.usage
+      ? String(result.usage.total_tokens ?? result.usage.totalTokens ?? "-")
+      : "-",
+    usage: result.usage,
     detail: thrown ? String(thrown && thrown.message)
       : errorEvent ? errorEvent.code + ": " + errorEvent.message
       : badIds.length ? "unresolved ids: " + badIds.join(",")
@@ -332,36 +394,105 @@ for (const query of queries) {
         ? "tool results escaped subscription scope: " + fixture.observed.scopeViolations.join(",")
       : budgetViolations.length ? budgetViolations.join("; ")
       : ""
-  });
+  };
+}
+
+const SOFT_CODES = new Set(["credit", "rate"]);
+const rows = [];
+let passed = 0;
+let softFails = 0;
+let totalUsage = { prompt_tokens: 0, completion_tokens: 0, total_tokens: 0 };
+let usageSeen = false;
+const wallStart = Date.now();
+
+if (matrixMode) {
+  console.log("live latency matrix against " + config.baseUrl + " model " + config.model
+    + " (" + runtime.records.length + " catalog records)");
+  console.log("runtime: " + runtime.kind + " | subscriptions: "
+    + [...STRESS_SUBSCRIPTIONS].join(", "));
+  for (const testCase of MATRIX_CASES) {
+    const row = await runCase({
+      query: testCase.query,
+      conversation: testCase.conversation,
+      recommendationQueue: testCase.recommendationQueue,
+      label: testCase.name,
+      maxPromptTokens: MATRIX_MAX_PROMPT_TOKENS
+    });
+    if (testCase.expectTurnClass && row.turnClass !== testCase.expectTurnClass && row.ok) {
+      row.ok = false;
+      row.detail = "turnClass " + row.turnClass + " !== " + testCase.expectTurnClass;
+    }
+    if (testCase.expectTurnClass === "direct" && row.ok && row.requests !== 1) {
+      row.ok = false;
+      row.detail = "direct follow-up expected 1 request, got " + row.requests;
+    }
+    if (row.ok) passed += 1;
+    if (row.soft) softFails += 1;
+    if (row.usage) {
+      usageSeen = true;
+      totalUsage.prompt_tokens += row.usage.prompt_tokens || row.usage.promptTokens || 0;
+      totalUsage.completion_tokens += row.usage.completion_tokens || row.usage.completionTokens || 0;
+      totalUsage.total_tokens += row.usage.total_tokens || row.usage.totalTokens || 0;
+    }
+    rows.push({
+      ...row,
+      status: row.ok ? "PASS" : (row.soft ? "SOFT(" + row.errorEvent.code + ")" : "FAIL")
+    });
+  }
+} else {
+  const queries = limit === null ? QUERIES : QUERIES.slice(0, limit);
+  console.log("live stress: " + queries.length + " queries against " + config.baseUrl
+    + " model " + config.model + " (" + runtime.records.length + " catalog records)");
+  console.log("runtime: " + runtime.kind + " | subscriptions: "
+    + [...STRESS_SUBSCRIPTIONS].join(", "));
+  for (const query of queries) {
+    const row = await runCase({ query, label: query });
+    if (row.ok) passed += 1;
+    if (row.soft) softFails += 1;
+    if (row.usage) {
+      usageSeen = true;
+      totalUsage.prompt_tokens += row.usage.prompt_tokens || row.usage.promptTokens || 0;
+      totalUsage.completion_tokens += row.usage.completion_tokens || row.usage.completionTokens || 0;
+      totalUsage.total_tokens += row.usage.total_tokens || row.usage.totalTokens || 0;
+    }
+    rows.push({
+      ...row,
+      status: row.ok ? "PASS" : (row.soft ? "SOFT(" + row.errorEvent.code + ")" : "FAIL")
+    });
+  }
 }
 
 const wallMs = Date.now() - wallStart;
 
 console.log("");
-console.log("query                                   | result      | queue |     ms | tokens");
-console.log("----------------------------------------+-------------+-------+--------+-------");
+console.log("case                                     | result      | class   | req |  ttft |     ms | tokens");
+console.log("------------------------------------------+-------------+---------+-----+-------+--------+-------");
 for (const row of rows) {
   console.log(
-    row.query.slice(0, 39).padEnd(39)
+    String(row.label).slice(0, 41).padEnd(41)
     + " | " + row.status.padEnd(11)
-    + " | " + String(row.queue).padStart(5)
+    + " | " + String(row.turnClass).padEnd(7)
+    + " | " + String(row.requests).padStart(3)
+    + " | " + String(row.ttft ?? "-").padStart(5)
     + " | " + String(row.ms).padStart(6)
-    + " | " + row.tokens.padStart(6)
+    + " | " + String(row.tokens).padStart(6)
     + (row.detail ? "\n    " + row.detail : "")
   );
 }
-console.log("----------------------------------------+-------------+-------+--------+-------");
-console.log("passed " + passed + "/" + queries.length
+console.log("------------------------------------------+-------------+---------+-----+-------+--------+-------");
+console.log("passed " + passed + "/" + rows.length
   + (softFails ? " (" + softFails + " soft credit/rate failures)" : "")
   + " | wall " + (wallMs / 1000).toFixed(1) + "s"
   + " | tokens " + (usageSeen
     ? totalUsage.total_tokens + " (prompt " + totalUsage.prompt_tokens
       + ", completion " + totalUsage.completion_tokens + ")"
     : "not reported by API"));
+console.log("Model speed is an honest BYOK trade-off; provider queue time is not controlled by this app.");
 
-const failed = queries.length - passed;
-if (failed > 2) {
-  console.log("live stress FAILED: " + failed + " failures (max 2 allowed)");
+const failed = rows.length - passed;
+const maxFail = matrixMode ? 0 : 2;
+if (failed > maxFail) {
+  console.log("live stress FAILED: " + failed + " failures (max " + maxFail + " allowed)");
   process.exit(1);
 }
 console.log("live stress OK");

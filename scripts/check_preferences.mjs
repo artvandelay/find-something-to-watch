@@ -4,6 +4,7 @@ import {
   mergeLearnedPreferences,
   renderLearnedContext,
   sanitizeLearnedPreferences,
+  upsertLearnedPreference,
   validatePreferenceCandidate,
   validatePreferenceCandidates
 } from "../docs/js/preferences.js";
@@ -50,5 +51,19 @@ assert.equal(contradicted.items.length, 1);
 assert.equal(contradicted.items[0].polarity, "like");
 assert.match(renderLearnedContext(contradicted), /## Learned from chats\n- Likes: horror \(genre\)/);
 assert.equal(sanitizeLearnedPreferences({ items: [{ kind: "bad", polarity: "like", value: "x" }] }, { now }).items.length, 0);
+
+const fromFeedback = upsertLearnedPreference(
+  defaultLearnedPreferences(),
+  { kind: "genre", polarity: "like", value: "thriller" },
+  { now }
+);
+assert.equal(fromFeedback.items.length, 1);
+assert.equal(fromFeedback.items[0].value, "thriller");
+assert.equal(fromFeedback.revision, 1);
+assert.equal(
+  upsertLearnedPreference(fromFeedback, { kind: "genre", polarity: "like", value: "thriller" }, { now }).revision,
+  1
+);
+assert.equal(upsertLearnedPreference(fromFeedback, { kind: "nope", polarity: "like", value: "x" }, { now }).items.length, 1);
 
 console.log("check_preferences OK");

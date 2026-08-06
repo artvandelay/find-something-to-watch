@@ -56,6 +56,22 @@ async function firstVisitShowsWorkspace() {
     check("first visit opens the chat shell", app.$("#shell").hidden === false);
     check("onboarding markup remains available",
       !!app.$("#onboarding-form") && app.$$("#onboarding-form [data-onboarding-step]").length === 3);
+    const examples = app.$$(".chat-example");
+    check("first visit offers example prompts",
+      examples.length === 3 && examples.every((button) => button.textContent.trim().length > 0),
+      examples.map((button) => button.textContent).join(" | "));
+    examples[0]?.click();
+    check("an example prompt fills and focuses the composer",
+      app.$("#query-input").value === examples[0]?.textContent
+        && app.document.activeElement === app.$("#query-input"),
+      app.$("#query-input").value);
+    check("catalog status makes snapshot availability explicit",
+      /availability may have changed/i.test(app.text("#catalog-status") || ""),
+      app.text("#catalog-status"));
+    check("static catalog assets use normal HTTP cache semantics",
+      app.fetchOptions.some((entry) => entry.href.includes("catalog.json") && entry.cache === "default")
+        && !app.fetchOptions.some((entry) => entry.href.includes("catalog.json") && entry.cache === "no-cache"),
+      JSON.stringify(app.fetchOptions.filter((entry) => entry.href.includes("catalog"))));
   } finally {
     app.restore();
   }
@@ -75,6 +91,9 @@ async function phaseFiveStructuralContract() {
         && !navigation.contains(subscriptions)
         && !!(subscriptions.closest(".sidebar-block")?.compareDocumentPosition(navigation)
           & app.window.Node.DOCUMENT_POSITION_FOLLOWING));
+    check("subscriptions expose an Edit control that lives with the summary",
+      !!app.$("#subscriptions-edit")
+        && app.$("#subscriptions-edit").closest(".subscriptions-block")?.contains(subscriptions));
     check("conversation history remains in the upper scrollable sidebar area",
       !!sidebarMain && sidebarMain.contains(app.$("#conversation-list"))
         && !sidebarBottom.contains(app.$("#conversation-list")));
@@ -136,6 +155,26 @@ async function shellRespectsSubscriptions() {
     check("every card carries a description", descriptions.length === titles.length
       && descriptions.every((d) => d.length > 0));
     check("save controls are present", app.$$("#queue-track .card-save").length === titles.length);
+    check("taste feedback controls are present",
+      app.$$("#queue-track .card-feedback-btn").length === titles.length * 4);
+    const topTitle = app.text("#queue-track .card .card-title");
+    await app.click("#queue-track .card .card-feedback-btn[data-feedback=like]");
+    await app.settle();
+    check("like feedback confirms learning visibly",
+      /Got it — more /i.test(app.text("#queue-feedback") || ""),
+      app.text("#queue-feedback"));
+    const browserMemory = createBrowserMemory();
+    await browserMemory.initialize();
+    const learned = await browserMemory.getLearned();
+    check("like feedback persists a learned preference",
+      learned.items.some((item) => item.polarity === "like"),
+      JSON.stringify(learned.items));
+    await app.click("#queue-track .card .card-feedback-btn[data-feedback=tonight]");
+    await app.settle();
+    check("not-tonight removes the title from the current picks",
+      !app.$$("#queue-track .card-title").some((node) => node.textContent === topTitle)
+        && /Skipped for tonight/i.test(app.text("#queue-feedback") || ""),
+      app.text("#queue-track"));
   } finally {
     app.restore();
   }
@@ -200,8 +239,8 @@ async function titleDetailsShareFullCatalogAndRefresh() {
 
     app.$("#queue-track .card").dispatchEvent(new app.window.Event("click", { bubbles: true }));
     await app.settle();
-    check("card-background clicks open title details", app.$("#title-details-dialog").hasAttribute("open"));
-    await app.click("#title-details-close");
+    check("card-background clicks do not open details accidentally",
+      !app.$("#title-details-dialog").hasAttribute("open"));
 
     app.$("#queue-track .card-links a").dispatchEvent(new app.window.Event("click", { bubbles: true }));
     await app.settle();
@@ -805,9 +844,12 @@ async function testModeIsLocalhostOnly() {
 async function searchIndexIdleWaitIsBounded() {
   const app = await bootApp();
   try {
-    check("search-index readiness bounds the idle callback wait",
+    check("sidecar readiness bounds the idle callback wait",
       app.idleRequests.some((options) => options?.timeout === 250),
       JSON.stringify(app.idleRequests));
+    check("settings copy frames model speed as a BYOK trade-off",
+      /trade-off|tradeoff|cannot guarantee/i.test(app.text("#llm-model-note") || ""),
+      app.text("#llm-model-note"));
   } finally {
     app.restore();
   }
@@ -851,22 +893,64 @@ async function streamedTurnRendersDecisionActivityAndMetrics() {
     await completeOnboarding(app);
     app.$("#query-input").value = "I like comedy";
     await app.click("#send-btn");
+    await new Promise((resolve) => app.window.requestAnimationFrame(() => resolve()));
+    await app.settle();
     check("streamed turn persists the user before completion",
       app.$$("#chat-transcript .chat-msg-user").length === 1);
     check("streamed text stays literal until completion",
       app.$(".chat-turn-response")?.textContent === "**Draft answer**"
         && app.$(".chat-turn-response strong") === null,
       app.$(".chat-turn-response")?.textContent);
-    check("attached activity reports the catalog phase",
-      /ANALYZING MATCHES/.test(app.text(".chat-turn-status") || ""));
+    check("attached activity reports a user-facing catalog milestone",
+      /Comparing matches/i.test(app.text(".chat-turn-status") || ""),
+      app.text(".chat-turn-status"));
+    check("attached activity shows a checking-off milestone timeline",
+      /Comparing matches/i.test(app.text(".chat-turn-steps .is-active") || "")
+        && app.$$(".chat-turn-steps .is-done").length >= 2,
+      app.text(".chat-turn-steps"));
+    check("composer stays editable while submit is disabled during a turn",
+      app.$("#query-input").disabled === false
+        && app.$("#send-btn").hidden === true
+        && app.$("#query-form").classList.contains("is-turn-active"),
+      "inputDisabled=" + app.$("#query-input").disabled
+        + " sendHidden=" + app.$("#send-btn").hidden);
+    app.$("#query-input").value = "draft next ask while waiting";
+    check("draft typed during a turn is retained",
+      app.$("#query-input").value === "draft next ask while waiting");
 
     release();
     await app.settle();
     check("completed streamed reply uses safe Markdown",
       !!app.$(".chat-turn-response strong") && /Final answer/.test(app.text(".chat-turn-response") || ""));
-    check("completed turn shows honest metrics",
-      /18\.4s · 20 tokens · \$0\.0042 reported/.test(app.text(".chat-turn-metrics") || ""),
-      app.text(".chat-turn-metrics"));
+    check("completed turn keeps token and cost metrics out of chat activity",
+      app.$(".chat-turn-metrics") === null
+        && !/20 tokens|\$0\.0042/.test(app.text(".chat-turn-activity") || ""),
+      app.text(".chat-turn-activity"));
+    check("completed turn records honest metrics in the developer trace",
+      /Metrics: 18\.4s · 20 tokens · \$0\.0042 reported/.test(app.text("#trace") || ""),
+      app.text("#trace"));
+    check("completed activity collapses to a compact catalog summary",
+      app.$(".chat-turn-steps")?.hidden === true
+        && /\d/.test(app.text(".chat-turn-status") || ""),
+      app.text(".chat-turn-status"));
+    check("draft survives turn completion until the user clears it",
+      app.$("#query-input").value === "draft next ask while waiting");
+    const browserMemory = createBrowserMemory();
+    await browserMemory.initialize();
+    const savedTiming = (await browserMemory.getConversation()).messages.at(-1)?.meta?.timing;
+    const savedPhaseNames = savedTiming?.phases?.map((phase) => phase.name) || [];
+    const prepReady = new Set(["indexeddb_context", "catalog_manifest"]);
+    const afterSubmit = savedPhaseNames.slice(1, 3);
+    check("completed turns persist bounded key-free timing phases in order",
+      savedPhaseNames[0] === "submit"
+        && afterSubmit.length === 2
+        && afterSubmit.every((name) => prepReady.has(name))
+        && prepReady.size === new Set(afterSubmit).size
+        && savedPhaseNames.slice(3).join(",") === "agent_start,first_visible_token,complete_turn"
+        && savedTiming?.droppedPhases === 0
+        && savedTiming.phases.every((phase) => Number.isFinite(phase.atMs)
+          && Number.isFinite(phase.durationMs)),
+      JSON.stringify(savedTiming));
     check("ranked rail separates Top pick and Alternatives",
       app.text("#queue-top-pick")?.includes("First Choice")
         && app.text("#queue-alternatives")?.includes("Second Choice")
@@ -974,18 +1058,7 @@ async function followUpContextUsesPriorTurnsAndQueue() {
 
 async function failedTurnRollsBackPendingUserMessage() {
   const app = await bootApp({
-    agentFixture: async (opts) => {
-      opts.onEvent({
-        type: "error",
-        turnId: opts.turnId,
-        code: "network",
-        message: "Fixture network failure.",
-        retryable: true,
-        partialReply: "",
-        timing: { totalMs: 2500, firstTokenMs: null }
-      });
-      return { ok: false, reply: "", queue: null, memoryCandidates: [] };
-    }
+    agentFixture: async () => ({ ok: false, reply: "", queue: null, memoryCandidates: [] })
   });
   try {
     await completeOnboarding(app);
@@ -998,7 +1071,13 @@ async function failedTurnRollsBackPendingUserMessage() {
       JSON.stringify((await browserMemory.getConversation()).messages));
     check("failed turns remain visible inline for retry context",
       /a thriller/.test(app.text("#chat-transcript") || "")
-        && /Fixture network failure/.test(app.text("#chat-transcript") || ""));
+        && /turn did not complete/i.test(app.text("#chat-transcript") || ""));
+    check("failed turns restore the query for a retry",
+      app.$("#query-input").value === "a thriller", app.$("#query-input").value);
+    check("failed turns without an error event clear active progress UI",
+      app.$(".chat-turn-stop")?.hidden === true
+        && !/Checking your services|Writing your picks|Searching the catalog/i.test(app.text(".chat-turn-status") || ""),
+      app.text(".chat-turn-status"));
   } finally {
     app.restore();
   }
@@ -1029,6 +1108,9 @@ async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
     check("Stop rolls back the pending user message",
       (await stoppedMemory.getConversation()).messages.length === 0,
       JSON.stringify((await stoppedMemory.getConversation()).messages));
+    check("Stop restores the query when no newer draft exists",
+      stopped.$("#query-input").value === "something funny",
+      stopped.$("#query-input").value);
     check("Stop does not create a global error banner", stopped.$("#error-banner").hidden);
   } finally {
     stopped.restore();
@@ -1094,16 +1176,116 @@ async function slowStreamShowsAttachedStuckState() {
     currentNow += 21001;
     await new Promise((resolve) => app.window.setTimeout(resolve, 650));
     check("slow streamed turns show the attached stuck state without losing Stop",
-      /TAKING LONGER THAN USUAL/.test(app.text(".chat-turn-status") || "")
+      /taking longer than usual/i.test(app.text(".chat-turn-status") || "")
         && !app.$(".chat-turn-stop").hidden,
       (app.text(".chat-turn-status") || "") + " / stop hidden=" + app.$(".chat-turn-stop").hidden);
     release();
     await app.settle();
-    check("unpriced successful turns label cost as unavailable",
-      /Cost unavailable/.test(app.text(".chat-turn-metrics") || ""));
+    check("unpriced successful turns omit cost instead of repeating unavailable",
+      /Metrics: 21\.0s · 2 tokens/.test(app.text("#trace") || "")
+        && !/Cost unavailable/.test(app.text("#trace") || ""),
+      app.text("#trace"));
   } finally {
     Date.now = actualNow;
     if (actualWindowNow) app.window.Date.now = actualWindowNow;
+    app.restore();
+  }
+}
+
+async function subscriptionsEditOpensSettingsAndRescopesQueue() {
+  const app = await bootApp();
+  try {
+    await completeOnboarding(app);
+    const before = app.$$("#queue-track .card-title").map((n) => n.textContent);
+    check("seeded queue starts on Netflix titles",
+      before.includes("Sharp Comedy") && !before.includes("Prime Thriller"), before.join(","));
+
+    await app.click("#subscriptions-edit");
+    check("Edit subscriptions opens Settings", app.$("#settings-dialog").hasAttribute("open"));
+    app.$("#settings-provider-list input[value=netflix]").click();
+    app.$("#settings-provider-list input[value=prime]").click();
+    await app.click("#settings-save");
+    await app.settle();
+
+    const after = app.$$("#queue-track .card-title").map((n) => n.textContent);
+    check("changing subscriptions rescopes the seeded queue",
+      after.includes("Prime Thriller") && !after.includes("Sharp Comedy"), after.join(","));
+  } finally {
+    app.restore();
+  }
+}
+
+async function watchedTitlesStayOutOfSeededPicks() {
+  const app = await bootApp();
+  try {
+    await completeOnboarding(app);
+    const memory = createBrowserMemory();
+    await memory.initialize();
+    await memory.setHistory({
+      schema: 2,
+      importedAt: "2026-08-05T00:00:00.000Z",
+      sources: [],
+      series: [],
+      movies: [],
+      other: [],
+      seen: ["sharp comedy"]
+    });
+    await app.click("#new-chat-btn");
+    await app.settle();
+    const titles = app.$$("#queue-track .card-title").map((n) => n.textContent);
+    check("seeded picks exclude titles already in watch history",
+      titles.length > 0 && !titles.includes("Sharp Comedy"), titles.join(","));
+    check("seeded picks do not show filler catalog reasons",
+      !/Selected from your catalog for this request/.test(app.text("#queue-track") || ""),
+      app.text("#queue-track"));
+  } finally {
+    app.restore();
+  }
+}
+
+async function conversationsCanBeRenamedAndDeleted() {
+  const storage = createStorage();
+  const app = await bootApp({ storage, agentFixture: {} });
+  try {
+    await completeOnboarding(app);
+    app.$("#query-input").value = "something funny";
+    await app.click("#send-btn");
+    await app.settle();
+    await app.click("#new-chat-btn");
+    await app.settle();
+
+    const archived = app.$$("#conversation-list-items .conversation-list-item:not(:disabled)")
+      .find((node) => /something funny/i.test(node.textContent || ""));
+    check("archived conversation appears in the sidebar", !!archived);
+
+    const row = archived.closest(".conversation-row");
+    row.querySelector(".conversation-more").click();
+    await app.settle();
+    row.querySelector(".conversation-menu button").click();
+    await app.settle();
+    const renameInput = app.$(".conversation-rename-form input");
+    renameInput.value = "Friday night";
+    renameInput.dispatchEvent(new app.window.Event("input", { bubbles: true }));
+    await app.click(".conversation-rename-form button[type='submit']");
+    await app.settle();
+    check("renamed conversation persists in the sidebar",
+      app.$$("#conversation-list-items .conversation-list-item")
+        .some((node) => /Friday night/i.test(node.textContent || "")));
+
+    const renamed = app.$$("#conversation-list-items .conversation-row")
+      .find((node) => /Friday night/i.test(node.textContent || ""));
+    renamed.querySelector(".conversation-more").click();
+    const deleteBtn = [...renamed.querySelectorAll(".conversation-menu button")]
+      .find((button) => /Delete/i.test(button.textContent || ""));
+    const confirm = app.window.confirm;
+    app.window.confirm = () => true;
+    deleteBtn.click();
+    await app.settle();
+    app.window.confirm = confirm;
+    check("deleted conversation leaves the sidebar",
+      !app.$$("#conversation-list-items .conversation-list-item")
+        .some((node) => /Friday night/i.test(node.textContent || "")));
+  } finally {
     app.restore();
   }
 }
@@ -1122,6 +1304,9 @@ const suites = [
   mobileDrawerCloses,
   chatIsGatedWithoutKey,
   conversationsAndLearnedMemoryPersist,
+  conversationsCanBeRenamedAndDeleted,
+  subscriptionsEditOpensSettingsAndRescopesQueue,
+  watchedTitlesStayOutOfSeededPicks,
   workerUnavailableKeepsShellAndKeyGate,
   settingsModelPickerSupportsOpenRouterDropdown,
   settingsWebSearchIsScopedToOpenRouter,

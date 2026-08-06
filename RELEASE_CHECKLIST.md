@@ -9,7 +9,11 @@
 - [ ] Run `npm install --ignore-scripts` and `npm run check`.
 - [ ] Confirm catalog execution and catalog runtime unit checks pass, including request timeout, Worker
       restart, duplicate-finish suppression, observed-ID grounding, and output limits.
-- [ ] Run `node scripts/stress_agent_hostile.mjs` and `node scripts/stress_search_perf.mjs`.
+- [ ] Run `node scripts/stress_agent_hostile.mjs`, `node scripts/stress_search_perf.mjs`, and
+      `node scripts/stress_catalog_startup.mjs`.
+- [ ] Review `docs/LATENCY.md`. If a release-testing key is present, run
+      `node scripts/stress_agent_live.mjs --matrix` without printing the key; otherwise note that the
+      live baseline was skipped.
 - [ ] Start `node scripts/e2e_catalog_server.mjs` and complete the deterministic browser mock pass with
       a real Worker: normal `run_catalog_js`, subscription-scoped queue, timeout recovery, desktop and
       mobile layouts, and no uncaught console errors.

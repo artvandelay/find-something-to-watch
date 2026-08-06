@@ -1,3 +1,5 @@
+import { isUsefulReason } from "../recommendations.js";
+
 /**
  * Right panel ("Your picks"): a vertically scrolling rail of horizontal cards —
  * poster on the left, title/metadata/synopsis/provider links on the right — so
@@ -35,7 +37,7 @@ export function createQueueView(el, deps) {
     if (rec.y !== null && rec.y !== undefined) parts.push(String(rec.y));
     if (rec.k) parts.push(rec.k);
     if (rec.rt !== null && rec.rt !== undefined) parts.push(rec.rt + " min");
-    if (rec.r !== null && rec.r !== undefined) parts.push("TMDB " + rec.r);
+    if (rec.r !== null && rec.r !== undefined) parts.push("★ " + Number(rec.r).toFixed(1));
     if (parts.length === 0) return null;
     const p = document.createElement("p");
     p.className = "card-meta";
@@ -65,10 +67,6 @@ export function createQueueView(el, deps) {
     const card = document.createElement("article");
     card.className = "card card-rank-" + rank;
     card.setAttribute("role", "listitem");
-    card.addEventListener("click", (event) => {
-      if (event.target.closest("a, button, input, select, textarea, summary")) return;
-      deps.onOpenTitleDetails?.(rec.id, event.currentTarget);
-    });
     card.appendChild(buildPoster(rec));
 
     const body = document.createElement("div");
@@ -91,17 +89,24 @@ export function createQueueView(el, deps) {
     const meta = metaLine(rec);
     if (meta) body.appendChild(meta);
 
-    if (rec.reason) {
+    const usefulReason = isUsefulReason(rec.reason) ? String(rec.reason).trim() : "";
+    if (usefulReason) {
       const reason = document.createElement("p");
       reason.className = "card-reason";
-      reason.textContent = rec.reason;
+      reason.textContent = usefulReason;
       body.appendChild(reason);
+    } else if (rank === 1 && rec.s) {
+      // Top pick keeps one short plot line when the model gave no real reason.
+      const description = document.createElement("p");
+      description.className = "card-description";
+      description.textContent = rec.s;
+      body.appendChild(description);
+    } else if (rank > 1 && rec.s) {
+      const description = document.createElement("p");
+      description.className = "card-description card-description-compact";
+      description.textContent = rec.s;
+      body.appendChild(description);
     }
-
-    const description = document.createElement("p");
-    description.className = "card-description";
-    description.textContent = rec.s || "Description unavailable in this catalog snapshot.";
-    body.appendChild(description);
 
     const save = document.createElement("button");
     save.type = "button";
@@ -121,9 +126,32 @@ export function createQueueView(el, deps) {
     else {
       const noLink = document.createElement("p");
       noLink.className = "card-meta";
-      noLink.textContent = "No link available on your subscriptions right now.";
+      noLink.textContent = "Not on your subscriptions right now.";
       body.appendChild(noLink);
     }
+
+    const feedback = document.createElement("div");
+    feedback.className = "card-feedback";
+    feedback.setAttribute("role", "group");
+    feedback.setAttribute("aria-label", "Taste feedback for " + (rec.t || rec.id || "title"));
+    for (const action of [
+      { id: "like", label: "More like this" },
+      { id: "pass", label: "Not for me" },
+      { id: "seen", label: "Already seen" },
+      { id: "tonight", label: "Not tonight" }
+    ]) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "card-feedback-btn";
+      button.dataset.feedback = action.id;
+      button.textContent = action.label;
+      button.addEventListener("click", (event) => {
+        event.stopPropagation();
+        deps.onFeedback?.(rec.id, action.id, rec);
+      });
+      feedback.appendChild(button);
+    }
+    body.appendChild(feedback);
 
     card.appendChild(body);
     return card;
@@ -146,6 +174,23 @@ export function createQueueView(el, deps) {
 
   function setCatalogStatus(text) {
     el.catalogStatus.textContent = text;
+  }
+
+  let feedbackTimer = 0;
+
+  function setFeedbackNote(text) {
+    if (!el.queueFeedback) return;
+    const value = typeof text === "string" ? text.trim() : "";
+    el.queueFeedback.textContent = value;
+    el.queueFeedback.hidden = value === "";
+    if (feedbackTimer) window.clearTimeout(feedbackTimer);
+    if (value) {
+      feedbackTimer = window.setTimeout(() => {
+        el.queueFeedback.textContent = "";
+        el.queueFeedback.hidden = true;
+        feedbackTimer = 0;
+      }, 4200);
+    }
   }
 
   function render(records, emptyText, source = null) {
@@ -198,5 +243,5 @@ export function createQueueView(el, deps) {
     el.queueViewport.scrollTop = 0;
   }
 
-  return { render, setCatalogStatus };
+  return { render, setCatalogStatus, setFeedbackNote };
 }

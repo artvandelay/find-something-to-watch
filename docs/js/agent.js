@@ -6,15 +6,104 @@ import { isOpenRouterBaseUrl } from "./openrouter-models.js";
 import { sanitizeRecommendationQueue } from "./recommendations.js";
 import { validatePreferenceCandidates } from "./preferences.js";
 
-const DEFAULT_BUDGET = { maxSteps: 8, maxMs: 120000 };
+const TURN_CLASS_BUDGETS = Object.freeze({
+  direct: { maxSteps: 0, maxMs: 90000 },
+  // Empirically, three planner steps is the floor for a tool call + repair +
+  // decision; four keeps normal recommendations reliable without restoring eight.
+  normal: { maxSteps: 4, maxMs: 120000 },
+  complex: { maxSteps: 8, maxMs: 120000 }
+});
 const MAX_QUEUE_IDS = 20;
 const MAX_QUERY_CHARACTERS = 6000;
 const MAX_YOUMD_CONTEXT_CHARACTERS = 8000;
 const MAX_CONVERSATION_CONTEXT_CHARACTERS = 18000;
+const MAX_RECENT_FULL_TURNS = 2;
+const MAX_OLDER_ASSISTANT_CHARACTERS = 320;
 const MAX_HISTORY_CONTEXT_CHARACTERS = 9600;
 const MAX_CATALOG_MANIFEST_CHARACTERS = 8000;
 const MAX_QUEUE_CONTEXT_ITEMS = 20;
 const MAX_QUEUE_CONTEXT_CHARACTERS = 4000;
+const MAX_TIMING_PHASES = 24;
+
+const DIRECT_FOLLOW_UP_RE = /\b(why (would|do) i (like|enjoy)|tell me more|more about|what(?:'s| is) it about|how long|runtime|who (directed|stars|wrote|is in)|reviews?|reception|that one|the (last|top) (pick|one)|explain (that|this|it))\b/i;
+const COMPLEX_REQUEST_RE = /\b(compare|versus|vs\.?|research|deep dive|comprehensive|everything|across (all|my)|several|multiple (services|providers|platforms)|and also)\b/i;
+
+function createLatencyTracker(prefix) {
+  const perf = globalThis.performance;
+  const origin = typeof perf?.now === "function" ? perf.now() : Date.now();
+  let sequence = 0;
+  let dropped = 0;
+  const phases = [];
+  const now = () => typeof perf?.now === "function" ? perf.now() : Date.now();
+  const mark = (name) => {
+    const id = `${prefix}:${sequence++}:${name}`;
+    try {
+      perf?.mark?.(id);
+    } catch {
+      // Timing must never affect a turn when Performance APIs are unavailable.
+    }
+    return id;
+  };
+  const record = (name, atMs = now() - origin, durationMs = 0) => {
+    if (phases.length >= MAX_TIMING_PHASES) {
+      dropped += 1;
+      return;
+    }
+    phases.push({
+      name,
+      atMs: Math.max(0, Math.round(atMs)),
+      durationMs: Math.max(0, Math.round(durationMs))
+    });
+  };
+  record("agent_start", 0);
+  return {
+    elapsed: () => Math.max(0, now() - origin),
+    start(name) {
+      return { name, atMs: now() - origin, mark: mark(name + ":start") };
+    },
+    end(entry) {
+      const endMark = mark(entry.name + ":end");
+      let duration = Math.max(0, now() - origin - entry.atMs);
+      try {
+        const measureName = `${prefix}:${sequence++}:${entry.name}:duration`;
+        perf?.measure?.(measureName, entry.mark, endMark);
+        const measured = perf?.getEntriesByName?.(measureName).at(-1)?.duration;
+        if (Number.isFinite(measured)) duration = measured;
+        perf?.clearMeasures?.(measureName);
+      } catch {
+        // Keep the fallback duration when measure() cannot run.
+      } finally {
+        try {
+          perf?.clearMarks?.(entry.mark);
+          perf?.clearMarks?.(endMark);
+        } catch {
+          // Performance buffers are best effort only.
+        }
+      }
+      record(entry.name, entry.atMs, duration);
+    },
+    point(name) {
+      const atMs = now() - origin;
+      const pointMark = mark(name);
+      try {
+        perf?.clearMarks?.(pointMark);
+      } catch {
+        // Performance buffers are best effort only.
+      }
+      record(name, atMs);
+      return atMs;
+    },
+    snapshot() {
+      return {
+        phases: phases
+          .slice()
+          .sort((left, right) => left.atMs - right.atMs)
+          .map((phase) => ({ ...phase })),
+        droppedPhases: dropped
+      };
+    }
+  };
+}
 
 function buildReceptionGuidance(webSearchEnabled) {
   if (webSearchEnabled) {
@@ -46,6 +135,37 @@ function buildRerankPrompt(prompts, webSearchEnabled) {
     text += "\n\nThe catalog only has synopsis text and TMDB vote signals (r, v); it does not include critic reviews or external articles. Say clearly when that limits what you can report.";
   }
   return text;
+}
+
+function buildDirectPrompt(prompts, query, webSearchEnabled) {
+  return "Viewer's latest message: " + String(query || "").slice(0, MAX_QUERY_CHARACTERS)
+    + "\n\n"
+    + buildRerankPrompt(prompts, webSearchEnabled)
+    + "\n\nAnswer this follow-up directly from Current recommendations and recent chat. Do not invent catalog IDs or titles.";
+}
+
+export function classifyTurn(query, context = {}, options = {}) {
+  const text = String(query || "").trim();
+  const queueItems = Array.isArray(context?.recommendationQueue?.items)
+    ? context.recommendationQueue.items
+    : [];
+  const hasQueue = queueItems.length > 0;
+  if (COMPLEX_REQUEST_RE.test(text) || text.length > 280) return "complex";
+  if (hasQueue && DIRECT_FOLLOW_UP_RE.test(text) && text.length <= 220) {
+    // Review follow-ups may need the OpenRouter web tool during planning.
+    if (options.webSearchEnabled && /\b(reviews?|reception)\b/i.test(text)) return "normal";
+    return "direct";
+  }
+  return "normal";
+}
+
+function budgetForTurnClass(turnClass, override = null) {
+  const base = TURN_CLASS_BUDGETS[turnClass] || TURN_CLASS_BUDGETS.normal;
+  if (!override || typeof override !== "object") return { ...base };
+  return {
+    maxSteps: Number.isFinite(override.maxSteps) ? Math.max(0, override.maxSteps) : base.maxSteps,
+    maxMs: Number.isFinite(override.maxMs) ? Math.max(0, override.maxMs) : base.maxMs
+  };
 }
 
 // Sent as its own system message. This directly reaches the configured LLM
@@ -177,9 +297,17 @@ function stripFence(text) {
     .trim();
 }
 
+function compactAssistantProse(text) {
+  const value = String(text || "").replace(/\s+/g, " ").trim();
+  if (value.length <= MAX_OLDER_ASSISTANT_CHARACTERS) return value;
+  return value.slice(0, MAX_OLDER_ASSISTANT_CHARACTERS - 1).trimEnd() + "…";
+}
+
 // Prior turns from the bounded conversation, converted into real chat
 // messages so the model can follow a multi-turn thread instead of treating
 // every call as a fresh one-shot query. Drops oldest complete turns first.
+// Older assistant prose is compacted because You.md / learned / history already
+// carry durable preference summaries; recent turns and the current queue stay full.
 function priorTurnMessages(conversation) {
   const turns = conversationTurns(conversation);
   const validMessages = Array.isArray(conversation)
@@ -191,10 +319,18 @@ function priorTurnMessages(conversation) {
   let used = 0;
   let droppedTurns = 0;
   let droppedCharacters = 0;
+  let compactedAssistantTurns = 0;
   for (let i = turns.length - 1; i >= 0; i--) {
     const turn = turns[i];
+    const recent = (turns.length - 1 - i) < MAX_RECENT_FULL_TURNS;
+    const assistant = turn.assistant
+      ? (recent ? turn.assistant : compactAssistantProse(turn.assistant))
+      : null;
+    if (turn.assistant && assistant && assistant.length < turn.assistant.length) {
+      compactedAssistantTurns += 1;
+    }
     const messages = [{ role: "user", content: turn.user }];
-    if (turn.assistant) messages.push({ role: "assistant", content: turn.assistant });
+    if (assistant) messages.push({ role: "assistant", content: assistant });
     const turnLength = messages.reduce((sum, message) => sum + message.content.length, 0);
     if (used + turnLength > MAX_CONVERSATION_CONTEXT_CHARACTERS) {
       droppedTurns = i + 1;
@@ -215,12 +351,13 @@ function priorTurnMessages(conversation) {
       includedTurns: Math.max(0, turns.length - droppedTurns),
       droppedTurns,
       droppedCharacters,
+      compactedAssistantTurns,
       droppedIncompleteMessages: Math.max(0, validMessages - turns.length * 2)
     }
   };
 }
 
-function buildContextDiagnostics(context, prior, viewerContext, queueContext, catalogContext) {
+function buildContextDiagnostics(context, prior, viewerContext, queueContext, catalogContext, extras = {}) {
   const youmd = typeof context?.youmd === "string" ? context.youmd : "";
   return {
     conversation: prior.diagnostics,
@@ -230,7 +367,10 @@ function buildContextDiagnostics(context, prior, viewerContext, queueContext, ca
     queue: queueContext.diagnostics,
     catalogManifestCharacters: catalogContext.length,
     totalCharacters: viewerContext.length + queueContext.content.length
-      + catalogContext.length + prior.diagnostics.includedCharacters
+      + catalogContext.length + prior.diagnostics.includedCharacters,
+    turnClass: extras.turnClass || "normal",
+    plannerBudget: Number.isFinite(extras.plannerBudget) ? extras.plannerBudget : null,
+    requestCountExpected: extras.requestCountExpected || null
   };
 }
 
@@ -348,13 +488,18 @@ export async function runAgent(opts) {
   const conversation = opts.conversation;
   const emit = typeof opts.onEvent === "function" ? opts.onEvent : function () {};
   const fetchImpl = opts.fetchImpl || globalThis.fetch;
-  const budget = { ...DEFAULT_BUDGET, ...(opts.budget || {}) };
-  const maxMs = Number.isFinite(budget.maxMs) ? Math.max(0, budget.maxMs) : DEFAULT_BUDGET.maxMs;
-  const maxSteps = Number.isFinite(budget.maxSteps) ? Math.max(0, budget.maxSteps) : DEFAULT_BUDGET.maxSteps;
+  const webSearchEnabled = opts.config?.webSearch === true && isOpenRouterBaseUrl(opts.config?.baseUrl);
+  const turnClass = typeof opts.turnClass === "string" && TURN_CLASS_BUDGETS[opts.turnClass]
+    ? opts.turnClass
+    : classifyTurn(query, context, { webSearchEnabled });
+  const budget = budgetForTurnClass(turnClass, opts.budget);
+  const maxMs = budget.maxMs;
+  const maxSteps = budget.maxSteps;
   const externalSignal = opts.signal || null;
   const turnId = turnIdFor(opts.turnId);
   const controller = new AbortController();
   const startedAt = Date.now();
+  const latency = createLatencyTracker("agent:" + turnId);
   let externallyAborted = false;
   let timedOut = false;
   let usage = null;
@@ -364,8 +509,12 @@ export async function runAgent(opts) {
   let costComplete = true;
   let firstTokenMs = null;
   let partialReply = "";
-  let currentPhase = "PLANNING";
-  const timing = () => ({ totalMs: Math.max(0, Date.now() - startedAt), firstTokenMs });
+  let currentPhase = "Checking your services";
+  const timing = () => ({
+    totalMs: Math.max(0, Date.now() - startedAt),
+    firstTokenMs,
+    ...latency.snapshot()
+  });
   const billing = () => ({
     basis: successfulRequests > 0 && costComplete ? "provider_reported" : "unavailable",
     amountUsd: successfulRequests > 0 && costComplete ? reportedCost : null,
@@ -376,7 +525,7 @@ export async function runAgent(opts) {
   const emitEvent = (event) => emit({ turnId, ...event });
   const status = (phase, text, step) => {
     currentPhase = phase;
-    emitEvent({ type: "status", phase, text, step });
+    emitEvent({ type: "status", phase, text: text || phase, step });
   };
   const addRequestUsage = (rawUsage) => {
     usage = addUsage(usage, rawUsage);
@@ -430,7 +579,6 @@ export async function runAgent(opts) {
       return fail();
     }
 
-    const webSearchEnabled = config.webSearch === true && isOpenRouterBaseUrl(config.baseUrl);
     const requestTools = localToolSchemas(tools);
     if (webSearchEnabled) {
       requestTools.push({ type: "openrouter:web_search" });
@@ -444,137 +592,175 @@ export async function runAgent(opts) {
       prior,
       viewerContext,
       queueContext,
-      catalogContext
+      catalogContext,
+      {
+        turnClass,
+        plannerBudget: maxSteps,
+        requestCountExpected: turnClass === "direct" ? 1 : null
+      }
     );
     emitEvent({ type: "context", diagnostics: contextDiagnostics });
-    const messages = [
+    const baseMessages = [
       { role: "system", content: prompts.system },
       { role: "system", content: buildReceptionGuidance(webSearchEnabled) },
       { role: "system", content: viewerContext },
       { role: "system", content: queueContext.content },
       { role: "system", content: catalogContext },
-      ...prior.messages,
-      {
-        role: "user",
-        content: buildPlannerPrompt(prompts, query, webSearchEnabled)
-      }
+      ...prior.messages
     ];
 
-    status("PLANNING", "Planning", 1);
-
-    let decisionText = null;
-    for (let step = 0; step < maxSteps; step++) {
-      ensureActive();
-      const data = await streamChatCompletion(
-        config,
-        { messages, tools: requestTools, tool_choice: "auto" },
-        { fetchImpl, signal: controller.signal }
-      );
-      addRequestUsage(data.usage);
-      const msg = data.message;
-      messages.push(msg);
-
-      if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
-        for (const call of msg.tool_calls) {
-          ensureActive();
-          const name = call && call.function && typeof call.function.name === "string"
-            ? call.function.name
-            : "unknown";
-          const toolCallId = call && typeof call.id === "string" ? call.id : "";
-          let args;
-          let result = null;
-          try {
-            args = JSON.parse((call && call.function && call.function.arguments) || "{}");
-            if (!args || typeof args !== "object" || Array.isArray(args)) {
-              throw new Error("tool arguments must be a JSON object");
-            }
-          } catch {
-            args = {};
-            result = { error: "tool arguments must be valid JSON object" };
-          }
-          status("SEARCHING CATALOG", "Searching catalog", step + 1);
-          const startedToolAt = Date.now();
-          emitEvent({ type: "tool_call", id: toolCallId, name, args, step: step + 1 });
-
-          const handler = tools && tools.handlers && tools.handlers[name];
-          if (result) {
-            // The role:tool result gives the model a chance to repair its call.
-          } else if (name === "openrouter:web_search" || typeof handler !== "function") {
-            result = { error: "unknown tool" };
-          } else {
-            try {
-              result = normalizeToolResult(
-                await abortable(Promise.resolve(handler(args, controller.signal)), controller.signal)
-              );
-            } catch (err) {
-              if (err && err.name === "AbortError") throw err;
-              result = { error: String((err && err.message) || err) };
-            }
-          }
-          emitEvent({
-            type: "tool_result",
-            id: toolCallId,
-            name,
-            count: resultCount(result),
-            ok: !result?.error,
-            durationMs: Math.max(0, Date.now() - startedToolAt),
-            step: step + 1
-          });
-          messages.push({ role: "tool", tool_call_id: toolCallId, content: toolResultContent(result) });
-        }
-        status("ANALYZING MATCHES", "Analyzing matches", step + 1);
-        continue;
-      }
-
-      decisionText = msg.content || "";
-      break;
-    }
-
-    if (decisionText === null) {
-      emitEvent({ type: "error", code: "budget", message: "The model kept searching without answering.", retryable: true, partialReply, timing: timing() });
-      return fail();
-    }
-
-    const decision = parseDecision(decisionText);
     let queue = null;
-    if (Array.isArray(decision.queue)) {
-      const draft = sanitizeRecommendationQueue({ items: decision.queue });
-      const rawItems = draft?.items || [];
-      if (rawItems.length === 0) {
-        queue = [];
-      } else {
-        const resolved = await abortable(Promise.resolve(
-          tools.resolve(rawItems.map((item) => item.id), controller.signal)
-        ), controller.signal);
-        const found = resolvedIds(resolved);
-        queue = rawItems.filter((item) => found.has(item.id));
-      }
-    }
-    const memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
+    let memoryCandidates = [];
+    let messages = baseMessages.slice();
 
-    status("WRITING", "Writing", maxSteps + 1);
-    messages.push({ role: "user", content: buildRerankPrompt(prompts, webSearchEnabled) });
-    const finalData = await streamChatCompletion(
-      config,
-      { messages },
-      {
-        fetchImpl,
-        signal: controller.signal,
-        onEvent: (event) => {
-          if (event.type !== "content") return;
-          if (firstTokenMs === null) firstTokenMs = Math.max(0, Date.now() - startedAt);
-          partialReply += event.text;
-          emitEvent({ type: "delta", text: event.text });
+    if (turnClass === "direct") {
+      status("Answering about your pick", "Answering about your pick", 1);
+      messages.push({
+        role: "user",
+        content: buildDirectPrompt(prompts, query, webSearchEnabled)
+      });
+    } else {
+      messages.push({
+        role: "user",
+        content: buildPlannerPrompt(prompts, query, webSearchEnabled)
+      });
+      status("Checking your services", "Checking your services", 1);
+
+      let decisionText = null;
+      for (let step = 0; step < maxSteps; step++) {
+        ensureActive();
+        const requestTiming = latency.start("model_request");
+        let data;
+        try {
+          data = await streamChatCompletion(
+            config,
+            { messages, tools: requestTools, tool_choice: "auto" },
+            { fetchImpl, signal: controller.signal }
+          );
+        } finally {
+          latency.end(requestTiming);
+        }
+        addRequestUsage(data.usage);
+        const msg = data.message;
+        messages.push(msg);
+
+        if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
+          for (const call of msg.tool_calls) {
+            ensureActive();
+            const name = call && call.function && typeof call.function.name === "string"
+              ? call.function.name
+              : "unknown";
+            const toolCallId = call && typeof call.id === "string" ? call.id : "";
+            let args;
+            let result = null;
+            try {
+              args = JSON.parse((call && call.function && call.function.arguments) || "{}");
+              if (!args || typeof args !== "object" || Array.isArray(args)) {
+                throw new Error("tool arguments must be a JSON object");
+              }
+            } catch {
+              args = {};
+              result = { error: "tool arguments must be valid JSON object" };
+            }
+            status("Searching the catalog", "Searching the catalog", step + 1);
+            const startedToolAt = Date.now();
+            const toolTiming = latency.start("catalog_tool");
+            emitEvent({ type: "tool_call", id: toolCallId, name, args, step: step + 1 });
+
+            try {
+              const handler = tools && tools.handlers && tools.handlers[name];
+              if (result) {
+                // The role:tool result gives the model a chance to repair its call.
+              } else if (name === "openrouter:web_search" || typeof handler !== "function") {
+                result = { error: "unknown tool" };
+              } else {
+                try {
+                  result = normalizeToolResult(
+                    await abortable(Promise.resolve(handler(args, controller.signal)), controller.signal)
+                  );
+                } catch (err) {
+                  if (err && err.name === "AbortError") throw err;
+                  result = { error: String((err && err.message) || err) };
+                }
+              }
+            } finally {
+              latency.end(toolTiming);
+            }
+            emitEvent({
+              type: "tool_result",
+              id: toolCallId,
+              name,
+              count: resultCount(result),
+              ok: !result?.error,
+              durationMs: Math.max(0, Date.now() - startedToolAt),
+              step: step + 1
+            });
+            messages.push({ role: "tool", tool_call_id: toolCallId, content: toolResultContent(result) });
+          }
+          status("Comparing matches", "Comparing matches", step + 1);
+          continue;
+        }
+
+        decisionText = msg.content || "";
+        break;
+      }
+
+      if (decisionText === null) {
+        emitEvent({ type: "error", code: "budget", message: "The model kept searching without answering.", retryable: true, partialReply, timing: timing() });
+        return fail(contextDiagnostics);
+      }
+
+      const decision = parseDecision(decisionText);
+      if (Array.isArray(decision.queue)) {
+        const draft = sanitizeRecommendationQueue({ items: decision.queue });
+        const rawItems = draft?.items || [];
+        if (rawItems.length === 0) {
+          queue = [];
+        } else {
+          const resolved = await abortable(Promise.resolve(
+            tools.resolve(rawItems.map((item) => item.id), controller.signal)
+          ), controller.signal);
+          const found = resolvedIds(resolved);
+          queue = rawItems.filter((item) => found.has(item.id));
         }
       }
-    );
+      memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
+
+      status("Writing your picks", "Writing your picks", maxSteps + 1);
+      messages.push({ role: "user", content: buildRerankPrompt(prompts, webSearchEnabled) });
+    }
+
+    const requestTiming = latency.start("model_request");
+    let finalData;
+    try {
+      finalData = await streamChatCompletion(
+        config,
+        { messages },
+        {
+          fetchImpl,
+          signal: controller.signal,
+          onEvent: (event) => {
+            if (event.type !== "content") return;
+            if (firstTokenMs === null) {
+              firstTokenMs = Math.max(0, Date.now() - startedAt);
+              latency.point("first_token");
+            }
+            partialReply += event.text;
+            emitEvent({ type: "delta", text: event.text });
+          }
+        }
+      );
+    } finally {
+      latency.end(requestTiming);
+    }
     addRequestUsage(finalData.usage);
 
     const reply = finalData.message.content || "";
     if (reply.trim() === "") {
       emitEvent({ type: "error", code: "parse", message: "The model response needs a non-empty reply.", retryable: false, partialReply, timing: timing() });
-      return fail();
+      return fail(contextDiagnostics);
     }
+    latency.point("complete_turn");
     const result = {
       ok: true,
       reply,
@@ -583,7 +769,8 @@ export async function runAgent(opts) {
       usage,
       billing: billing(),
       timing: timing(),
-      contextDiagnostics
+      contextDiagnostics,
+      turnClass
     };
     emitEvent({
       type: "done",
@@ -594,7 +781,8 @@ export async function runAgent(opts) {
       usage,
       billing: result.billing,
       timing: result.timing,
-      contextDiagnostics
+      contextDiagnostics,
+      turnClass
     });
     return result;
   } catch (err) {
