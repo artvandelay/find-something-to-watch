@@ -8,7 +8,7 @@ Acquiring complete, up-to-date catalog metadata across India's top 10 paid Over-
 
 ```
                           ┌─────────────────────────────────────────────────────────┐
-                          │    llm-search-netflix Ingestion Pipeline Architecture   │
+                          │  find-something-to-watch Ingestion Pipeline Architecture │
                           └─────────────────────────────────────────────────────────┘
                                                        │
                            ┌───────────────────────────┴───────────────────────────┐
@@ -142,7 +142,7 @@ Acquiring complete, up-to-date catalog metadata across India's top 10 paid Over-
 
 ## 4. Live Probe Evidence & Response Signatures
 
-All raw response probe payloads are stored in `/Users/jigar/projects/messing-around/llm-search-netflix/research/raw/p0/`. Below are sanitized JSON snippets demonstrating the exact data structures retrieved.
+All raw response probe payloads are stored in `research/raw/p0/`. Below are sanitized JSON snippets demonstrating the exact data structures retrieved.
 
 ### 4.1 JioHotstar BFF Response Sample (`jiohotstar.json`)
 
@@ -260,7 +260,7 @@ All raw response probe payloads are stored in `/Users/jigar/projects/messing-aro
 
 ---
 
-## 5. Recommended Architecture for `llm-search-netflix`
+## 5. Recommended Architecture for `find-something-to-watch`
 
 To power natural language search over India's OTT catalog in this codebase, adopt the following unified ingestion and search architecture.
 
@@ -327,7 +327,7 @@ All scripts should be executed using the Python virtual environment at `~/pyenv/
 
 ### Experiment 1: Extract ZEE5 Catalog Grid
 
-Save as `/Users/jigar/projects/messing-around/llm-search-netflix/scripts/probe_zee5.py`:
+Save as `scripts/probe_zee5.py`:
 
 ```python
 import os
@@ -373,7 +373,7 @@ if __name__ == "__main__":
 
 ### Experiment 2: Fetch SonyLIV Container List
 
-Save as `/Users/jigar/projects/messing-around/llm-search-netflix/scripts/probe_sonyliv.py`:
+Save as `scripts/probe_sonyliv.py`:
 
 ```python
 import json
@@ -408,7 +408,7 @@ if __name__ == "__main__":
 
 ### Experiment 3: Fetch Hoichoi (ViewLift) Catalog
 
-Save as `/Users/jigar/projects/messing-around/llm-search-netflix/scripts/probe_hoichoi.py`:
+Save as `scripts/probe_hoichoi.py`:
 
 ```python
 import json

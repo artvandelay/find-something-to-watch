@@ -7,7 +7,7 @@ import json
 import urllib.request
 from pathlib import Path
 
-RAW_DIR = Path("/Users/jigar/projects/messing-around/llm-search-netflix/research/raw/aggregators")
+RAW_DIR = Path(__file__).resolve().parents[1] / "research" / "raw" / "aggregators"
 RAW_DIR.mkdir(parents=True, exist_ok=True)
 
 def update_justwatch_probe():

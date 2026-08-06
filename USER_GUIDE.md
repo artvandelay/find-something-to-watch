@@ -1,4 +1,4 @@
-# Watch agent — User Guide
+# Find Something to Watch — User Guide
 
 **A hobby watch-decision tool with deliberate bring-your-own-model friction.**
 
@@ -7,7 +7,7 @@ India — Netflix, Prime Video, JioHotstar, ZEE5, SonyLIV, MUBI, and twenty more
 
 ## Opening the app
 
-Open the live site: https://artvandelay.github.io/india-ott-byok/
+Open the live site: https://artvandelay.github.io/find-something-to-watch/
 
 Stored in this browser. Relevant context is sent to the model endpoint you configure. There is no account
 or sign-up. Your subscriptions, LLM key, You.md, watch history, conversations, ranked decisions, learned
@@ -18,26 +18,23 @@ is no server, account, or cloud sync.
 
 Model-generated catalog analysis runs in a disposable Worker for fault containment; it is not a
 hostile-code security sandbox. The main thread keeps the trusted records used for recommendation cards,
-playlists, and no-key keyword search; the model does not receive watch URLs or poster URLs.
+playlists, and the initial queue; the model does not receive watch URLs or poster URLs.
 
 (Running a local copy instead? From the project folder run
 `python3 -m http.server --directory docs` and open http://localhost:8000.)
 
-## First visit: onboarding
+## First visit: configure the app
 
-The first time you open the app, complete these three short steps:
+The app opens directly into the main workspace. Before you can use chat:
 
-1. **Your subscriptions** — tick every service you actually pay for. Results are always restricted to
-   these; you can change the selection later from **Settings**.
-2. **Compatible model** — enter a nonempty OpenRouter key. The app starts with its default OpenRouter
-   endpoint and model; bring your preferred compatible model later in **Settings**.
-3. **Watch-history export** (optional) — import one `.csv`, `.json`, or `.zip` export. ZIP files may
-   contain CSV or JSON candidates. If an import fails, remove it and retry, or explicitly continue
-   without history.
+1. Open **Settings**.
+2. Select every streaming service you subscribe to. Results are always restricted to these services.
+3. Under **Your model**, enter a nonempty OpenRouter key. You can also change the compatible endpoint
+   and model.
+4. Select **Save**.
 
-Click **Continue** to enter the app. This flow appears once; reopen subscriptions and key settings from
-**Settings**, and edit You.md or replace history from **Profile & context** later. You.md is deliberately
-not an onboarding field.
+To personalize results, open **Profile & context**. You can add a You.md taste profile or import an
+optional `.csv`, `.json`, or `.zip` watch-history export. ZIP files may contain CSV or JSON candidates.
 
 ## Settings and optional web search
 
@@ -45,16 +42,16 @@ not an onboarding field.
 **Allow web search with OpenRouter (can add cost)** checkbox. The checkbox is available only when the
 base URL hostname is exactly `openrouter.ai`; changing to any other endpoint clears and disables it.
 
-Web search is off by default and does not appear in onboarding. When enabled, OpenRouter may process
-relevant queries with web search and may charge for that extra work. It does not change the local catalog,
-the subscription gate, or the rule that recommendations must be grounded in catalog results.
+Web search is off by default. When enabled, OpenRouter may process relevant queries with web search and
+may charge for that extra work. It does not change the local catalog, the subscription gate, or the rule
+that recommendations must be grounded in catalog results.
 
 ## The three-panel layout
 
 - **Sidebar (left)** — start a **New chat**, see active and recent conversations plus your subscribed
   services, and open **Playlists**, **Profile & context**, and **Settings**. Use the arrow beside the
-  temporary mark to collapse it to an icon rail; that choice is remembered. Below about 1280px it
-  collapses on its own, and on narrow screens it becomes a drawer behind the menu button.
+  brand mark to collapse it to an icon rail; that choice is remembered. Below about 1280px it collapses
+  on its own, and on narrow screens it becomes a drawer behind the menu button.
 - **Chat (middle)** — your conversation transcript with the composer pinned to the bottom of the
   column. Message text is capped at a comfortable reading width. Describe what you want in natural
   language and send.
@@ -62,7 +59,8 @@ the subscription gate, or the rule that recommendations must be grounded in cata
   **More options** from a maximum of 20 titles. Before you send your first message, this is seeded
   instantly from your subscriptions' highest-rated unwatched titles — no model call needed. Each agent
   reply may replace this list; turns that are just clarifying questions leave it exactly as it was. On
-  narrow screens it moves below the chat column.
+  desktop, drag the divider to resize this panel or use its arrow to hide it. On narrow screens it moves
+  below the chat column.
 
 ## Having a conversation
 
@@ -174,7 +172,7 @@ to you.
 - **The catalog line says it's still preparing** — search is blocked until the title index finishes
   building (usually under a second); a second note about "refining with synopses" may linger briefly
   after that while the fuller, synopsis-aware index finishes in the background.
-- **Catalog analysis is still preparing** — no-key keyword search and playlists continue to work. Wait
-  a moment before retrying a keyed agent request.
+- **Catalog analysis is still preparing** — playlists continue to work. Wait a moment before retrying
+  chat.
 - **A recommended title has no working link** — your subscriptions changed since it was added to the
   tray, or the snapshot's link for it is stale; send a new message or start a **New chat** to refresh.

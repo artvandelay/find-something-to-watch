@@ -1,5 +1,5 @@
 {
-  "name": "llm-search-netflix",
+  "name": "find-something-to-watch",
   "private": true,
   "type": "module",
   "devDependencies": {

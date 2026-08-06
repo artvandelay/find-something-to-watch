@@ -1,4 +1,4 @@
-import { normalizeTitle, buildIndex, search, filterIndices, seedQueue } from "./catalog.js";
+import { buildIndex, seedQueue } from "./catalog.js";
 import { parseWatchHistoryExport, summarize } from "./history.js";
 import { createHistoryPlanInferer } from "./history-model.js";
 import { createTools } from "./tools.js";
@@ -23,6 +23,7 @@ import {
 } from "./playlists.js";
 import { toMarkdown, toJson, toCsv } from "./exporters.js";
 import { createOnboardingView } from "./views/onboarding.js";
+import { createPaneLayoutView } from "./views/panes.js";
 import { createSidebarView } from "./views/sidebar.js";
 import { createChatView } from "./views/chat.js";
 import { createQueueView } from "./views/queue.js";
@@ -35,6 +36,10 @@ import { readTestMode } from "./test-mode.js";
 const store = createStore(window.localStorage);
 const memory = createBrowserMemory({ onIssue: (issue) => console.warn("ui: browser-memory issue", issue) });
 
+// Keep onboarding available while the app opens directly into chat. Set this
+// to false to restore the profile-based first-run flow.
+const BYPASS_ONBOARDING = true;
+
 const DOM_IDS = [
   "app", "error-banner",
   "onboarding-screen", "onboarding-form", "onboarding-provider-list",
@@ -44,9 +49,10 @@ const DOM_IDS = [
   "shell", "sidebar-toggle", "sidebar", "sidebar-collapse", "backdrop", "new-chat-btn",
   "conversation-list", "conversation-list-items", "subscriptions-summary", "playlists-btn", "context-btn",
   "settings-btn", "catalog-status",
-  "workspace", "chat-region", "chat-transcript", "chat-note",
+  "workspace", "chat-region", "chat-transcript", "chat-key-error", "chat-note",
   "query-form", "query-input", "send-btn", "stop-btn",
-  "queue-region", "queue-status", "queue-source", "queue-viewport", "queue-track", "queue-empty",
+  "pane-separator", "queue-region", "queue-collapse", "queue-restore",
+  "queue-status", "queue-source", "queue-viewport", "queue-track", "queue-empty",
   "queue-top-pick", "queue-alternatives", "queue-more",
   "title-details-dialog", "title-details-close", "title-details-title", "title-details-content",
   "attribution",
@@ -70,9 +76,6 @@ const DOM_IDS = [
   "playlist-create-view", "playlist-create-name", "playlist-create",
   "playlist-feedback"
 ];
-
-const KEYWORD_NOTE = "Keyword search — add an API key in Settings for ranked recommendations.";
-const NO_KEY_REPLY_PREFIX = "Keyword matches (add an API key in Settings for a conversational, ranked search): ";
 
 let el = null;
 let dialogs = null;
@@ -212,17 +215,19 @@ function updateCatalogStatusLine() {
   queueView.setCatalogStatus(line);
   if (chat) {
     const runtimeNote = catalogRuntimeError
-      ? "Catalog analysis is unavailable; keyword search remains available without an API key."
+      ? "Catalog analysis is unavailable. Chat will be available when it recovers."
       : "";
     chat.setNote(runtimeNote || (!richIndexReady
       ? "Search is still refining with full synopses — results may be less precise for a moment."
       : ""));
-    chat.setSendReady(Boolean(index));
+    refreshSendReadiness();
   }
 }
 
 function refreshSendReadiness() {
-  chat.setSendReady(Boolean(index));
+  const hasKey = store.hasKey();
+  chat.setKeyAvailable(hasKey);
+  chat.setSendReady(hasKey && Boolean(index));
 }
 
 /** Navigation and destructive local-data controls are locked during a turn. */
@@ -492,43 +497,17 @@ function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgr
   };
 }
 
-async function runKeywordFallback(query, seenKeys) {
-  if (!index) {
-    index = buildIndex(records);
-    updateCatalogStatusLine();
-  }
-  const allowed = new Set(filterIndices(records, {
-    providers: subscriptions,
-    excludeKeys: seenKeys
-  }));
-  const ids = search(index, query, { limit: 20, allow: allowed })
-    .map((result) => records[result.i]?.id)
-    .filter(Boolean);
-  const turnId = "local-" + Date.now().toString(36);
-  recommendationQueue = {
-    ...defaultRecommendationQueue(),
-    source: { conversationId: conversation.id, turnId, query: query.replace(/\s+/g, " ").trim().slice(0, 120) },
-    items: ids.slice(0, 20).map((id) => ({ id, reason: DEFAULT_RECOMMENDATION_REASON }))
-  };
-  const replyText = NO_KEY_REPLY_PREFIX + (ids.length
-    ? ids.map((id) => recordsById.get(id)?.t).filter(Boolean).slice(0, 5).join(", ")
-    : "no matches in this catalog snapshot.");
-  const saved = await memory.completeTurn(conversation.id, { content: replyText, queue: recommendationQueue });
-  conversation = saved.conversation;
-  recommendationQueue = saved.queue;
-  renderConversation();
-  renderQueue();
-  chat.setNote(KEYWORD_NOTE);
-}
-
 async function onSubmit() {
   if (controller) return;
+  if (!store.hasKey()) {
+    refreshSendReadiness();
+    return;
+  }
   const query = chat.getQuery();
   if (!query) return;
 
   clearError();
-  const keyedTurn = store.hasKey();
-  if (keyedTurn && !runtimeIsReady() && !hasDeterministicAgent()) {
+  if (!runtimeIsReady() && !hasDeterministicAgent()) {
     chat.setNote("Catalog analysis is still preparing. Try again in a moment.");
     return;
   }
@@ -551,21 +530,6 @@ async function onSubmit() {
     seenKeys = (await memory.getHistory())?.seen ?? [];
   } catch (err) {
     showError("Personalization data is unavailable; this search may include watched titles.");
-  }
-
-  if (!keyedTurn) {
-    chat.setBusy(true);
-    setShellBusy(true);
-    try {
-      await runKeywordFallback(query, seenKeys);
-    } catch (err) {
-      showError(err && err.message ? err.message : "Keyword search failed.");
-    } finally {
-      chat.setBusy(false);
-      setShellBusy(false);
-      refreshSendReadiness();
-    }
-    return;
   }
 
   const turnId = makeTurnId();
@@ -736,6 +700,7 @@ async function onSubscriptionsChange(newProviders) {
   renderPlaylists();
   titleDetailsView?.refresh();
   await seedQueueIfEmpty();
+  refreshSendReadiness();
 }
 
 function exportMeta() {
@@ -884,6 +849,11 @@ async function init() {
     setCollapsed: (collapsed) => store.setSidebarCollapsed(collapsed)
   });
 
+  createPaneLayoutView(el, {
+    getLayout: () => store.getPaneLayout(),
+    setLayout: (layout) => store.setPaneLayout(layout)
+  });
+
   chat = createChatView(el, { onSubmit, onStop });
 
   titleDetailsView = createTitleDetailsView(el, { resolveDetails: resolveTitleDetails });
@@ -938,7 +908,7 @@ async function init() {
     subscriptions = new Set(profile.providers);
     updateRuntimeCatalogMetadata();
 
-    if (!profile.onboardingComplete) {
+    if (!BYPASS_ONBOARDING && !profile.onboardingComplete) {
       onboarding.show();
     } else {
       await showShell();

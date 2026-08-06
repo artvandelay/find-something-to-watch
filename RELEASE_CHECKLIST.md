@@ -2,8 +2,7 @@
 
 ## Required before tagging
 
-- [ ] Confirm the visible wordmark remains a temporary placeholder in release copy; do not present it as a
-      final product name.
+- [ ] Confirm **Find Something to Watch** is used consistently in release copy and repository links.
 - [ ] Rotate the TMDB token that appeared in local debugging output.
 - [ ] Confirm redistribution rights for the legacy uNoGS and Streaming Availability records retained in the union.
 - [ ] Run `bash scripts/scan_secrets.sh`.
@@ -15,18 +14,18 @@
 - [ ] Start `node scripts/e2e_catalog_server.mjs` and complete the deterministic browser mock pass with
       a real Worker: normal `run_catalog_js`, subscription-scoped queue, timeout recovery, desktop and
       mobile layouts, and no uncaught console errors.
-- [ ] Confirm first-visit onboarding, playlists, backup export, and no-key keyword fallback work while
-      the catalog Worker is unavailable.
+- [ ] Confirm direct first-visit workspace access, the no-key chat gate, playlists, and backup export
+      work while the catalog Worker is unavailable.
 - [ ] Run exactly one `node scripts/stress_agent_live.mjs --limit 1` query with a release-testing
       OpenRouter key in the root `.env`; do not print, record, or place that key in browser automation.
 - [ ] Verify Settings web search is off by default, available only for the exact `openrouter.ai`
-      hostname, and discloses that it can add cost. Confirm it is not present in onboarding.
+      hostname, and discloses that it can add cost.
 - [ ] Confirm the disposable executor is documented as fault containment, not a hostile-code security
       sandbox.
 - [ ] Confirm `gzip -c docs/assets/catalog.json | wc -c` is below 2,000,000 bytes.
-- [ ] On a fresh production-like origin, verify the required three-panel onboarding flow: subscriptions,
-  nonempty OpenRouter key, then optional CSV/JSON/ZIP history. Confirm no base URL, model, or You.md
-  input is present in onboarding.
+- [ ] On a fresh production-like origin, verify the shell opens directly, the composer requires an API
+  key, and the in-chat guidance sends the visitor to Settings. Configure subscriptions, endpoint, key,
+  and model there; import optional CSV/JSON/ZIP history from Profile & context.
 - [ ] Import representative CSV, nested JSON, and ZIP history exports. Confirm only bounded filenames,
   structural metadata, and sample rows/records reach the schema-inference request; full uploads remain
   local and a failed import preserves existing history.

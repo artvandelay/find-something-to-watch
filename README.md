@@ -1,17 +1,17 @@
-# Watch agent — bring your own key
+# Find Something to Watch
 
 **A hobby watch-decision tool for people who want to configure it themselves.**
 
-Live: https://artvandelay.github.io/india-ott-byok/
+Live: https://artvandelay.github.io/find-something-to-watch/
 
 ## What this is
 
 This is a hobby project for technically curious viewers. It ships a dated India streaming-catalog
 snapshot and local search over it. Bring your preferred compatible model and your own taste context. The
-required three-step onboarding collects subscriptions, an OpenRouter key, and an optional watch-history
-export. Afterward, a three-panel shell — a collapsible sidebar, chat with a pinned composer, and a
-vertical picks rail — remembers conversations, ranked decisions, and playlists across reloads. The
-visible wordmark is a temporary placeholder, not a final product name.
+app opens into a three-panel shell — a collapsible sidebar, chat with a pinned composer, and a vertical
+picks rail — that remembers conversations, ranked decisions, and playlists across reloads. Configure
+your subscriptions and model key in **Settings**, then optionally import watch history from **Profile &
+context**.
 
 Stored in this browser. Relevant context is sent to the model endpoint you configure. There is no
 account, backend, analytics, or cloud sync. The API key is held in `localStorage`; subscriptions, You.md,
@@ -21,8 +21,8 @@ sent to the configured model endpoint to infer the file layout; the complete upl
 
 Model-generated catalog analysis runs in a disposable Worker for fault containment; it is not a
 hostile-code security sandbox. The main thread keeps the trusted catalog records used to render cards,
-playlists, the initial queue, and no-key keyword search. The model sees bounded results from one local
-`run_catalog_js` tool, never watch URLs or poster URLs.
+playlists, and the initial queue. The model sees bounded results from one local `run_catalog_js` tool,
+never watch URLs or poster URLs.
 
 ## Why
 
@@ -32,16 +32,15 @@ actually are.
 
 ## Bring your preferred compatible model
 
-Onboarding requires a nonempty OpenRouter key and starts with the app's default endpoint and model. You
-can configure a compatible endpoint and model later in the in-app **Settings** dialog.
+Chat requires a nonempty OpenRouter key. Add it in the in-app **Settings** dialog, where you can also
+configure a compatible endpoint and model.
 
 The key is stored only in `localStorage` on your device — it is never sent anywhere except to the
-configured endpoint. It is required to enter the normal app experience.
+configured endpoint.
 
 **Web search is off by default.** The Settings dialog can enable it only when the base URL hostname is
 exactly `openrouter.ai`. When enabled, OpenRouter may process relevant queries with web search and can
-add cost. It is never shown during the three-step onboarding flow, and it does not change the local
-catalog or subscription boundary.
+add cost. It does not change the local catalog or subscription boundary.
 
 No catalog key of any kind is needed at runtime. The catalog is a static JSON file built ahead of time
 (see below) and shipped with the site.
@@ -51,8 +50,8 @@ No catalog key of any kind is needed at runtime. The catalog is a static JSON fi
 Two optional inputs shape the ranking:
 
 - **You.md** — a free-form markdown description of your taste. Write it however you like: favorite
-  directors, moods you are in, and things you never want to see again. It is editable later in
-  **Profile & context**, not during onboarding.
+  directors, moods you are in, and things you never want to see again. It is editable in **Profile &
+  context**.
 - **Watch history** — import a `.csv`, `.json`, or `.zip` export. ZIP files may contain CSV or JSON
   candidates. The parser works locally; only a bounded structural sample is sent to OpenRouter for
   schema inference, never the full file.
@@ -67,9 +66,9 @@ remains separate.
 
 ## Subscriptions are a hard boundary
 
-Onboarding (and Settings, later) asks which of the 26 curated India services you actually subscribe to.
-Every local search, model catalog analysis, recommendation card, and normal provider link is restricted
-to titles available on at least one selected service. The title-details dialog is the one exception: it
+Settings asks which of the 26 curated India services you actually subscribe to. Every local search,
+model catalog analysis, recommendation card, and normal provider link is restricted to titles available
+on at least one selected service. The title-details dialog is the one exception: it
 groups the catalog record's providers into **On your subscriptions** and **Other known platforms**. “All
 platforms” means the curated providers recorded in that dated catalog entry, not exhaustive or live
 market availability. A title's link is labelled to match what it actually is: a true per-title deep link
@@ -175,9 +174,8 @@ bash scripts/scan_secrets.sh
 
 `scripts/check_app_boot.mjs` boots the real `docs/index.html` and the real `docs/js/ui.js` in jsdom,
 against a small catalog fixture and a fresh IndexedDB, and drives the app the way a user would:
-onboarding step by step, creating and exporting playlists, reloading, exporting a key-free memory backup,
-the mobile drawer, the developer shortcut, and a query
-with no key configured.
+configuring subscriptions and a key, creating and exporting playlists, reloading, exporting a key-free
+memory backup, using the mobile drawer and developer shortcut, and verifying the no-key chat gate.
 
 It exists because these are integration failures — a control that is never rendered, or a hidden
 `required` input that silently blocks a form — which unit tests on individual modules cannot see and
@@ -219,10 +217,10 @@ exits non-zero when the key is absent, so it is safe to include in CI where the 
 ### Local testing bypass
 
 Mostly superseded by the boot test above; useful when you want to poke at the live UI by hand.
-`?testMode=1` bypasses onboarding when the hostname is exactly `localhost` or
-`127.0.0.1`. Add `testProviders=netflix,prime` to select known providers; without it, the default is
-Netflix. Production hosts and localhost-like subdomains ignore this flag, and it never creates or stores
-an API key.
+`?testMode=1` preconfigures a test profile when the hostname is exactly `localhost` or `127.0.0.1`.
+Add `testProviders=netflix,prime` to select known providers; without it, the default is Netflix.
+Production hosts and localhost-like subdomains ignore this flag, and it never creates or stores an API
+key.
 
 To scan the repo for accidentally committed secrets:
 

@@ -91,7 +91,7 @@ to https://www.justwatch.com.
 ## Cron (weekly re-sweep)
 
 ```
-0 4 * * 1 cd /Users/jigar/projects/messing-around/llm-search-netflix && ~/pyenv/tmdb-catalog/bin/python catalog/catalog.py --db catalog/catalog.db >> catalog/sweep.log 2>&1
+0 4 * * 1 cd /path/to/find-something-to-watch && ~/pyenv/tmdb-catalog/bin/python catalog/catalog.py --db catalog/catalog.db >> catalog/sweep.log 2>&1
 ```
 
 ## Out of scope

@@ -78,7 +78,7 @@ def _http_get_json(
             "X-RapidAPI-Key": rapidapi_key,
             "X-RapidAPI-Host": DEFAULT_HOST_HEADER,
             "Accept": "application/json",
-            "User-Agent": "llm-search-netflix/unogs-dump",
+            "User-Agent": "find-something-to-watch/unogs-dump",
         },
         method="GET",
     )

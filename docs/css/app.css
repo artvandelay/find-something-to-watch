@@ -18,6 +18,8 @@
   --sidebar-w: 260px;
   --sidebar-collapsed-w: 56px;
   --rail-w: 380px;
+  --separator-w: 9px;
+  --rail-collapsed-w: 40px;
   --chat-measure: 70ch;
   --danger: #ff6673;
   --success: #7fd9ad;
@@ -677,10 +679,69 @@ svg.nav-icon {
 
 #workspace {
   display: grid;
-  grid-template-columns: minmax(0, 1fr) var(--rail-w);
+  grid-template-columns: minmax(0, 1fr) var(--separator-w) var(--rail-w);
   min-height: 0;
   min-width: 0;
   overflow: hidden;
+}
+
+/* ---- Pane splitter ---- */
+
+#pane-separator {
+  position: relative;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+#pane-separator::before {
+  content: "";
+  position: absolute;
+  inset: 0 4px;
+  background: var(--border);
+  transition: background 0.15s ease;
+}
+
+#pane-separator:hover::before,
+#pane-separator:active::before {
+  background: var(--border-strong);
+}
+
+#pane-separator:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: -3px;
+}
+
+#workspace.queue-collapsed {
+  grid-template-columns: minmax(0, 1fr) var(--rail-collapsed-w);
+}
+
+#workspace.queue-collapsed #queue-region {
+  display: none;
+}
+
+#queue-restore:not([hidden]) {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 0;
+  border-left: 1px solid var(--border);
+  border-radius: 0;
+  background: var(--bg-raised);
+  color: var(--muted);
+}
+
+#queue-restore:not([hidden]):hover {
+  color: var(--fg);
+  background: var(--card);
+}
+
+#queue-restore .restore-label {
+  writing-mode: vertical-rl;
+  font-size: 0.72rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
 }
 
 /* ---- Chat column ---- */
@@ -866,6 +927,26 @@ svg.nav-icon {
   margin-inline: auto;
 }
 
+.chat-key-error {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 8px;
+  margin: 0 0 10px;
+  border: 1px solid color-mix(in srgb, var(--danger) 58%, var(--border));
+  border-left: 3px solid var(--danger);
+  border-radius: 3px;
+  background: var(--card);
+  padding: 10px 12px;
+}
+
+.chat-key-error[hidden] {
+  display: none;
+}
+
+.chat-key-error strong {
+  flex-basis: 100%;
+}
+
 #chat-note {
   margin: 0 0 8px;
 }
@@ -949,6 +1030,17 @@ svg.nav-icon {
   align-items: baseline;
   gap: 10px;
   padding: 16px 16px 8px;
+}
+
+#queue-collapse {
+  flex: 0 0 auto;
+  align-self: center;
+  display: grid;
+  place-items: center;
+  width: 28px;
+  min-width: 28px;
+  height: 28px;
+  padding: 0;
 }
 
 .queue-source {
@@ -1636,12 +1728,24 @@ dialog h3 {
     z-index: 15;
   }
 
-  #workspace {
+  #workspace,
+  #workspace.queue-collapsed {
     grid-template-columns: minmax(0, 1fr);
     grid-template-rows: minmax(0, 1fr) minmax(220px, 0.85fr);
   }
 
+  #pane-separator,
+  #queue-restore {
+    display: none;
+  }
+
+  #queue-collapse {
+    display: none;
+  }
+
+  #workspace.queue-collapsed #queue-region,
   #queue-region {
+    display: flex;
     border-left: 0;
     border-top: 1px solid var(--border);
   }

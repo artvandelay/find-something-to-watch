@@ -59,7 +59,7 @@ Adopt a **Hybrid Native API & BFF Ingestion Architecture**:
 
 ## 3. Live Probe Evidence & Firecrawl vs Native API Benchmarking
 
-All raw probe responses are stored on disk in `/Users/jigar/projects/messing-around/llm-search-netflix/research/raw/p1/`.
+All raw probe responses are stored on disk in `research/raw/p1/`.
 
 ### A. YouTube India (Official Movie Channels & Storefront)
 * Raw probe file: `research/raw/p1/youtube_india.json`
@@ -145,9 +145,9 @@ All raw probe responses are stored on disk in `/Users/jigar/projects/messing-aro
 
 ---
 
-## 5. Recommended Architecture for `llm-search-netflix`
+## 5. Recommended Architecture for `find-something-to-watch`
 
-To integrate Track 3 (Free & AVOD India Catalogs) into the `llm-search-netflix` repository:
+To integrate Track 3 (Free & AVOD India Catalogs) into the `find-something-to-watch` repository:
 
 ```
 +-----------------------------------------------------------------------------------+
@@ -174,7 +174,7 @@ To integrate Track 3 (Free & AVOD India Catalogs) into the `llm-search-netflix` 
                                    v
              +-------------------------------------------+
              |   Vector Indexing (sentence-transformers) |
-             |   llm-search-netflix RAG Search Engine    |
+             | find-something-to-watch RAG Search Engine |
              +-------------------------------------------+
 ```
 

@@ -2,11 +2,10 @@ import { bootApp, createStorage } from "./harness/app.mjs";
 import { createBrowserMemory } from "../docs/js/memory.js";
 
 async function completeOnboarding(app, provider = "netflix") {
-  app.$("#onboarding-provider-list input[value=" + provider + "]").click();
-  await app.click("#onboarding-next");
-  app.$("#onboarding-llm-api-key").value = "sk-test";
-  await app.click("#onboarding-next");
-  await app.click("#onboarding-next");
+  await app.click("#settings-btn");
+  app.$("#settings-provider-list input[value=" + provider + "]").click();
+  app.$("#llm-api-key").value = "sk-test";
+  await app.click("#settings-save");
 }
 
 /** True only when the node exists and no ancestor is hidden. */
@@ -50,22 +49,13 @@ function check(name, condition, detail) {
   console.log("FAIL - " + name + (detail === undefined ? "" : "\n       " + detail));
 }
 
-async function firstVisitShowsUsableOnboarding() {
+async function firstVisitShowsWorkspace() {
   const app = await bootApp();
   try {
-    check("first visit shows onboarding", app.$("#onboarding-screen").hidden === false);
-    check("first visit hides the shell", app.$("#shell").hidden === true);
-    check("onboarding starts on step 1", app.visibleSteps().join(",") === "subscriptions",
-      "visible: " + app.visibleSteps().join(","));
-
-    const options = app.$$("#onboarding-provider-list input[type=checkbox]");
-    check("provider checkboxes are rendered", options.length > 0,
-      "rendered " + options.length + " options; a first-time user cannot continue without them");
-    check("provider options match the catalog order",
-      options.map((i) => i.value).join(",") === "netflix,prime,hotstar",
-      options.map((i) => i.value).join(","));
-    check("provider options are labelled",
-      options.every((i) => (i.closest("label")?.textContent || "").trim().length > 0));
+    check("first visit bypasses onboarding", app.$("#onboarding-screen").hidden === true);
+    check("first visit opens the chat shell", app.$("#shell").hidden === false);
+    check("onboarding markup remains available",
+      !!app.$("#onboarding-form") && app.$$("#onboarding-form [data-onboarding-step]").length === 3);
   } finally {
     app.restore();
   }
@@ -115,42 +105,13 @@ async function phaseFiveStructuralContract() {
   }
 }
 
-async function onboardingGuardsAndCompletes() {
+async function legacyOnboardingStaysDormant() {
   const app = await bootApp();
   try {
-    await app.click("#onboarding-next");
-    check("step 1 blocks an empty selection",
-      app.visibleSteps().join(",") === "subscriptions" && /subscription/i.test(app.text("#error-banner") || ""),
-      "step=" + app.visibleSteps().join(",") + " banner=" + app.text("#error-banner"));
-
-    app.$("#onboarding-provider-list input[value=netflix]").click();
-    await app.click("#onboarding-next");
-    check("selecting a provider advances to the key step",
-      app.visibleSteps().join(",") === "openrouter-key", app.visibleSteps().join(","));
-
-    await app.click("#onboarding-next");
-    check("step 2 blocks an empty key",
-      app.visibleSteps().join(",") === "openrouter-key" && /key/i.test(app.text("#error-banner") || ""),
-      "step=" + app.visibleSteps().join(",") + " banner=" + app.text("#error-banner"));
-
-    app.$("#onboarding-llm-api-key").value = "sk-test";
-    await app.click("#onboarding-next");
-    check("entering a key advances to the history step",
-      app.visibleSteps().join(",") === "watch-history", app.visibleSteps().join(","));
-
-    const stored = JSON.parse(app.window.localStorage.getItem("ottbyok.llm") || "{}");
-    check("the key is stored with default endpoint and model",
-      stored.apiKey === "sk-test" && /^https?:\/\//.test(stored.baseUrl || "") && !!stored.model,
-      JSON.stringify(stored));
-
-    await app.click("#onboarding-back");
-    check("back returns to the key step", app.visibleSteps().join(",") === "openrouter-key");
-    await app.click("#onboarding-next");
-
-    await app.click("#onboarding-next");
-    check("finishing without history reveals the shell",
-      app.$("#onboarding-screen").hidden === true && app.$("#shell").hidden === false);
-    check("no model request is made during onboarding",
+    check("bypassed onboarding stays hidden", app.$("#onboarding-screen").hidden === true);
+    check("its key input and navigation remain in the document",
+      !!app.$("#onboarding-llm-api-key") && !!app.$("#onboarding-next"));
+    check("direct boot does not make a model request",
       !app.requested.some((u) => /chat\/completions/.test(u)), app.requested.join(" "));
   } finally {
     app.restore();
@@ -482,7 +443,7 @@ async function customPlaylistLifecycleAndExports() {
 }
 
 async function backupExportIncludesUserState() {
-  const app = await bootApp();
+  const app = await bootApp({ agentFixture: {} });
   try {
     await completeOnboarding(app);
 
@@ -491,9 +452,8 @@ async function backupExportIncludesUserState() {
     await app.settle();
     await app.click("#playlists-close");
 
-    // Build a real conversation through the local fallback so the backup has
-    // state from each major user-owned area without making a model request.
-    app.window.localStorage.removeItem("ottbyok.llm");
+    // Build a real conversation through the deterministic agent fixture so the
+    // backup has state from each major user-owned area.
     app.$("#query-input").value = "comedy";
     app.$("#query-input").dispatchEvent(new app.window.Event("input", { bubbles: true }));
     await app.click("#send-btn");
@@ -518,7 +478,8 @@ async function backupExportIncludesUserState() {
       backupDownload.filename === "memory.json" && backup.schema === 3,
       backupDownload.filename + " schema=" + backup.schema);
     check("backup export includes conversation, ranked queue, profile, archives, learned facts, and playlists",
-      backup.conversation.messages.length === messagesBefore.length
+      backup.conversation.messages.length >= messagesBefore.length
+        && backup.conversation.messages.some((message) => message.role === "assistant")
         && backup.queue.items.length === queueBefore.length
         && backup.profile.providers.includes("netflix")
         && Array.isArray(backup.threads.items)
@@ -610,7 +571,7 @@ async function sidebarCollapsePersistsAcrossReload() {
   }
 }
 
-async function keywordFallbackWithoutKey() {
+async function chatIsGatedWithoutKey() {
   const app = await bootApp();
   try {
     await completeOnboarding(app);
@@ -623,10 +584,12 @@ async function keywordFallbackWithoutKey() {
     await app.settle();
 
     const roles = app.$$("#chat-transcript .chat-msg").map((n) => n.className);
-    check("a query without a key still answers locally",
-      roles.length === 2 && /user/.test(roles[0]) && /assistant/.test(roles[1]), roles.join(" | "));
-    check("the local answer explains the missing key",
-      /api key/i.test(app.text("#chat-transcript") || ""));
+    check("a query without a key does not enter the conversation",
+      roles.length === 0, roles.join(" | "));
+    check("the chat explains how to configure the missing key",
+      /settings/i.test(app.text("#chat-key-error") || "")
+        && /api key/i.test(app.text("#chat-key-error") || ""));
+    check("the composer becomes disabled without a key", app.$("#send-btn").disabled === true);
     check("no network call is attempted without a key",
       !app.requested.some((u) => /chat\/completions/.test(u)));
   } finally {
@@ -636,10 +599,9 @@ async function keywordFallbackWithoutKey() {
 
 async function conversationsAndLearnedMemoryPersist() {
   const storage = createStorage();
-  const first = await bootApp({ storage });
+  const first = await bootApp({ storage, agentFixture: {} });
   try {
     await completeOnboarding(first);
-    first.window.localStorage.removeItem("ottbyok.llm");
     first.$("#query-input").value = "comedy";
     first.$("#query-input").dispatchEvent(new first.window.Event("input", { bubbles: true }));
     await first.click("#send-btn");
@@ -659,7 +621,10 @@ async function conversationsAndLearnedMemoryPersist() {
     archived.click();
     await first.settle();
     check("selecting an archived conversation restores its transcript",
-      first.text("#chat-transcript") === transcript);
+      first.$$("#chat-transcript .chat-msg").length === 2
+        && /comedy/i.test(first.text("#chat-transcript") || "")
+        && /Fixture reply/i.test(first.text("#chat-transcript") || ""),
+      transcript + " vs " + first.text("#chat-transcript"));
     check("selecting an archived conversation restores its ranked queue",
       first.$$("#queue-track .card-title").map((node) => node.textContent).join("\n") === picks);
 
@@ -702,23 +667,15 @@ async function conversationsAndLearnedMemoryPersist() {
   }
 }
 
-async function workerUnavailableKeepsOnboardingAndFallback() {
+async function workerUnavailableKeepsShellAndKeyGate() {
   const app = await bootApp();
   try {
     check("the harness has no Worker implementation", typeof app.window.Worker === "undefined",
       String(app.window.Worker));
-    check("Worker unavailability still shows first-visit onboarding",
-      app.$("#onboarding-screen").hidden === false && app.$("#shell").hidden === true);
-
-    await completeOnboarding(app);
-    app.window.localStorage.removeItem("ottbyok.llm");
-    const input = app.$("#query-input");
-    input.value = "comedy";
-    input.dispatchEvent(new app.window.Event("input", { bubbles: true }));
-    await app.click("#send-btn");
-
-    check("Worker unavailability keeps no-key fallback available",
-      /api key/i.test(app.text("#chat-transcript") || ""));
+    check("Worker unavailability still opens the chat shell",
+      app.$("#onboarding-screen").hidden === true && app.$("#shell").hidden === false);
+    check("Worker unavailability keeps the key gate visible",
+      /api key/i.test(app.text("#chat-key-error") || "") && app.$("#send-btn").disabled);
   } finally {
     app.restore();
   }
@@ -784,8 +741,10 @@ async function testModeIsLocalhostOnly() {
 
   const remote = await bootApp({ url: "https://ott.example.com/?testMode=1&testProviders=netflix" });
   try {
-    check("test mode cannot bypass onboarding off localhost",
-      remote.$("#onboarding-screen").hidden === false, "onboarding was skipped on a public host");
+    check("direct chat boot is also used off localhost",
+      remote.$("#onboarding-screen").hidden === true && remote.$("#shell").hidden === false);
+    check("remote test-mode parameters do not configure subscriptions",
+      !/Netflix/i.test(remote.text("#subscriptions-summary") || ""));
   } finally {
     remote.restore();
   }
@@ -994,9 +953,9 @@ async function slowStreamShowsAttachedStuckState() {
 }
 
 const suites = [
-  firstVisitShowsUsableOnboarding,
+  firstVisitShowsWorkspace,
   phaseFiveStructuralContract,
-  onboardingGuardsAndCompletes,
+  legacyOnboardingStaysDormant,
   shellRespectsSubscriptions,
   titleDetailsShareFullCatalogAndRefresh,
   missingPlaylistTitleOpensDetailsTombstone,
@@ -1005,9 +964,9 @@ const suites = [
   backupExportIncludesUserState,
   sidebarCollapsePersistsAcrossReload,
   mobileDrawerCloses,
-  keywordFallbackWithoutKey,
+  chatIsGatedWithoutKey,
   conversationsAndLearnedMemoryPersist,
-  workerUnavailableKeepsOnboardingAndFallback,
+  workerUnavailableKeepsShellAndKeyGate,
   settingsWebSearchIsScopedToOpenRouter,
   developerSurfaceIsHidden,
   testModeIsLocalhostOnly,

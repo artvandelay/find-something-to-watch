@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8">
     <meta name="viewport" content="width=device-width,initial-scale=1">
-    <title>Watch agent — search the catalog</title>
+    <title>Find Something to Watch</title>
     <meta name="description" content="Search a dated catalog snapshot across your India streaming subscriptions. Stored in this browser. Relevant context is sent to the model endpoint you configure.">
     <link rel="stylesheet" href="./css/app.css">
   </head>
@@ -14,7 +14,7 @@
       <!-- ============================ Onboarding ============================ -->
       <section id="onboarding-screen" aria-labelledby="onboarding-title" hidden>
         <div class="onboarding-card">
-          <h1 id="onboarding-title">Unscroll</h1>
+          <h1 id="onboarding-title">Find Something to Watch</h1>
           <p class="tagline">Search the catalog. Pick something. Start watching.</p>
           <p class="intro">Choose your subscriptions, bring your preferred compatible model, then optionally import watch history.</p>
 
@@ -82,8 +82,8 @@
         <aside id="sidebar" aria-label="Navigation and settings">
           <div class="sidebar-head">
             <span class="sidebar-brand">
-              <span class="brand-mark" aria-hidden="true">U</span>
-              <span class="brand-name nav-label">Unscroll</span>
+              <span class="brand-mark" aria-hidden="true">F</span>
+              <span class="brand-name nav-label">Find Something</span>
             </span>
             <button id="sidebar-collapse" type="button" aria-controls="sidebar" aria-expanded="true"
               aria-label="Collapse sidebar" title="Collapse sidebar">
@@ -145,6 +145,11 @@
 
             <div class="composer-dock">
               <div class="composer-inner">
+                <div id="chat-key-error" class="chat-key-error" role="alert" aria-live="assertive" hidden>
+                  <strong>An OpenRouter API key is required to use chat.</strong>
+                  <span>Open Settings in the sidebar, select a subscription, add your key under “Your model” → “API key,” then select Save.</span>
+                  <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">Create an OpenRouter API key</a>
+                </div>
                 <p id="chat-note" class="note" hidden aria-live="polite"></p>
 
                 <form id="query-form">
@@ -161,10 +166,20 @@
             </div>
           </section>
 
+          <div id="pane-separator" role="separator" tabindex="0" aria-orientation="vertical"
+            aria-label="Resize chat and picks panels"
+            title="Drag to resize the picks panel. Double-click to reset."></div>
+
           <aside id="queue-region" aria-label="Your picks">
             <div id="queue-header">
               <h2>Your picks</h2>
               <p id="queue-status" aria-live="polite"></p>
+              <button id="queue-collapse" type="button" aria-controls="queue-region" aria-expanded="true"
+                aria-label="Hide picks panel" title="Hide picks panel">
+                <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                  <path d="M9 6l6 6-6 6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+                </svg>
+              </button>
             </div>
             <p id="queue-source" class="queue-source" hidden></p>
             <div id="queue-viewport">
@@ -177,12 +192,20 @@
             </div>
             <p id="catalog-status" class="note rail-footer" aria-live="polite">Loading catalog…</p>
           </aside>
+
+          <button id="queue-restore" type="button" hidden aria-controls="queue-region" aria-expanded="false"
+            aria-label="Show picks panel" title="Show picks panel">
+            <svg class="nav-icon" aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+              <path d="M15 6l-6 6 6 6" fill="none" stroke="currentColor" stroke-width="1.8"/>
+            </svg>
+            <span class="restore-label" aria-hidden="true">Picks</span>
+          </button>
         </main>
       </div>
 
       <footer id="attribution">
         This product uses the TMDB API but is not endorsed or certified by TMDB.
-        <a href="https://github.com/artvandelay/india-ott-byok">Source on GitHub</a>.
+        <a href="https://github.com/artvandelay/find-something-to-watch">Source on GitHub</a>.
       </footer>
     </div>
 

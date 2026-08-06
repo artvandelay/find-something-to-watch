@@ -14,8 +14,8 @@ All notable changes to this project will be documented here.
 - Schema-2 TMDB + legacy catalog union with 31,884 deduplicated titles.
 - Language, genre, provider, year, runtime, kind, and TMDB rating filters.
 - Lazy-loaded synopsis sidecar and vote-weighted BM25 ranking.
-- Required three-step onboarding for subscriptions, an OpenRouter key, and optional CSV/JSON/ZIP watch
-  history.
+- Direct-to-workspace first visit with a clear Settings-based subscription and API-key gate.
+- Optional CSV/JSON/ZIP watch-history import from Profile & context.
 - Provider-agnostic local history import with bounded, model-assisted schema inference; complete uploads
   stay in the browser.
 - Persistent named playlists, including immutable Watch later, with Markdown, JSON, and CSV exports.
@@ -42,6 +42,7 @@ All notable changes to this project will be documented here.
 - The shell is now three vertical panels: a collapsible sidebar (persisted, auto-collapsing below
   1280px), a chat column with the composer pinned to the bottom and message text capped at a readable
   measure, and a vertically scrolling picks rail of compact card rows instead of a paged grid.
+- The picks rail can be resized, collapsed, and restored on desktop; its layout persists across reloads.
 - Backup export and clear-local-data moved from the sidebar into Settings under **Local data**, and
   the catalog snapshot line moved to a quiet footer under the picks rail.
 - Learned preference candidates now require model-produced explicit/durable decisions and literal
@@ -49,9 +50,10 @@ All notable changes to this project will be documented here.
 - Browser-memory backups are export-only in this version.
 - The playlists dialog is now progressive — library, playlist detail, and create are separate views,
   with rename, delete, and export behind a More control instead of one long form.
-- Product and privacy copy now states that data is stored in the browser while relevant context is sent to
-  the configured model endpoint. It labels availability as a dated catalog snapshot, preserves the
-  disposable-Worker fault-containment caveat, and does not present the temporary visible wordmark as final.
+- Product and privacy copy now states that data is stored in the browser while relevant context is sent
+  to the configured model endpoint. It labels availability as a dated catalog snapshot and preserves
+  the disposable-Worker fault-containment caveat.
+- The product and repository are named **Find Something to Watch**.
 
 ### Verification
 

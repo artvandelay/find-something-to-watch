@@ -148,7 +148,7 @@ class ApiClient:
                 "X-RapidAPI-Key": self._key,
                 "X-RapidAPI-Host": DEFAULT_HOST_HEADER,
                 "Accept": "application/json",
-                "User-Agent": "llm-search-netflix/streaming-availability-fetch",
+                "User-Agent": "find-something-to-watch/streaming-availability-fetch",
             },
             method="GET",
         )

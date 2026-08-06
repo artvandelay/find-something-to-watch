@@ -3,9 +3,10 @@ import json
 import time
 import requests
 import httpx
+from pathlib import Path
 from urllib.parse import quote
 
-RAW_DIR = "/Users/jigar/projects/messing-around/llm-search-netflix/research/raw/p1"
+RAW_DIR = Path(__file__).resolve().parents[1] / "research" / "raw" / "p1"
 os.makedirs(RAW_DIR, exist_ok=True)
 
 HEADERS = {

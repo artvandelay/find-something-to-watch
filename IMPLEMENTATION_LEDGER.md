@@ -387,9 +387,9 @@ COMPLETE
     have no matches.
   - `real-time availability` remains only as an explicit limitation in `CONTRACT.md` and this ledger,
     plus a historical quotation in research material; it is not claimed by product copy.
-  - `Unscroll` remains only in the preserved visible placeholder wordmark and the ledger's baseline
-    description; no README, user-guide, changelog, metadata, or release-copy treatment presents it as
-    final.
+  - At the time of this check, `Unscroll` remained only in the preserved visible placeholder wordmark
+    and the ledger's baseline description; no README, user-guide, changelog, metadata, or release-copy
+    treatment presented it as final.
 - `git diff --check -- docs/index.html docs/js/views/dialogs.js README.md USER_GUIDE.md CHANGELOG.md
   RELEASE_CHECKLIST.md` — passed.
 - `node --check docs/js/views/dialogs.js` — passed.

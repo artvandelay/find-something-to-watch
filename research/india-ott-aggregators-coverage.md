@@ -233,7 +233,7 @@ curl -s "https://api.watchmode.com/v1/title/{id}/sources/?apiKey=$WATCHMODE_KEY&
 ### 4.5 uNoGSNG — already configured
 
 ```bash
-python3 "/Users/jigar/.cursor/skills/netflix-unogs-search/scripts/unogs_cli.py" search \
+python3 "/path/to/unogs_cli.py" search \
   --country India --type movie --query "fantasy" --limit 10
 ```
 

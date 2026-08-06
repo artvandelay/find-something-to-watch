@@ -169,7 +169,8 @@ catalog/catalog.db, matching this union.
 ```js
 const KEYS = {
   llm: "ottbyok.llm",      // { baseUrl, apiKey, model, webSearch }
-  sidebar: "ottbyok.sidebar" // "1" collapsed | "0" expanded — presentation only
+  sidebar: "ottbyok.sidebar", // "1" collapsed | "0" expanded — presentation only
+  pane: "ottbyok.pane.v1"  // { railWidth, railCollapsed } — presentation only
 };
 const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
@@ -184,11 +185,15 @@ a reload; it carries no user data and is cleared by "Clear local data" along wit
 other keys. Below 1280px the sidebar auto-collapses regardless of the stored value, and
 below 900px the drawer replaces the rail entirely.
 
+`ottbyok.pane.v1` holds the desktop picks-rail width and collapsed state. A null width
+uses the responsive CSS default. The stacked layout ignores the collapsed state at or
+below 900px.
+
 LLM configuration, including the API key, remains in `localStorage` for backward
 compatibility. It is intentionally absent from IndexedDB and `memory.json` exports.
 `webSearch` is a strict boolean and defaults to `false`. The Settings-only checkbox
 may persist it as `true` only when the configured base URL hostname is exactly
-`openrouter.ai`; onboarding has no web-search control. An enabled turn may append
+`openrouter.ai`. An enabled turn may append
 `{ type: "openrouter:web_search" }` to the model tools, which can add OpenRouter
 search and model cost. Catalog search remains local.
 
@@ -239,7 +244,7 @@ when the supplied signal aborts or when processing fails.
 The model has exactly one catalog-analysis function, `run_catalog_js`. It accepts an
 explicit JavaScript `code` string and runs it against subscription-scoped analytical
 data. The main thread retains the trusted presentation catalog used for cards,
-playlists, initial queue seeding, and no-key keyword search. Model-authored analysis
+playlists, initial queue seeding, and local keyword matching. Model-authored analysis
 runs in Workers.
 
 `createCatalogRuntime({ workerFactory, onState, requestTimeoutMs })` exposes
@@ -829,26 +834,22 @@ This list changed substantially for the sidebar/chat/recommendation-display shel
 overhaul (onboarding screen + sidebar + chat + queue, replacing the single-form
 layout), and again for the three-panel layout (collapsible sidebar, chat column with a
 pinned composer, vertical picks rail), the move of local-data controls into Settings,
-and the progressive playlists dialog. The current visible wordmark is a temporary
-placeholder; it is not a final product name. The India provider scope described above
-is unrelated to branding.
+and the progressive playlists dialog. The visible product name is **Find Something to
+Watch**. The India provider scope described above is unrelated to branding.
 
 Always present:
 app, error-banner, attribution
 
-Onboarding (shown once, gated by `profile.onboardingComplete`):
+Legacy onboarding markup (retained but bypassed while the app opens directly into the shell):
 onboarding-screen, onboarding-title, onboarding-form, onboarding-progress,
 onboarding-provider-list, onboarding-llm-api-key, onboarding-history-file,
 onboarding-history-summary, onboarding-history-status, onboarding-history-remove,
 onboarding-back, onboarding-next
 
-The form contains exactly three panels, each carrying `data-onboarding-step` with one
-of `subscriptions`, `openrouter-key`, or `watch-history`. The key panel asks only for
-a nonempty OpenRouter key; base URL and model come from `DEFAULT_LLM`. You.md is not
-part of onboarding and remains editable in Profile & context. History is optional,
-but after an import failure the user must explicitly continue without history. The
-view stores the key with `DEFAULT_LLM.baseUrl` and `DEFAULT_LLM.model` before history
-import or finalization; it makes no model request unless a history file is supplied.
+The form still contains three panels, each carrying `data-onboarding-step` with one of
+`subscriptions`, `openrouter-key`, or `watch-history`. `BYPASS_ONBOARDING` currently
+opens every visitor directly into the shell. Subscriptions and model configuration are
+set in Settings; You.md and optional watch history are managed in Profile & context.
 
 Shell (three vertical panels: sidebar, chat column, picks rail):
 shell, sidebar-toggle, sidebar, sidebar-collapse, backdrop, new-chat-btn,
@@ -860,10 +861,13 @@ catalog-status, workspace
 conversations as keyboard-accessible controls in newest-first order.
 
 Chat column:
-chat-region, chat-transcript, chat-note, query-form, query-input, send-btn, stop-btn
+chat-region, chat-transcript, chat-key-error, chat-note, query-form, query-input,
+send-btn, stop-btn
 
 `#query-form` is pinned to the bottom of the chat column inside `.composer-dock`;
 message content is capped at `--chat-measure` (about 70ch) and centered.
+Without a stored API key, `#chat-key-error` directs the visitor to Settings and the
+send control remains disabled.
 Each active assistant turn renders an attached placeholder/activity row directly under
 its triggering user message. The row exposes phase changes through a polite status
 announcement, exposes Stop while active, displays elapsed time only after one second,
@@ -878,8 +882,9 @@ The final metrics footer contains total latency, total tokens, and either
 `$0.0042 reported` for complete provider-reported billing or `Cost unavailable`.
 
 Picks rail:
-queue-region, queue-status, queue-viewport, queue-track, queue-empty,
-queue-source, queue-top-pick, queue-alternatives, queue-more
+pane-separator, queue-region, queue-collapse, queue-restore, queue-status,
+queue-viewport, queue-track, queue-empty, queue-source, queue-top-pick,
+queue-alternatives, queue-more
 
 The rail scrolls vertically. `#queue-source` renders the bounded source query for the
 latest queue update. `#queue-top-pick` contains rank one, `#queue-alternatives`
@@ -887,6 +892,9 @@ contains ranks two and three, and `#queue-more` is a collapsed control/container
 ranks four through 20. Recommendation cards retain poster, title, metadata, synopsis,
 provider links, and a `+` save button; the title is a real details trigger. Save and
 provider actions are independent interactive descendants and never open details.
+On desktop, `#pane-separator` supports pointer and keyboard resizing,
+`#queue-collapse` hides the rail, and `#queue-restore` restores it. The stored layout
+is ignored by the stacked mobile presentation.
 
 Title details:
 title-details-dialog, title-details-close, title-details-title, title-details-content
@@ -944,9 +952,8 @@ Every recommendation card includes a visible `+` save button with
 
 ## Localhost-only test mode
 
-`?testMode=1` bypasses onboarding only when `location.hostname` is exactly
-`localhost` or `127.0.0.1`. It persists an onboarding-complete test profile on that
-local origin, with providers read from comma-separated `testProviders`, normalized
-against `PROVIDER_SLUGS`, and defaulting to `netflix`. It never reads, creates, or
-persists an API key. Production hosts, localhost-like subdomains, malformed URLs,
+`?testMode=1` configures a test profile only when `location.hostname` is exactly
+`localhost` or `127.0.0.1`. Providers are read from comma-separated `testProviders`,
+normalized against `PROVIDER_SLUGS`, and default to `netflix`. It never reads, creates,
+or persists an API key. Production hosts, localhost-like subdomains, malformed URLs,
 and requests without the exact flag ignore test mode.

@@ -36,8 +36,25 @@ deepStrictEqual(s.getLlm(), DEFAULT_LLM);
 
 s.setLlm({ baseUrl: "https://x/v1", apiKey: "sk-1", model: "m" });
 strictEqual(s.getLlm().webSearch, false);
+
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
+s.setPaneLayout({ railWidth: 420.6, railCollapsed: true, junk: 1 });
+deepStrictEqual(s.getPaneLayout(), { railWidth: 421, railCollapsed: true });
+deepStrictEqual(JSON.parse(mem.get(KEYS.pane)), { railWidth: 421, railCollapsed: true });
+s.setPaneLayout({ railWidth: null, railCollapsed: false });
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
+storage.setItem(KEYS.pane, "{not json");
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
+storage.setItem(KEYS.pane, JSON.stringify({ railWidth: "wide", railCollapsed: "yes" }));
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
+storage.setItem(KEYS.pane, JSON.stringify([1, 2, 3]));
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
+storage.setItem(KEYS.pane, JSON.stringify({ railWidth: -40 }));
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
+
 s.clearAll();
 strictEqual(mem.size, 0);
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);
+deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
 
 console.log("check_store OK");

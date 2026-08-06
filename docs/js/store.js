@@ -2,7 +2,8 @@ export const KEYS = {
   llm: "ottbyok.llm",
   youmd: "ottbyok.youmd",
   history: "ottbyok.history",
-  sidebar: "ottbyok.sidebar"
+  sidebar: "ottbyok.sidebar",
+  pane: "ottbyok.pane.v1"
 };
 
 // The browser-memory adapter migrates these two values into IndexedDB after a
@@ -106,6 +107,36 @@ export function createStore(storage) {
     return write(KEYS.sidebar, collapsed ? "1" : "0");
   }
 
+  function normalizePaneLayout(source) {
+    const width = Number(source && source.railWidth);
+    return {
+      railWidth: Number.isFinite(width) && width > 0 ? Math.round(width) : null,
+      railCollapsed: Boolean(source) && source.railCollapsed === true
+    };
+  }
+
+  function getPaneLayout() {
+    try {
+      const raw = read(KEYS.pane);
+      if (!raw) return { railWidth: null, railCollapsed: false };
+      const parsed = JSON.parse(raw);
+      if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) {
+        return { railWidth: null, railCollapsed: false };
+      }
+      return normalizePaneLayout(parsed);
+    } catch (err) {
+      return { railWidth: null, railCollapsed: false };
+    }
+  }
+
+  function setPaneLayout(layout) {
+    try {
+      return write(KEYS.pane, JSON.stringify(normalizePaneLayout(layout)));
+    } catch (err) {
+      return false;
+    }
+  }
+
   function clearAll() {
     let ok = true;
     for (const key of Object.values(KEYS)) {
@@ -124,6 +155,8 @@ export function createStore(storage) {
     setLlm,
     getSidebarCollapsed,
     setSidebarCollapsed,
+    getPaneLayout,
+    setPaneLayout,
     clearAll,
     hasKey
   };

@@ -6,6 +6,8 @@ import { parseMarkdown, renderMarkdown } from "./markdown.js";
 
 export function createChatView(el, deps) {
   let busy = false;
+  let keyAvailable = false;
+  let sendReady = false;
   let activeTurn = null;
 
   function renderMessage(role, content) {
@@ -190,7 +192,7 @@ export function createChatView(el, deps) {
     const restoreFocus = !nextBusy && document.activeElement === el.stopBtn;
     busy = nextBusy;
     el.chatRegion.setAttribute("aria-busy", busy ? "true" : "false");
-    el.sendBtn.disabled = busy;
+    el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
     el.queryInput.disabled = busy;
     el.stopBtn.hidden = !busy;
     el.sendBtn.hidden = busy;
@@ -198,7 +200,15 @@ export function createChatView(el, deps) {
   }
 
   function setSendReady(ready) {
-    el.sendBtn.disabled = busy || !ready;
+    sendReady = Boolean(ready);
+    el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
+  }
+
+  function setKeyAvailable(available) {
+    keyAvailable = Boolean(available);
+    el.chatKeyError.hidden = keyAvailable;
+    el.queryForm.setAttribute("aria-disabled", keyAvailable ? "false" : "true");
+    el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
   }
 
   function getQuery() {
@@ -217,6 +227,11 @@ export function createChatView(el, deps) {
     event.preventDefault();
     deps.onSubmit();
   });
+  el.queryInput.addEventListener("keydown", (event) => {
+    if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
+    event.preventDefault();
+    if (!el.sendBtn.disabled) el.queryForm.requestSubmit();
+  });
   el.stopBtn.addEventListener("click", () => deps.onStop());
 
   return {
@@ -232,6 +247,7 @@ export function createChatView(el, deps) {
     setNote,
     setBusy,
     setSendReady,
+    setKeyAvailable,
     getQuery,
     clearQuery,
     setQuery
