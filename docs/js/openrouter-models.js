@@ -3,16 +3,16 @@ import { createModelApiUrl } from "./llm-client.js";
 export const RECOMMENDED_OPENROUTER_MODELS = Object.freeze([
   { id: "openai/gpt-5.6-terra-pro", name: "GPT-5.6 Terra Pro", note: "app default" },
   { id: "openai/gpt-5.6-terra", name: "GPT-5.6 Terra" },
-  { id: "anthropic/claude-sonnet-4.6", name: "Claude Sonnet 4.6" },
-  { id: "anthropic/claude-sonnet-5", name: "Claude Sonnet 5" },
-  { id: "anthropic/claude-opus-5", name: "Claude Opus 5" },
-  { id: "google/gemini-3.6-flash", name: "Gemini 3.6 Flash" },
-  { id: "google/gemini-2.5-flash-lite", name: "Gemini 2.5 Flash Lite" },
-  { id: "deepseek/deepseek-v4-flash", name: "DeepSeek V4 Flash" },
-  { id: "deepseek/deepseek-v4-pro", name: "DeepSeek V4 Pro" },
+  { id: "openai/gpt-6-astra", name: "GPT-6 Astra" },
+  { id: "openai/gpt-6.1-sol", name: "GPT-6.1 Sol" },
+  { id: "openai/gpt-6-luna", name: "GPT-6 Luna", note: "low cost" },
+  { id: "anthropic/claude-sonnet-5.5", name: "Claude Sonnet 5.5" },
+  { id: "anthropic/claude-opus-5.5", name: "Claude Opus 5.5" },
+  { id: "anthropic/claude-haiku-5.5", name: "Claude Haiku 5.5" },
+  { id: "google/gemini-3.8-flash", name: "Gemini 3.8 Flash" },
+  { id: "deepseek/deepseek-v4.1-flash", name: "DeepSeek V4.1 Flash" },
   { id: "moonshotai/kimi-k3", name: "Kimi K3" },
-  { id: "openai/gpt-4o-mini", name: "GPT-4o mini", note: "low cost" },
-  { id: "openai/gpt-4o", name: "GPT-4o" }
+  { id: "x-ai/grok-4.7", name: "Grok 4.7" }
 ]);
 
 export function isOpenRouterBaseUrl(value) {

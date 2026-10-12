@@ -864,11 +864,19 @@ async function onPickFeedback(titleId, action, rec) {
 function userFacingMilestone(phase, text) {
   const raw = String(text || phase || "").trim();
   const key = String(phase || text || "").trim().toUpperCase();
-  if (key === "PLANNING" || /checking your services/i.test(raw)) return "Checking your services";
-  if (key === "SEARCHING CATALOG" || /searching/i.test(raw)) return "Searching the catalog";
-  if (key === "ANALYZING MATCHES" || /comparing matches/i.test(raw)) return "Comparing matches";
-  if (key === "WRITING" || /writing your picks|answering/i.test(raw)) {
-    return /answering/i.test(raw) ? "Answering about your pick" : "Writing your picks";
+  if (key === "PLANNING" || /checking your services|seeing what you can watch/i.test(raw)) {
+    return "Seeing what you can watch";
+  }
+  if (key === "SEARCHING CATALOG" || /searching|looking for a good fit/i.test(raw)) {
+    return "Looking for a good fit";
+  }
+  if (key === "ANALYZING MATCHES" || /comparing matches|narrowing it down/i.test(raw)) {
+    return "Narrowing it down";
+  }
+  if (key === "WRITING" || /writing your picks|choosing a few to watch|answering|thinking about that one/i.test(raw)) {
+    return /answering|thinking about that one/i.test(raw)
+      ? "Thinking about that one"
+      : "Choosing a few to watch";
   }
   if (/taking longer/i.test(raw)) return "Still working — this is taking longer than usual";
   return raw || "Working";

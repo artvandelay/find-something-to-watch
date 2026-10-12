@@ -1,3 +1,5 @@
+import { providerHref } from "../providers.js";
+
 /**
  * Shared, catalog-faithful title details dialog. The coordinator owns catalog
  * resolution; this view only renders the frozen details model with DOM nodes.
@@ -37,7 +39,7 @@ export function createTitleDetailsView(el, { resolveDetails }) {
       const item = document.createElement("li");
       if (provider.url && provider.cta) {
         const link = document.createElement("a");
-        link.href = provider.url;
+        link.href = providerHref(provider.slug, provider.url);
         link.target = "_blank";
         link.rel = "noopener noreferrer";
         link.textContent = provider.cta;

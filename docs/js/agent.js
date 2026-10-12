@@ -110,19 +110,24 @@ function buildReceptionGuidance(webSearchEnabled) {
     return "## Reception and reviews\n"
       + "The local catalog exposes synopsis text and TMDB vote signals (r, v), not critic reviews.\n"
       + "When the viewer asks about critical reception or reviews on a factual follow-up, you may use web search during planning to find external reception or articles.\n"
+      + "When the viewer names an external published list (IMDb, NYT, or a similar list), you may use web search during planning to look up that list before you return decision JSON.\n"
+      + "Then call run_catalog_js to see which of those titles are actually in the subscribed catalog. Queue ids still come only from ids observed in run_catalog_js output. Never invent a title, year, id, or list membership.\n"
+      + "Do not use web search for ordinary taste queries that the catalog can answer alone.\n"
       + "Use only information returned by web search or catalog fields. Never invent quotes, awards, or reception.\n"
       + "Recommendations and queue IDs still must come only from run_catalog_js.";
   }
   return "## Reception and reviews\n"
     + "The local catalog exposes synopsis text and TMDB vote signals (r, v). It does not include critic reviews, newspaper quotes, or external articles.\n"
     + "When the viewer asks about critical reception or reviews, say clearly that this catalog snapshot does not carry that data and use only the bounded catalog fields you have.\n"
+    + "An outside published list is not in the catalog, so say so rather than inventing which titles from that list are available.\n"
     + "Never invent quotes, awards, or reception.";
 }
 
 function buildPlannerPrompt(prompts, query, webSearchEnabled) {
   let text = prompts.planner.replace("{{QUERY}}", String(query || "").slice(0, MAX_QUERY_CHARACTERS));
   if (webSearchEnabled) {
-    text += "\n\nWhen the viewer asks about critical reception or reviews on an existing pick, you may use web search during this planning phase before returning decision JSON. Omit \"queue\" unless they explicitly ask for new picks or alternatives.";
+    text += "\n\nWhen the viewer asks about critical reception or reviews on an existing pick, you may use web search during this planning phase before returning decision JSON. Omit \"queue\" unless they explicitly ask for new picks or alternatives."
+      + " When the viewer names an external published list (IMDb, NYT, or a similar list), you may use web search during this planning phase to look up that list before you return decision JSON. Then call run_catalog_js to see which of those titles are actually in the subscribed catalog. Queue ids still come only from ids observed in run_catalog_js output. Never invent a title, year, id, or list membership. Do not use web search for ordinary taste queries that the catalog can answer alone.";
   }
   return text;
 }
@@ -509,7 +514,7 @@ export async function runAgent(opts) {
   let costComplete = true;
   let firstTokenMs = null;
   let partialReply = "";
-  let currentPhase = "Checking your services";
+  let currentPhase = "Seeing what you can watch";
   const timing = () => ({
     totalMs: Math.max(0, Date.now() - startedAt),
     firstTokenMs,
@@ -614,7 +619,7 @@ export async function runAgent(opts) {
     let messages = baseMessages.slice();
 
     if (turnClass === "direct") {
-      status("Answering about your pick", "Answering about your pick", 1);
+      status("Thinking about that one", "Thinking about that one", 1);
       messages.push({
         role: "user",
         content: buildDirectPrompt(prompts, query, webSearchEnabled)
@@ -624,7 +629,7 @@ export async function runAgent(opts) {
         role: "user",
         content: buildPlannerPrompt(prompts, query, webSearchEnabled)
       });
-      status("Checking your services", "Checking your services", 1);
+      status("Seeing what you can watch", "Seeing what you can watch", 1);
 
       let decisionText = null;
       for (let step = 0; step < maxSteps; step++) {
@@ -662,7 +667,7 @@ export async function runAgent(opts) {
               args = {};
               result = { error: "tool arguments must be valid JSON object" };
             }
-            status("Searching the catalog", "Searching the catalog", step + 1);
+            status("Looking for a good fit", "Looking for a good fit", step + 1);
             const startedToolAt = Date.now();
             const toolTiming = latency.start("catalog_tool");
             emitEvent({ type: "tool_call", id: toolCallId, name, args, step: step + 1 });
@@ -697,7 +702,7 @@ export async function runAgent(opts) {
             });
             messages.push({ role: "tool", tool_call_id: toolCallId, content: toolResultContent(result) });
           }
-          status("Comparing matches", "Comparing matches", step + 1);
+          status("Narrowing it down", "Narrowing it down", step + 1);
           continue;
         }
 
@@ -726,7 +731,7 @@ export async function runAgent(opts) {
       }
       memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
 
-      status("Writing your picks", "Writing your picks", maxSteps + 1);
+      status("Choosing a few to watch", "Choosing a few to watch", maxSteps + 1);
       messages.push({ role: "user", content: buildRerankPrompt(prompts, webSearchEnabled) });
     }
 

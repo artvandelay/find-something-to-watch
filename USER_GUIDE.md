@@ -44,7 +44,8 @@ base URL hostname is exactly `openrouter.ai`; changing to any other endpoint cle
 
 Web search is off by default. When enabled, OpenRouter may process relevant queries with web search and
 may charge for that extra work. It does not change the local catalog, the subscription gate, or the rule
-that recommendations must be grounded in catalog results.
+that recommendations must be grounded in catalog results. With it on, a published list you name (such as
+an IMDb or NYT list) can be looked up, then limited to titles that are actually in your subscriptions.
 
 ## The three-panel layout
 
@@ -71,8 +72,8 @@ Type what you're in the mood for, the way you'd say it to a friend:
 - "A slow-burn thriller like the ones I loved last year"
 - "Actually, make it shorter than that" (the agent remembers the last few turns)
 
-The agent first shows `PLANNING`, `SEARCHING CATALOG`, `ANALYZING MATCHES`, and `WRITING`, then streams
-the answer. Mention mood, time available, language, genre, a provider, or what to avoid directly in your
+The agent first shows "Seeing what you can watch", "Looking for a good fit", "Narrowing it down", and
+"Choosing a few to watch", then streams the answer. Mention mood, time available, language, genre, a provider, or what to avoid directly in your
 message. **Stop** cancels an active turn. After 20 seconds without meaningful progress, the activity row
 says `TAKING LONGER THAN USUAL` and keeps Stop available. Completed turns show latency, token totals, and
 either provider-reported cost or **Cost unavailable**; reported cost is not an estimate.

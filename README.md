@@ -40,7 +40,8 @@ configured endpoint.
 
 **Web search is off by default.** The Settings dialog can enable it only when the base URL hostname is
 exactly `openrouter.ai`. When enabled, OpenRouter may process relevant queries with web search and can
-add cost. It does not change the local catalog or subscription boundary.
+add cost. It does not change the local catalog or subscription boundary. With it on, a published list
+you name can be looked up, then limited to titles in your subscriptions.
 
 No catalog key of any kind is needed at runtime. The catalog is a static JSON file built ahead of time
 (see below) and shipped with the site.
@@ -92,8 +93,8 @@ latest decision traceable to the conversation.
 Use **New chat** to archive a non-empty conversation and begin another. The sidebar keeps up to 20 recent
 conversations, including each conversation's ranked decision, so switching back restores both.
 
-The agent shows `PLANNING`, `SEARCHING CATALOG`, `ANALYZING MATCHES`, and `WRITING`, then streams the
-answer. **Stop** cancels an active turn. A turn that has not progressed for 20 seconds says `TAKING LONGER
+The agent shows "Seeing what you can watch", "Looking for a good fit", "Narrowing it down", and
+"Choosing a few to watch", then streams the answer. **Stop** cancels an active turn. A turn that has not progressed for 20 seconds says `TAKING LONGER
 THAN USUAL` and retains Stop. Completed turns show latency, token totals, and either provider-reported
 cost or **Cost unavailable**. Reported cost is not an estimate.
 

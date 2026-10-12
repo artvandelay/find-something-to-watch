@@ -7,10 +7,10 @@ import { parseMarkdown, renderMarkdown } from "./markdown.js";
 const NEAR_BOTTOM_PX = 96;
 
 const TURN_STEPS = Object.freeze([
-  { id: "services", match: /checking your services/i, label: "Checking your services" },
-  { id: "search", match: /searching the catalog/i, label: "Searching the catalog" },
-  { id: "compare", match: /comparing matches/i, label: "Comparing matches" },
-  { id: "write", match: /writing your picks|answering about your pick/i, label: "Writing your picks" }
+  { id: "services", match: /seeing what you can watch/i, label: "Seeing what you can watch" },
+  { id: "search", match: /looking for a good fit/i, label: "Looking for a good fit" },
+  { id: "compare", match: /narrowing it down/i, label: "Narrowing it down" },
+  { id: "write", match: /choosing a few to watch|thinking about that one/i, label: "Choosing a few to watch" }
 ]);
 
 export function createChatView(el, deps) {
@@ -181,7 +181,7 @@ export function createChatView(el, deps) {
     if (el.chatTranscript.querySelector(".chat-empty")) el.chatTranscript.textContent = "";
     activeTurn = createActivity();
     el.chatTranscript.appendChild(activeTurn.wrap);
-    setTurnStatus("Checking your services");
+    setTurnStatus("Seeing what you can watch");
     scrollToEnd();
   }
 
@@ -200,10 +200,10 @@ export function createChatView(el, deps) {
     const index = TURN_STEPS.findIndex((step) => step.match.test(label));
     if (index < 0) return;
 
-    if (/answering about your pick/i.test(label)) {
-      activeTurn.stepNodes[3].textContent = "Answering about your pick";
-    } else if (/writing your picks/i.test(label)) {
-      activeTurn.stepNodes[3].textContent = "Writing your picks";
+    if (/thinking about that one/i.test(label)) {
+      activeTurn.stepNodes[3].textContent = "Thinking about that one";
+    } else if (/choosing a few to watch/i.test(label)) {
+      activeTurn.stepNodes[3].textContent = "Choosing a few to watch";
     }
 
     activeTurn.stepIndex = Math.max(activeTurn.stepIndex, index);

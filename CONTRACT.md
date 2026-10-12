@@ -113,7 +113,7 @@ watch_region=IN. Never emit a provider outside this table, and never drop the re
 slug | label | TMDB provider ids merged into it | watch URL template
 netflix     | Netflix         | 8, 175        | https://www.netflix.com/search?q={q}
 prime       | Prime Video     | 119, 10, 2100 | https://www.primevideo.com/search?phrase={q}
-hotstar     | JioHotstar      | 2336, 122     | https://www.hotstar.com/in/search?q={q}
+hotstar     | JioHotstar      | 2336, 122     | https://www.hotstar.com/in/search?search_query={q}
 zee5        | ZEE5            | 232           | https://www.zee5.com/search?q={q}
 sonyliv     | SonyLIV         | 237           | https://www.sonyliv.com/search?searchTerm={q}
 mubi        | MUBI            | 11, 201       | https://mubi.com/en/in/search/films?query={q}
@@ -149,6 +149,9 @@ Excluded TMDB provider ids (rent/buy storefronts and unmapped channel aliases), 
 559, 562, 567, 569, 124, 2285, and every remaining "* Amazon Channel" id not listed above.
 
 Netflix deep links use the search template when a direct title URL is unavailable.
+JioHotstar has no per-title content id in the catalog, so its link stays a search URL.
+Snapshots that still store `https://www.hotstar.com/in/search?q={q}` are rewritten at
+display time to `search_query`, because JioHotstar ignores `q` and opens an empty search bar.
 
 ## Genre vocabulary (27 names, from TMDB /genre/movie/list and /genre/tv/list)
 
@@ -586,6 +589,9 @@ export function linkKind(slug, url)   // "direct" | "search" | "fallback" | null
 export function watchCta(slug, url)   // CTA text matching the link kind, e.g.
                                        // "Watch on Netflix" / "Find on ZEE5" /
                                        // "See where to watch (TMDB)"
+export function providerHref(slug, url) // href used for provider anchors; rewrites a
+                                         // stored JioHotstar `?q=` search URL to
+                                         // `?search_query=` and leaves every other URL
 export function intersectProviders(rec, allowed) // returns rec with p/u restricted
                                                   // to the given Set/array of slugs
 ```
@@ -832,7 +838,9 @@ tool loop with system messages for viewer context, dynamic reception guidance, t
 current recommendation queue, and the catalog manifest before prior turns, then appends
 `prompts.rerank` and streams the final no-tools presentation response. Reception
 guidance is catalog-only by default; when `webSearch` is enabled for OpenRouter it
-also permits web search during planning for external reception on factual follow-ups.
+also permits web search during planning for external reception on factual follow-ups,
+and for an external published list the viewer named. Those list titles must then be
+checked with `run_catalog_js`; queue ids still come only from ids observed there.
 strict internal JSON containing optional ranked queue items and optional learned-memory
 candidates. Final presentation emits direct safe Markdown, not JSON. `ok` is `true`
 only for a successfully parsed final response. Authentication, configuration,
@@ -853,8 +861,11 @@ turns are not polluted by unanswered user-only history.
 { type: "error", turnId, code, message, retryable, partialReply, timing }
 ```
 
-Visible phases progress in order through `PLANNING`, `SEARCHING CATALOG`,
-`ANALYZING MATCHES`, and `WRITING`, then streamed answer text. `"done"` carries the
+Visible activity lines progress in order through "Seeing what you can watch",
+"Looking for a good fit", "Narrowing it down", and "Choosing a few to watch", then
+streamed answer text. A direct follow-up uses "Thinking about that one" for the last
+line. Older status keys `PLANNING`, `SEARCHING CATALOG`, `ANALYZING MATCHES`, and
+`WRITING` still map to those lines. `"done"` carries the
 complete safe-Markdown `reply`, a `null`/ranked/empty queue update, validated memory
 candidates, timing, usage, and billing. The agent validates queue IDs through
 `tools.resolve` and validates memory candidates against the latest query. `"delta"`

@@ -1,6 +1,6 @@
 // Pure export formatters: data in, string out. providers.js is the one
 // import allowed here since it is itself import-free and DOM-free.
-import { providerLabel, watchCta } from "./providers.js";
+import { providerHref, providerLabel, watchCta } from "./providers.js";
 import { renderLearnedContext } from "./preferences.js";
 
 const MAX_RECENT = 25;
@@ -8,7 +8,7 @@ const MAX_RECENT = 25;
 function providerLinks(u) {
   if (!u || typeof u !== "object") return "";
   return Object.keys(u)
-    .map((slug) => `[${watchCta(slug, u[slug])}](${u[slug]})`)
+    .map((slug) => `[${watchCta(slug, u[slug])}](${providerHref(slug, u[slug])})`)
     .join(" · ");
 }
 
@@ -17,7 +17,7 @@ function firstUrl(u) {
   const keys = Object.keys(u);
   if (keys.length === 0) return "";
   const v = u[keys[0]];
-  return v == null ? "" : String(v);
+  return v == null ? "" : providerHref(keys[0], v);
 }
 
 export function toMarkdown(picks, meta) {

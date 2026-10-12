@@ -192,10 +192,11 @@ async function titleDetailsShareFullCatalogAndRefresh() {
     s: "",
     im: "tt1234567",
     r: 8.4,
-    p: ["netflix", "prime"],
+    p: ["netflix", "prime", "hotstar"],
     u: {
       netflix: "https://www.netflix.com/title/1234567",
-      prime: "https://www.primevideo.com/search?phrase=Catalog%20Detail"
+      prime: "https://www.primevideo.com/search?phrase=Catalog%20Detail",
+      hotstar: "https://www.hotstar.com/in/search?q=Catalog%20Detail"
     },
     img: "https://image.tmdb.org/t/p/w185/example.jpg",
     l: "en",
@@ -205,6 +206,9 @@ async function titleDetailsShareFullCatalogAndRefresh() {
   const app = await bootApp({ records: [record], sidecar: "deferred" });
   try {
     await completeOnboarding(app);
+    await app.click("#settings-btn");
+    app.$("#settings-provider-list input[value=hotstar]").click();
+    await app.click("#settings-save");
     const trigger = app.$("#queue-track .card-title-button");
     trigger.focus();
     trigger.click();
@@ -227,6 +231,25 @@ async function titleDetailsShareFullCatalogAndRefresh() {
         && /Other known platforms/.test(app.text("#title-details-content") || "")
         && /Find on Prime Video/.test(app.text("#title-details-content") || ""),
       app.text("#title-details-content"));
+    const hotstarDetails = [...app.$$("#title-details-content a")]
+      .find((anchor) => /JioHotstar/.test(anchor.textContent || ""));
+    check("JioHotstar details link searches the title instead of opening a bare search bar",
+      hotstarDetails?.getAttribute("href") === "https://www.hotstar.com/in/search?search_query=Catalog%20Detail"
+        && hotstarDetails.getAttribute("target") === "_blank"
+        && hotstarDetails.getAttribute("rel") === "noopener noreferrer",
+      hotstarDetails?.getAttribute("href"));
+    const netflixDetails = [...app.$$("#title-details-content a")]
+      .find((anchor) => /Watch on Netflix/.test(anchor.textContent || ""));
+    check("direct provider links keep their catalog URL",
+      netflixDetails?.getAttribute("href") === "https://www.netflix.com/title/1234567",
+      netflixDetails?.getAttribute("href"));
+    const hotstarCard = [...app.$$("#queue-track .card-links a")]
+      .find((anchor) => /JioHotstar/.test(anchor.textContent || ""));
+    check("queue JioHotstar link uses the same title search href",
+      hotstarCard?.getAttribute("href") === "https://www.hotstar.com/in/search?search_query=Catalog%20Detail"
+        && hotstarCard.getAttribute("target") === "_blank"
+        && hotstarCard.getAttribute("rel") === "noopener noreferrer",
+      hotstarCard?.getAttribute("href"));
 
     const focusBeforeRefresh = app.document.activeElement;
     app.resolveSidecar({ schema: 2, count: 1, s: { [record.id]: "Merged synopsis from the sidecar." } });
@@ -742,14 +765,14 @@ async function settingsModelPickerSupportsOpenRouterDropdown() {
         && app.$$(".model-picker-option").length > 0);
 
     const sonnet = [...app.$$(".model-picker-option")]
-      .find((node) => node.dataset.modelId === "anthropic/claude-sonnet-4.6");
+      .find((node) => node.dataset.modelId === "anthropic/claude-sonnet-5.5");
     check("recommended models are listed as picker options", !!sonnet);
     sonnet.click();
     await app.settle();
     await app.click("#settings-save");
     let stored = JSON.parse(app.window.localStorage.getItem("ottbyok.llm") || "{}");
     check("saving a picker model persists the slug",
-      stored.model === "anthropic/claude-sonnet-4.6", JSON.stringify(stored));
+      stored.model === "anthropic/claude-sonnet-5.5", JSON.stringify(stored));
 
     await app.click("#settings-btn");
     await app.settle();
@@ -904,10 +927,10 @@ async function streamedTurnRendersDecisionActivityAndMetrics() {
         && app.$(".chat-turn-response strong") === null,
       app.$(".chat-turn-response")?.textContent);
     check("attached activity reports a user-facing catalog milestone",
-      /Comparing matches/i.test(app.text(".chat-turn-status") || ""),
+      /Narrowing it down/i.test(app.text(".chat-turn-status") || ""),
       app.text(".chat-turn-status"));
     check("attached activity shows a checking-off milestone timeline",
-      /Comparing matches/i.test(app.text(".chat-turn-steps .is-active") || "")
+      /Narrowing it down/i.test(app.text(".chat-turn-steps .is-active") || "")
         && app.$$(".chat-turn-steps .is-done").length >= 2,
       app.text(".chat-turn-steps"));
     check("composer stays editable while submit is disabled during a turn",
@@ -1078,7 +1101,7 @@ async function failedTurnRollsBackPendingUserMessage() {
       app.$("#query-input").value === "a thriller", app.$("#query-input").value);
     check("failed turns without an error event clear active progress UI",
       app.$(".chat-turn-stop")?.hidden === true
-        && !/Checking your services|Writing your picks|Searching the catalog/i.test(app.text(".chat-turn-status") || ""),
+        && !/Seeing what you can watch|Choosing a few to watch|Looking for a good fit/i.test(app.text(".chat-turn-status") || ""),
       app.text(".chat-turn-status"));
   } finally {
     app.restore();

@@ -1,3 +1,4 @@
+import { providerHref } from "../providers.js";
 import { isUsefulReason } from "../recommendations.js";
 
 /**
@@ -54,7 +55,7 @@ export function createQueueView(el, deps) {
     row.className = "card-links";
     for (const slug of slugs) {
       const a = document.createElement("a");
-      a.href = u[slug];
+      a.href = providerHref(slug, u[slug]);
       a.target = "_blank";
       a.rel = "noopener noreferrer";
       a.textContent = deps.watchCta(slug, u[slug]);

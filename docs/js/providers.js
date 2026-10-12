@@ -88,6 +88,20 @@ export function watchCta(slug, url) {
   return "Watch on " + label;
 }
 
+// Catalog snapshots store https://www.hotstar.com/in/search?q={title}.
+// JioHotstar ignores `q` and lands on an empty /in/search bar. Its own search
+// uses `search_query`. The catalog has no Hotstar content id, so this stays
+// a search URL rather than a title page.
+const HOTSTAR_Q_SEARCH = /^https:\/\/www\.hotstar\.com\/in\/search\?q=([^#]*)$/i;
+
+export function providerHref(slug, url) {
+  const value = String(url || "");
+  if (slug !== "hotstar") return value;
+  const match = HOTSTAR_Q_SEARCH.exec(value);
+  if (!match) return value;
+  return "https://www.hotstar.com/in/search?search_query=" + match[1];
+}
+
 /**
  * Returns a shallow copy of a catalog record (or pick) whose `p` and `u`
  * fields are restricted to the given set of subscribed provider slugs. Used

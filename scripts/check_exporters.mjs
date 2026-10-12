@@ -40,6 +40,17 @@ ok(md.startsWith("# Watch picks"));
 ok(md.includes("## 1. Space Heist (2020)"));
 ok(md.includes("TMDB 7.2"));
 ok(md.includes("[Find on Netflix](https://x/1)"));
+const hotstarMd = toMarkdown([{
+  ...picks[0],
+  p: ["hotstar"],
+  u: { hotstar: "https://www.hotstar.com/in/search?q=Free%20Guy" }
+}], meta);
+ok(hotstarMd.includes("[Find on JioHotstar](https://www.hotstar.com/in/search?search_query=Free%20Guy)"));
+ok(toCsv([{
+  ...picks[0],
+  p: ["hotstar"],
+  u: { hotstar: "https://www.hotstar.com/in/search?q=Free%20Guy" }
+}], meta).includes("https://www.hotstar.com/in/search?search_query=Free%20Guy"));
 ok(md.includes("- Description: A crew pulls off a daring space robbery."));
 ok(!md.includes("(null)"));
 ok(!md.includes("null min"));

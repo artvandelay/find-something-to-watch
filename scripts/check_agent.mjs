@@ -160,10 +160,10 @@ function ok(payload) {
   );
   assert.equal(done.usage.requestCount, 3);
   assert.equal(done.turnClass, "normal");
-  assert.ok(events.some((event) => event.type === "status" && /Checking your services/i.test(event.phase)));
-  assert.ok(events.some((event) => event.type === "status" && /Searching the catalog/i.test(event.phase)));
-  assert.ok(events.some((event) => event.type === "status" && /Comparing matches/i.test(event.phase)));
-  assert.ok(events.some((event) => event.type === "status" && /Writing your picks/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Seeing what you can watch/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Looking for a good fit/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Narrowing it down/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Choosing a few to watch/i.test(event.phase)));
   assert.ok(events.some((event) => event.type === "delta" && event.text === "Try Space Heist tonight."));
   assert.equal(events.find((event) => event.type === "context")?.diagnostics?.plannerBudget, 4);
 }
@@ -453,7 +453,7 @@ function ok(payload) {
     events.find((event) => event.type === "context")?.diagnostics,
     result.contextDiagnostics
   );
-  assert.ok(events.some((event) => event.type === "status" && /Answering about your pick/i.test(event.phase)));
+  assert.ok(events.some((event) => event.type === "status" && /Thinking about that one/i.test(event.phase)));
 }
 
 // Test 6a2 - turn classification and complex budget.
@@ -635,6 +635,10 @@ function ok(payload) {
   assert.equal(on.ok, true);
   assert.match(onRequests[0].messages[1].content, /you may use web search during planning/);
   assert.match(onRequests[0].messages.at(-1).content, /you may use web search during this planning phase/);
+  assert.match(onRequests[0].messages.at(-1).content, /external published list/i);
+  assert.match(onRequests[0].messages.at(-1).content, /ids observed in run_catalog_js output/i);
+  assert.match(offRequests[0].messages[1].content, /outside published list is not in the catalog/i);
+  assert.doesNotMatch(offRequests[0].messages.at(-1).content, /you may use web search/i);
 }
 
 // Test 8 - the internal deadline aborts asynchronous tool handlers.
