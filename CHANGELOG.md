@@ -33,9 +33,25 @@ All notable changes to this project will be documented here.
   visible confirmation when preferences are learned.
 - Offline hostile-input, catalog-integrity, and search-performance stress suites.
 - Live OpenRouter agent stress harness.
+- One continuous chat with a clock-aware welcome, suggestion chips, and a divider after a long gap.
+- Free podcasts, films, and audiobooks from Open Culture, searchable with the paid catalog and marked Free.
+- Learned viewing habits, titles you say you already watched, and a short recall of earlier chats.
+- A "Can't open it" action on free titles that hides that title for this browser.
+- A welcome line and a "What I remember" panel for learned facts, titles marked in chat, and imported
+  history counts.
+- Direct import of YouTube Takeout (JSON, HTML, or ZIP) and Netflix viewing-history CSV, without the model.
+- A region setting, default India, that hides free links known to fail there and opens Apple links in
+  that region's store.
+- "Start over (keep API key)" in Settings, and the same action from `?reset`. "Clear everything" still
+  removes the API key.
 
 ### Changed
 
+- Watch history attached in chat is read by asking the model for a layout, generating a reader from that
+  layout, and running it in a disposable worker. The reply states the counts, or the error if the layout
+  or the file fails. Saved history is left unchanged on failure.
+- Watch history is added in the chat. The reply states what was read, or the parser error if the file
+  could not be read. Profile & context keeps the imported counts and Remove imported history.
 - Settings remains the place to edit subscriptions after chat starts; the sidebar now has
   an Edit control, and subscription changes reseed or rescope the picks rail.
 - Conversations can be renamed or deleted from the sidebar, with deletes confirmed and the

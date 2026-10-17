@@ -1,0 +1,146 @@
+{
+  "schema": 1,
+  "meta": {
+    "region": "IN",
+    "built_at": "2026-10-14T00:00:00Z",
+    "sources": [
+      {
+        "id": "openculture-podcasts",
+        "label": "Open Culture: Great Free Podcasts",
+        "url": "https://www.openculture.com/great-podcasts",
+        "kind": "podcast",
+        "count": 3
+      },
+      {
+        "id": "openculture-movies",
+        "label": "Open Culture: Free Movies Online",
+        "url": "https://www.openculture.com/freemoviesonline",
+        "kind": "movie",
+        "count": 2
+      },
+      {
+        "id": "openculture-audiobooks",
+        "label": "Open Culture: Free Audiobooks",
+        "url": "https://www.openculture.com/freeaudiobooks",
+        "kind": "audiobook",
+        "count": 1
+      }
+    ],
+    "probe": { "checked": 0, "ok": 0, "dropped": 0 }
+  },
+  "records": [
+    {
+      "id": "free:p:99-percent-invisible",
+      "t": "99% Invisible",
+      "y": null,
+      "k": "podcast",
+      "rt": null,
+      "s": "A podcast about the unnoticed design of everyday things.",
+      "im": null,
+      "r": null,
+      "p": ["free_apple", "free_spotify", "free_web", "free_rss"],
+      "u": {
+        "free_apple": "https://podcasts.apple.com/in/podcast/99-invisible/id394775318",
+        "free_spotify": "https://open.spotify.com/show/fixture99pi",
+        "free_web": "https://99percentinvisible.org/",
+        "free_rss": "https://feeds.99percentinvisible.org/99percentinvisible"
+      },
+      "img": null,
+      "l": "en",
+      "g": ["Art, Design & Fashion"],
+      "v": 0
+    },
+    {
+      "id": "free:p:hardcore-history",
+      "t": "Dan Carlin's Hardcore History",
+      "y": null,
+      "k": "podcast",
+      "rt": null,
+      "s": "Long-form history podcasts from Dan Carlin.",
+      "im": null,
+      "r": null,
+      "p": ["free_apple", "free_web"],
+      "u": {
+        "free_apple": "https://podcasts.apple.com/in/podcast/dan-carlins-hardcore-history/id173001861",
+        "free_web": "https://www.dancarlin.com/hardcore-history-series/"
+      },
+      "img": null,
+      "l": "en",
+      "g": ["History"],
+      "v": 0
+    },
+    {
+      "id": "free:p:radiolab",
+      "t": "Radiolab",
+      "y": null,
+      "k": "podcast",
+      "rt": null,
+      "s": "A podcast that investigates ideas in science and philosophy.",
+      "im": null,
+      "r": null,
+      "p": ["free_apple"],
+      "u": {
+        "free_apple": "https://podcasts.apple.com/in/podcast/radiolab/id152249110"
+      },
+      "img": null,
+      "l": "en",
+      "g": ["Ideas"],
+      "v": 0
+    },
+    {
+      "id": "free:m:a-star-is-born-1937",
+      "t": "A Star is Born (1937)",
+      "y": 1937,
+      "k": "movie",
+      "rt": null,
+      "s": "A 1937 film about a rising star and a fading one.",
+      "im": null,
+      "r": null,
+      "p": ["free_youtube"],
+      "u": {
+        "free_youtube": "https://www.youtube.com/watch?v=fixtureStar1"
+      },
+      "img": "https://i.ytimg.com/vi/fixtureStar1/hqdefault.jpg",
+      "l": "en",
+      "g": ["Comedy & Dramas"],
+      "v": 0
+    },
+    {
+      "id": "free:m:a-matter-of-life-and-death",
+      "t": "A Matter of Life and Death",
+      "y": 1946,
+      "k": "movie",
+      "rt": null,
+      "s": "A 1946 fantasy about a pilot who appeals his death.",
+      "im": null,
+      "r": null,
+      "p": ["free_archive"],
+      "u": {
+        "free_archive": "https://archive.org/details/Lbines-RetroVisionTheaterPresentsAMatterOfLifeAndDeath502"
+      },
+      "img": null,
+      "l": "en",
+      "g": ["Comedy & Dramas"],
+      "v": 0
+    },
+    {
+      "id": "free:a:aesops-fables",
+      "t": "Aesop's Fables",
+      "y": null,
+      "k": "audiobook",
+      "rt": null,
+      "s": "Audiobook by Aesop.",
+      "im": null,
+      "r": null,
+      "p": ["free_apple", "free_archive"],
+      "u": {
+        "free_apple": "https://itunes.apple.com/WebObjects/MZStore.woa/wa/viewPodcast?id=255293600",
+        "free_archive": "https://archive.org/details/aesop_fables_volume_one_librivox"
+      },
+      "img": null,
+      "l": "en",
+      "g": [],
+      "v": 0
+    }
+  ]
+}

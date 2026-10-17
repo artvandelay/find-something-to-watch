@@ -269,8 +269,8 @@ Availability changes constantly, so treat anything here as a starting point rath
 right now. Ratings are TMDB audience scores. No affiliation with any streaming service is implied or
 claimed.
 
-The footer of the app shows TMDB attribution — "This product uses the TMDB API but is not endorsed or
-certified by TMDB" — as required by TMDB's API terms.
+The footer of the app credits its data sources: TMDB for titles, ratings, posters, and availability,
+and Open Culture for the free picks.
 
 ## License
 

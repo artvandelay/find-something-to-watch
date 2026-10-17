@@ -1,4 +1,4 @@
-import { providerHref } from "../providers.js";
+import { providerHref, isFreeRecord } from "../providers.js";
 import { isUsefulReason } from "../recommendations.js";
 
 /**
@@ -34,6 +34,18 @@ export function createQueueView(el, deps) {
   }
 
   function metaLine(rec) {
+    if (isFreeRecord(rec)) {
+      const kind = rec.k === "podcast" ? "Podcast" : rec.k === "audiobook" ? "Audiobook" : "Film";
+      const parts = [kind];
+      if (rec.y !== null && rec.y !== undefined) parts.push(String(rec.y));
+      const line = document.createElement("p");
+      line.className = "card-meta";
+      const badge = document.createElement("span");
+      badge.className = "badge-free";
+      badge.textContent = "Free";
+      line.append(badge, document.createTextNode(" · " + parts.join(" · ")));
+      return line;
+    }
     const parts = [];
     if (rec.y !== null && rec.y !== undefined) parts.push(String(rec.y));
     if (rec.k) parts.push(rec.k);
@@ -135,12 +147,14 @@ export function createQueueView(el, deps) {
     feedback.className = "card-feedback";
     feedback.setAttribute("role", "group");
     feedback.setAttribute("aria-label", "Taste feedback for " + (rec.t || rec.id || "title"));
-    for (const action of [
+    const actions = [
       { id: "like", label: "More like this" },
       { id: "pass", label: "Not for me" },
       { id: "seen", label: "Already seen" },
       { id: "tonight", label: "Not tonight" }
-    ]) {
+    ];
+    if (isFreeRecord(rec)) actions.push({ id: "blocked", label: "Can't open it" });
+    for (const action of actions) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "card-feedback-btn";
@@ -244,5 +258,19 @@ export function createQueueView(el, deps) {
     el.queueViewport.scrollTop = 0;
   }
 
-  return { render, setCatalogStatus, setFeedbackNote };
+  function renderInline(recs) {
+    if (!Array.isArray(recs) || recs.length === 0) return null;
+    const list = document.createElement("div");
+    list.className = "chat-picks";
+    list.setAttribute("role", "list");
+    list.setAttribute("aria-label", "Picks from this reply");
+    recs.forEach((rec, index) => {
+      const card = buildCard(rec, index + 1);
+      card.classList.add("card-compact");
+      list.appendChild(card);
+    });
+    return list;
+  }
+
+  return { render, renderInline, setCatalogStatus, setFeedbackNote };
 }

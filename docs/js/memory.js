@@ -1,5 +1,6 @@
 import { LEGACY_CONTEXT_KEYS, YOUMD_TEMPLATE } from "./store.js";
-import { PROVIDER_SLUGS } from "./providers.js";
+import { normalizeTitle } from "./catalog.js";
+import { DEFAULT_REGION, PROVIDER_SLUGS, REGIONS } from "./providers.js";
 import { defaultPlaylists, sanitizePlaylists } from "./playlists.js";
 import {
   defaultRecommendationQueue,
@@ -28,7 +29,7 @@ export const MEMORY_KEYS = Object.freeze({
 
 export const MEMORY_LIMITS = Object.freeze({
   profileProviders: 26,
-  conversationMessages: 24,
+  conversationMessages: 400,
   messageCharacters: 6000,
   queueItems: 20,
   inactiveConversations: 20,
@@ -53,6 +54,10 @@ const MAX_TIMING_MS = 24 * 60 * 60 * 1000;
 
 const ISO_DATE_RE = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/;
 const PROVIDER_SET = new Set(PROVIDER_SLUGS);
+const REGION_SET = new Set(REGIONS);
+export const MARK_LIMIT = 500;
+const MARK_BUCKETS = new Set(["seen", "blocked"]);
+const MARK_SOURCES = new Set(["chat", "button"]);
 
 export class BrowserMemoryError extends Error {
   constructor(code, message, cause = null) {
@@ -128,6 +133,7 @@ function profileDefault() {
     updatedAt: null,
     onboardingComplete: false,
     providers: [],
+    region: DEFAULT_REGION,
     memoryEnabled: true
   };
 }
@@ -165,13 +171,45 @@ function sanitizeProfile(value, now) {
     if (PROVIDER_SET.has(slug) && !uniqueProviders.includes(slug)) uniqueProviders.push(slug);
     if (uniqueProviders.length === MEMORY_LIMITS.profileProviders) break;
   }
+  const region = typeof value.region === "string" ? value.region.trim().toUpperCase() : "";
   return {
     schema: MEMORY_SCHEMA_VERSION,
     updatedAt: isIsoDate(value.updatedAt) ? value.updatedAt : nowIso(now),
     onboardingComplete: value.onboardingComplete === true,
     providers: uniqueProviders,
+    region: REGION_SET.has(region) ? region : DEFAULT_REGION,
     memoryEnabled: value.memoryEnabled !== false
   };
+}
+
+export function sanitizeMarks(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const marks = [];
+  for (const raw of value) {
+    if (!isPlainObject(raw)) continue;
+    const key = collapsedString(raw.key, 200);
+    const title = collapsedString(raw.title, 200);
+    if (!key || !title || !MARK_BUCKETS.has(raw.bucket) || !MARK_SOURCES.has(raw.source)) continue;
+    const id = key + "\0" + raw.bucket;
+    if (seen.has(id)) continue;
+    seen.add(id);
+    marks.push({
+      key,
+      title,
+      bucket: raw.bucket,
+      source: raw.source,
+      at: isIsoDate(raw.at) ? raw.at : null
+    });
+  }
+  return marks.slice(-MARK_LIMIT);
+}
+
+export function rememberMark(marks, entry) {
+  const next = sanitizeMarks(marks);
+  const filtered = next.filter((mark) => !(mark.key === entry.key && mark.bucket === entry.bucket));
+  const safe = sanitizeMarks(filtered.concat(entry));
+  return safe.slice(-MARK_LIMIT);
 }
 
 function sanitizeTiming(value) {
@@ -202,6 +240,22 @@ function sanitizeTiming(value) {
       ? Math.min(MAX_TIMING_PHASES, Math.floor(timing.droppedPhases))
       : 0
   };
+}
+
+function sanitizePicks(value) {
+  if (!Array.isArray(value)) return [];
+  const seen = new Set();
+  const picks = [];
+  for (const item of value) {
+    if (!isPlainObject(item) || typeof item.id !== "string") continue;
+    const id = item.id.trim();
+    if (!id || id.length > 80 || seen.has(id)) continue;
+    seen.add(id);
+    const reason = typeof item.reason === "string" ? item.reason.slice(0, 300) : "";
+    picks.push({ id, reason });
+    if (picks.length === 3) break;
+  }
+  return picks;
 }
 
 function sanitizeConversation(value, now) {
@@ -236,6 +290,10 @@ function sanitizeConversation(value, now) {
           pricedRequestCount: Number.isFinite(billing.pricedRequestCount) && billing.pricedRequestCount >= 0 ? billing.pricedRequestCount : 0
         }
       };
+    }
+    if (message.role === "assistant") {
+      const picks = sanitizePicks(message.picks);
+      if (picks.length > 0) safe.picks = picks;
     }
     messages.push(safe);
   }
@@ -290,7 +348,10 @@ function sanitizeHistory(value) {
   if (!isPlainObject(value)) return null;
   try {
     const serialized = JSON.stringify(value);
-    return serialized.length <= MEMORY_LIMITS.historyBytes ? JSON.parse(serialized) : null;
+    if (serialized.length > MEMORY_LIMITS.historyBytes) return null;
+    const parsed = JSON.parse(serialized);
+    if (Array.isArray(parsed.marks)) parsed.marks = sanitizeMarks(parsed.marks);
+    return parsed;
   } catch {
     return null;
   }
@@ -596,7 +657,7 @@ export function createBrowserMemory({
     });
   }
 
-  async function completeTurn(conversationId, { content, queue = null, meta = undefined, learned = undefined } = {}) {
+  async function completeTurn(conversationId, { content, queue = null, meta = undefined, learned = undefined, picks = undefined } = {}) {
     return serializeWrite(async () => {
       const current = await currentConversationAndQueue();
       if (current.conversation.id !== conversationId) {
@@ -607,6 +668,7 @@ export function createBrowserMemory({
       const timestamp = nowIso(now);
       const assistant = { role: "assistant", content: text, createdAt: timestamp };
       if (meta !== undefined) assistant.meta = meta;
+      if (picks !== undefined) assistant.picks = picks;
       const nextConversation = sanitizeConversation({
         ...current.conversation,
         updatedAt: timestamp,
@@ -860,6 +922,22 @@ export function createBrowserMemory({
     };
   }
 
+  async function unmarkTitle(key) {
+    const normalized = normalizeTitle(key);
+    if (!normalized) return get(MEMORY_KEYS.history);
+    return serializeWrite(async () => {
+      const current = await get(MEMORY_KEYS.history);
+      if (!current) return null;
+      const next = {
+        ...current,
+        seen: (Array.isArray(current.seen) ? current.seen : []).filter((item) => item !== normalized),
+        blocked: (Array.isArray(current.blocked) ? current.blocked : []).filter((item) => item !== normalized),
+        marks: (Array.isArray(current.marks) ? current.marks : []).filter((mark) => mark?.key !== normalized)
+      };
+      return set(MEMORY_KEYS.history, next);
+    });
+  }
+
   async function clear() {
     try {
       const db = await database();
@@ -886,6 +964,7 @@ export function createBrowserMemory({
     setYouMd: (youmd) => set(MEMORY_KEYS.youmd, youmd),
     getHistory: () => get(MEMORY_KEYS.history),
     setHistory: (history) => set(MEMORY_KEYS.history, history),
+    unmarkTitle,
     getPlaylists: () => get(MEMORY_KEYS.playlists),
     setPlaylists: (playlists) => set(MEMORY_KEYS.playlists, playlists),
     saveConversationAndQueue,

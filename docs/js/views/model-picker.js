@@ -38,7 +38,7 @@ export function createModelPicker(el) {
 
     if (customMode) {
       const custom = el.llmModelCustom.value.trim();
-      nameEl.textContent = custom || "Other model ID…";
+      nameEl.textContent = custom || "Model ID";
       metaEl.textContent = custom ? "custom" : "";
       return;
     }

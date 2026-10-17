@@ -14,15 +14,80 @@ import {
   selectedProviders
 } from "./dom.js";
 
+export function renderLearnedFacts(container, draft, onChange = null) {
+  container.textContent = "";
+  const items = Array.isArray(draft?.items) ? draft.items : [];
+  if (items.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "note";
+    empty.textContent = "No learned preferences yet.";
+    container.appendChild(empty);
+    return;
+  }
+  function notify() {
+    if (typeof onChange === "function") onChange(draft);
+  }
+  for (const [index, item] of items.entries()) {
+    const row = document.createElement("div");
+    row.className = "learned-fact";
+    row.setAttribute("role", "listitem");
+    const polarity = document.createElement("select");
+    polarity.setAttribute("aria-label", "Preference");
+    for (const [value, label] of [["like", "Like"], ["avoid", "Avoid"]]) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = label;
+      option.selected = item.polarity === value;
+      polarity.appendChild(option);
+    }
+    const kind = document.createElement("select");
+    kind.setAttribute("aria-label", "Preference type");
+    for (const value of LEARNED_KINDS) {
+      const option = document.createElement("option");
+      option.value = value;
+      option.textContent = value;
+      option.selected = item.kind === value;
+      kind.appendChild(option);
+    }
+    const value = document.createElement("input");
+    value.type = "text";
+    value.maxLength = 80;
+    value.value = item.value;
+    value.setAttribute("aria-label", "Preference value");
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "danger-action";
+    remove.textContent = "Remove";
+    remove.addEventListener("click", () => {
+      draft.items.splice(index, 1);
+      if (Number.isInteger(draft.revision)) draft.revision += 1;
+      renderLearnedFacts(container, draft, onChange);
+      notify();
+    });
+    for (const control of [polarity, kind, value]) {
+      control.addEventListener("input", () => {
+        draft.items[index] = {
+          ...draft.items[index],
+          polarity: polarity.value,
+          kind: kind.value,
+          value: value.value
+        };
+        notify();
+      });
+    }
+    row.append(polarity, kind, value, remove);
+    container.appendChild(row);
+  }
+}
+
 /**
  * Secondary UI: settings (subscriptions + LLM key + local-data backups),
- * profile & context (You.md + watch-history import), and the hidden developer
+ * profile & context (You.md and imported-history counts), and the hidden developer
  * console. Kept out of the primary chat + picks view so they don't compete for
  * attention, and so the sidebar is not a stack of dividers.
  */
 export function createDialogs(el, deps) {
   let parsedHistoryDraft; // undefined = no pending change this dialog session
-  let historyImportController = null;
   let savedHistorySummary = "No history imported.";
   let learnedDraft = null;
   let modelPickerController = null;
@@ -97,24 +162,24 @@ export function createDialogs(el, deps) {
     }
   }
 
-  function cancelHistoryImport() {
-    if (!historyImportController) return;
-    historyImportController.abort();
-    historyImportController = null;
-  }
-
   // ---- Settings: subscriptions + LLM key/model/baseUrl ----
 
   async function openSettings() {
     try {
       const profile = await deps.getProfile();
-      renderProviderOptions(el.settingsProviderList, deps.providerOrder(), profile.providers);
+      renderProviderOptions(
+        el.settingsProviderList,
+        deps.providerOrder(),
+        profile.providers,
+        profile.region || "IN"
+      );
       const llm = deps.store.getLlm();
       el.llmBaseUrl.value = llm.baseUrl || "";
       el.llmApiKey.value = llm.apiKey || "";
       setModelPickerMode(llm.baseUrl);
       renderModelPicker(llm.model || "");
       el.llmWebSearch.checked = llm.webSearch === true;
+      if (el.regionSelect) el.regionSelect.value = profile.region || "IN";
       el.llmWebSearch.disabled = !isOpenRouterBaseUrl(el.llmBaseUrl.value);
       if (el.llmWebSearch.disabled) el.llmWebSearch.checked = false;
       feedback(el.settingsFeedback);
@@ -131,6 +196,17 @@ export function createDialogs(el, deps) {
     el.settingsBtn.addEventListener("click", () => {
       void openSettings();
     });
+
+    if (el.regionSelect) {
+      el.regionSelect.addEventListener("change", () => {
+        renderProviderOptions(
+          el.settingsProviderList,
+          deps.providerOrder(),
+          selectedProviders(el.settingsProviderList),
+          el.regionSelect.value || "IN"
+        );
+      });
+    }
 
     el.settingsSave.addEventListener("click", async () => {
       feedback(el.settingsFeedback);
@@ -163,7 +239,7 @@ export function createDialogs(el, deps) {
       }
       el.settingsSave.disabled = true;
       try {
-        await deps.onSubscriptionsChange(providers);
+        await deps.onSubscriptionsChange(providers, { region: el.regionSelect ? el.regionSelect.value : "IN" });
         el.settingsDialog.close();
       } catch (err) {
         feedback(el.settingsFeedback, err && err.message ? err.message : "Could not save settings.");
@@ -202,79 +278,24 @@ export function createDialogs(el, deps) {
 
   function setBusy(busy) {
     el.clearDataBtn.disabled = busy;
+    if (el.resetKeepKeyBtn) el.resetKeepKeyBtn.disabled = busy;
   }
 
   function wireLocalData() {
     el.exportBackupBtn.addEventListener("click", () => deps.onExportBackup());
     el.clearDataBtn.addEventListener("click", () => deps.onClearData());
+    el.resetKeepKeyBtn?.addEventListener("click", () => deps.onResetKeepKey?.());
   }
 
-  // ---- Profile & context: You.md + watch-history import ----
+  // ---- Profile & context: You.md plus imported-history counts ----
 
   function wireContext() {
-    function renderLearnedFacts() {
-      el.learnedFacts.textContent = "";
-      const items = Array.isArray(learnedDraft?.items) ? learnedDraft.items : [];
-      if (items.length === 0) {
-        const empty = document.createElement("p");
-        empty.className = "note";
-        empty.textContent = "No learned preferences yet.";
-        el.learnedFacts.appendChild(empty);
-        return;
-      }
-      for (const [index, item] of items.entries()) {
-        const row = document.createElement("div");
-        row.className = "learned-fact";
-        row.setAttribute("role", "listitem");
-        const polarity = document.createElement("select");
-        polarity.setAttribute("aria-label", "Preference");
-        for (const [value, label] of [["like", "Like"], ["avoid", "Avoid"]]) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = label;
-          option.selected = item.polarity === value;
-          polarity.appendChild(option);
-        }
-        const kind = document.createElement("select");
-        kind.setAttribute("aria-label", "Preference type");
-        for (const value of LEARNED_KINDS) {
-          const option = document.createElement("option");
-          option.value = value;
-          option.textContent = value;
-          option.selected = item.kind === value;
-          kind.appendChild(option);
-        }
-        const value = document.createElement("input");
-        value.type = "text";
-        value.maxLength = 80;
-        value.value = item.value;
-        value.setAttribute("aria-label", "Preference value");
-        const remove = document.createElement("button");
-        remove.type = "button";
-        remove.className = "danger-action";
-        remove.textContent = "Remove";
-        remove.addEventListener("click", () => {
-          learnedDraft.items.splice(index, 1);
-          renderLearnedFacts();
-        });
-        for (const control of [polarity, kind, value]) {
-          control.addEventListener("input", () => {
-            learnedDraft.items[index] = {
-              ...learnedDraft.items[index],
-              polarity: polarity.value,
-              kind: kind.value,
-              value: value.value
-            };
-          });
-        }
-        row.append(polarity, kind, value, remove);
-        el.learnedFacts.appendChild(row);
-      }
+    function renderContextFacts() {
+      renderLearnedFacts(el.learnedFacts, learnedDraft);
     }
 
     el.contextBtn.addEventListener("click", async () => {
       try {
-        cancelHistoryImport();
         const [youmd, history, profile, learned] = await Promise.all([
           deps.getYouMd(), deps.getHistory(), deps.getProfile(), deps.getLearned()
         ]);
@@ -283,7 +304,7 @@ export function createDialogs(el, deps) {
         el.historySummary.textContent = savedHistorySummary;
         el.memoryEnabled.checked = profile.memoryEnabled !== false;
         learnedDraft = JSON.parse(JSON.stringify(learned));
-        renderLearnedFacts();
+        renderContextFacts();
         feedback(el.contextFeedback);
         parsedHistoryDraft = undefined;
         el.contextDialog.showModal();
@@ -292,40 +313,7 @@ export function createDialogs(el, deps) {
       }
     });
 
-    el.historyFile.addEventListener("change", async () => {
-      const file = el.historyFile.files && el.historyFile.files[0];
-      if (!file) return;
-
-      cancelHistoryImport();
-      parsedHistoryDraft = undefined;
-      const controller = new AbortController();
-      historyImportController = controller;
-      feedback(el.contextFeedback, `Importing ${file.name}…`);
-
-      try {
-        const parsed = await deps.importHistoryFile(file, {
-          signal: controller.signal,
-          onStatus: (message) => {
-            if (historyImportController === controller && !controller.signal.aborted) {
-              feedback(el.contextFeedback, message);
-            }
-          }
-        });
-        if (historyImportController !== controller || controller.signal.aborted) return;
-        parsedHistoryDraft = parsed;
-        el.historySummary.textContent = deps.summarizeHistory(parsed);
-        feedback(el.contextFeedback, "History is ready to save.");
-      } catch (err) {
-        if (historyImportController !== controller || controller.signal.aborted) return;
-        el.historySummary.textContent = savedHistorySummary;
-        feedback(el.contextFeedback, err && err.message ? err.message : "Could not import watch history. Existing history was not changed.");
-      } finally {
-        if (historyImportController === controller) historyImportController = null;
-      }
-    });
-
     el.historyRemove.addEventListener("click", () => {
-      cancelHistoryImport();
       parsedHistoryDraft = null;
       el.historySummary.textContent = "No history imported.";
       feedback(el.contextFeedback);
@@ -335,7 +323,7 @@ export function createDialogs(el, deps) {
       if (!learnedDraft) return;
       learnedDraft.items = [];
       learnedDraft.revision = (Number.isInteger(learnedDraft.revision) ? learnedDraft.revision : 0) + 1;
-      renderLearnedFacts();
+      renderContextFacts();
     });
 
     el.contextSave.addEventListener("click", async () => {
@@ -360,7 +348,6 @@ export function createDialogs(el, deps) {
 
     el.contextClose.addEventListener("click", () => el.contextDialog.close());
     el.contextDialog.addEventListener("close", () => {
-      cancelHistoryImport();
       parsedHistoryDraft = undefined;
       learnedDraft = null;
     });

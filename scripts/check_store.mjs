@@ -52,6 +52,11 @@ deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
 storage.setItem(KEYS.pane, JSON.stringify({ railWidth: -40 }));
 deepStrictEqual(s.getPaneLayout(), { railWidth: null, railCollapsed: false });
 
+storage.setItem(KEYS.llm, JSON.stringify({ apiKey: "sk-keep", baseUrl: "https://openrouter.ai/api/v1", model: "m" }));
+storage.setItem(KEYS.youmd, "notes");
+s.clearAll({ keepLlm: true });
+strictEqual(storage.getItem(KEYS.youmd), null);
+strictEqual(JSON.parse(storage.getItem(KEYS.llm)).apiKey, "sk-keep");
 s.clearAll();
 strictEqual(mem.size, 0);
 deepStrictEqual(s.getLlm(), DEFAULT_LLM);

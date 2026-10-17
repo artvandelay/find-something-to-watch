@@ -32,7 +32,11 @@ const prompts = JSON.parse(await readFile(
 ));
 const config = { baseUrl: "https://fake/v1", apiKey: "sk-test", model: "m" };
 
-assert.equal(prompts.version, 4);
+assert.equal(prompts.version, 6);
+assert.match(prompts.system, /The user's region is \{region\}/);
+assert.match(prompts.system, /free:/);
+assert.match(prompts.planner, /watched/);
+assert.match(prompts.planner, /habit/);
 assert.match(prompts.rerank, /unordered or ordered lists/);
 assert.match(prompts.rerank, /Never emit raw HTML/);
 assert.match(prompts.rerank, /Do not return JSON/);
@@ -677,6 +681,41 @@ function ok(payload) {
   });
   assert.equal(result.ok, false);
   assert.equal(events.at(-1).code, "budget");
+  assert.deepEqual(result.watched, []);
+}
+
+// Clock block is prepended, and watched titles need evidence from the query.
+{
+  const requests = [];
+  const decision = JSON.stringify({
+    queue: [],
+    watched: [
+      { title: "Dark Matter", evidence: "watched Dark Matter" },
+      { title: "Inception", evidence: "not in the message" }
+    ]
+  });
+  const fetchImpl = async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    const content = requests.length === 1 ? decision : "A comedy that fits weeknights.";
+    return ok({ choices: [{ message: { role: "assistant", content } }] });
+  };
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: {
+      youmd: "",
+      history: null,
+      mood: "",
+      temporal: "## Right now\n- Local time: Wednesday 14 Oct, 9:42 pm (evening)."
+    },
+    query: "I watched Dark Matter last week",
+    conversation: [],
+    fetchImpl
+  });
+  assert.match(requests[0].messages.at(-1).content, /## Right now/);
+  assert.equal(result.ok, true);
+  assert.deepEqual(result.watched, ["Dark Matter"]);
 }
 
 console.log("check_agent OK");

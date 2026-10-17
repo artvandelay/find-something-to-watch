@@ -55,14 +55,18 @@ async function firstVisitShowsWorkspace() {
     check("first visit bypasses onboarding", app.$("#onboarding-screen").hidden === true);
     check("first visit opens the chat shell", app.$("#shell").hidden === false);
     check("onboarding markup remains available",
-      !!app.$("#onboarding-form") && app.$$("#onboarding-form [data-onboarding-step]").length === 3);
-    const examples = app.$$(".chat-example");
-    check("first visit offers example prompts",
-      examples.length === 3 && examples.every((button) => button.textContent.trim().length > 0),
-      examples.map((button) => button.textContent).join(" | "));
-    examples[0]?.click();
-    check("an example prompt fills and focuses the composer",
-      app.$("#query-input").value === examples[0]?.textContent
+      !!app.$("#onboarding-form") && app.$$("#onboarding-form [data-onboarding-step]").length === 2);
+    check("chat composer accepts a history file", !!app.$("#chat-file"));
+    check("profile has no separate history file input",
+      !app.$("#history-file") && !app.$("#onboarding-history-file") && !!app.$("#history-summary") && !!app.$("#history-remove"));
+    const chips = app.$$(".chat-chip");
+    check("first visit offers suggestion chips",
+      chips.length >= 3 && chips.length <= 4 && !!app.$(".chat-welcome"),
+      chips.map((button) => button.textContent).join(" | "));
+    chips[0]?.click();
+    check("a suggestion fills and focuses the composer",
+      app.$("#query-input").value === chips[0]?.dataset.query
+        && app.$("#query-input").value !== chips[0]?.textContent
         && app.document.activeElement === app.$("#query-input"),
       app.$("#query-input").value);
     check("catalog status makes snapshot availability explicit",
@@ -678,7 +682,7 @@ async function conversationsAndLearnedMemoryPersist() {
         && first.$$("#conversation-list-items .conversation-list-item:not(:disabled)")
           .some((node) => /comedy/i.test(node.textContent || "")));
     check("New chat starts an empty active conversation",
-      /Ask for something to watch/.test(first.text("#chat-transcript") || ""));
+      !!first.$(".chat-welcome") && first.$$(".chat-chip").length >= 3);
 
     const archived = first.$$("#conversation-list-items .conversation-list-item:not(:disabled)")
       .find((node) => /comedy/i.test(node.textContent || ""));

@@ -1,46 +1,24 @@
 import { renderProviderOptions, selectedProviders } from "./dom.js";
 
 /**
- * First-run screen: subscriptions, required OpenRouter key, and optional
- * provider-neutral watch-history import.
+ * First-run screen: subscriptions and a required OpenRouter key.
+ * Watch history is added later from the chat composer.
  */
 export function createOnboardingView(el, deps) {
-  const steps = ["subscriptions", "openrouter-key", "watch-history"];
+  const steps = ["subscriptions", "openrouter-key"];
   const panels = Array.from(el.onboardingForm.querySelectorAll("[data-onboarding-step]"));
   let stepIndex = 0;
-  let parsedHistory = null;
-  let importController = null;
-  let importFailed = false;
   let completing = false;
 
   function currentProviders() {
     return selectedProviders(el.onboardingProviderList);
   }
 
-  function setStatus(message) {
-    el.onboardingHistoryStatus.textContent = message || "";
-  }
-
-  function isImporting() {
-    return importController !== null;
-  }
-
   function updateControls() {
-    const busy = isImporting() || completing;
     el.onboardingBack.hidden = stepIndex === 0;
-    el.onboardingBack.disabled = busy;
-    el.onboardingNext.disabled = busy;
-    el.onboardingHistoryFile.disabled = busy;
-    el.onboardingHistoryRemove.disabled = busy;
-    el.onboardingHistoryRemove.hidden = !isImporting() && !importFailed && !parsedHistory;
-
-    if (stepIndex < 2) {
-      el.onboardingNext.textContent = "Continue";
-    } else if (parsedHistory) {
-      el.onboardingNext.textContent = "Finish";
-    } else {
-      el.onboardingNext.textContent = "Continue without history";
-    }
+    el.onboardingBack.disabled = completing;
+    el.onboardingNext.disabled = completing;
+    el.onboardingNext.textContent = stepIndex === steps.length - 1 ? "Finish" : "Continue";
   }
 
   function renderStep() {
@@ -49,53 +27,6 @@ export function createOnboardingView(el, deps) {
     }
     el.onboardingProgress.textContent = `Step ${stepIndex + 1} of ${steps.length}`;
     updateControls();
-  }
-
-  function abortImport() {
-    if (!importController) return;
-    importController.abort();
-    importController = null;
-  }
-
-  function clearHistoryFile() {
-    abortImport();
-    parsedHistory = null;
-    importFailed = false;
-    el.onboardingHistoryFile.value = "";
-    el.onboardingHistorySummary.textContent = "";
-    setStatus("");
-    updateControls();
-  }
-
-  async function importHistoryFile(file) {
-    abortImport();
-    parsedHistory = null;
-    importFailed = false;
-    el.onboardingHistorySummary.textContent = "";
-    setStatus("Importing watch history…");
-    const controller = new AbortController();
-    importController = controller;
-    updateControls();
-
-    try {
-      const history = await deps.importHistoryFile(file, {
-        signal: controller.signal,
-        onStatus: setStatus
-      });
-      if (controller.signal.aborted || importController !== controller) return;
-      parsedHistory = history;
-      el.onboardingHistorySummary.textContent = "Watch history imported.";
-      setStatus("");
-    } catch (err) {
-      if (controller.signal.aborted || importController !== controller) return;
-      importFailed = true;
-      setStatus(err && err.message ? err.message : "Could not import this watch-history file.");
-    } finally {
-      if (importController === controller) {
-        importController = null;
-        updateControls();
-      }
-    }
   }
 
   function saveKey() {
@@ -122,7 +53,7 @@ export function createOnboardingView(el, deps) {
     try {
       await deps.onComplete({
         providers: currentProviders(),
-        history: parsedHistory
+        region: el.onboardingRegionSelect?.value || "IN"
       });
     } catch (err) {
       deps.onError(err && err.message ? err.message : "Could not save onboarding.");
@@ -133,7 +64,7 @@ export function createOnboardingView(el, deps) {
   }
 
   async function advance() {
-    if (isImporting() || completing) return;
+    if (completing) return;
     if (stepIndex === 0) {
       if (currentProviders().length === 0) {
         deps.onError("Select at least one subscription to continue.");
@@ -143,27 +74,23 @@ export function createOnboardingView(el, deps) {
       renderStep();
       return;
     }
-    if (stepIndex === 1) {
-      if (!saveKey()) return;
-      stepIndex += 1;
-      renderStep();
-      return;
-    }
+    if (!saveKey()) return;
     await finish();
   }
 
-  function wireHistoryFile() {
-    el.onboardingHistoryFile.addEventListener("change", () => {
-      const file = el.onboardingHistoryFile.files && el.onboardingHistoryFile.files[0];
-      if (!file) return;
-      void importHistoryFile(file);
-    });
-    el.onboardingHistoryRemove.addEventListener("click", clearHistoryFile);
+  function renderProviders() {
+    const region = el.onboardingRegionSelect?.value || "IN";
+    renderProviderOptions(
+      el.onboardingProviderList,
+      deps.providerOrder(),
+      selectedProviders(el.onboardingProviderList),
+      region
+    );
   }
 
   function wireNavigation() {
     el.onboardingBack.addEventListener("click", () => {
-      if (isImporting() || completing || stepIndex === 0) return;
+      if (completing || stepIndex === 0) return;
       stepIndex -= 1;
       renderStep();
     });
@@ -171,29 +98,25 @@ export function createOnboardingView(el, deps) {
       event.preventDefault();
       void advance();
     });
+    if (el.onboardingRegionSelect) {
+      el.onboardingRegionSelect.addEventListener("change", renderProviders);
+    }
   }
 
   function show() {
-    abortImport();
     stepIndex = 0;
-    parsedHistory = null;
-    importFailed = false;
-    renderProviderOptions(el.onboardingProviderList, deps.providerOrder());
     const llm = deps.store.getLlm();
     el.onboardingLlmApiKey.value = llm.apiKey || "";
-    el.onboardingHistoryFile.value = "";
-    el.onboardingHistorySummary.textContent = "";
-    setStatus("");
+    if (el.onboardingRegionSelect) el.onboardingRegionSelect.value = "IN";
+    renderProviders();
     el.onboardingScreen.hidden = false;
     renderStep();
   }
 
   function hide() {
-    abortImport();
     el.onboardingScreen.hidden = true;
   }
 
-  wireHistoryFile();
   wireNavigation();
 
   return { show, hide };

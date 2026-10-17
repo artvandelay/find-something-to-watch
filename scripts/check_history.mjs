@@ -13,6 +13,7 @@ import {
   validateHistoryPlan
 } from "../docs/js/history.js";
 import { createHistoryPlanInferer } from "../docs/js/history-model.js";
+import { createHistoryRuntime } from "../docs/js/history-runtime.js";
 
 const NOW = () => new Date("2026-08-05T00:00:00.000Z");
 const csv = [
@@ -141,6 +142,20 @@ assert.ok(sentBody.length < csv.length + 1000);
 assert.equal(sentBody.includes("Pilot"), true);
 assert.equal(sentBody.includes("x".repeat(100)), false);
 
+await assert.rejects(
+  parseWatchHistoryExport({ name: "watch.csv", text: csv }, {
+    inferPlan: async () => ({ schema: 1, files: [] })
+  }),
+  (error) => error instanceof HistoryImportError && /invalid top-level shape/.test(error.message)
+);
+await assert.rejects(
+  createHistoryRuntime().run({
+    code: "fetch('https://evil.test')",
+    files: { "watch.csv": csv }
+  }),
+  (error) => /rejected/.test(error.message)
+);
+
 const legacy = parseNetflixCsv("Title,Date\n\"A, B: Season 1: x\",\"1/2/26\"\n");
 assert.equal(legacy.series[0].name, "A, B");
 assert.equal(typeof summarize(legacy), "string");
@@ -166,5 +181,31 @@ assert.deepEqual(netflix.movies.map((movie) => movie.title).sort(), [
 ]);
 assert.equal(netflix.seen.includes("the ba ds of bollywood"), true);
 assert.equal(netflix.seen.includes("seinfeld"), true);
+
+const generatedNetflix = await parseWatchHistoryExport(
+  { name: "NetflixViewingHistory.csv", text: netflixCsv },
+  {
+    inferPlan: async () => ({
+      schema: 1,
+      files: [{
+        name: "NetflixViewingHistory.csv",
+        format: "csv",
+        headerRow: 0,
+        dataStartRow: 1,
+        titleColumn: 0,
+        dateColumn: 1,
+        typeColumn: null,
+        seriesColumn: null,
+        episodeColumn: null,
+        dateFormat: "mdy",
+        typeMap: { movie: [], series: [] }
+      }]
+    }),
+    now: NOW
+  }
+);
+assert.deepEqual(generatedNetflix.seen, netflix.seen);
+assert.deepEqual(generatedNetflix.series, netflix.series);
+assert.deepEqual(generatedNetflix.movies.map((movie) => movie.title), netflix.movies.map((movie) => movie.title));
 
 console.log("check_history OK");

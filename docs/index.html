@@ -24,36 +24,38 @@
       <section id="onboarding-screen" aria-labelledby="onboarding-title" hidden>
         <div class="onboarding-card">
           <h1 id="onboarding-title">Find Something to Watch</h1>
-          <p class="tagline">Search the catalog. Pick something. Start watching.</p>
-          <p class="intro">Choose your subscriptions, bring your preferred compatible model, then optionally import watch history.</p>
+          <p class="tagline">Tell me the mood. I'll find where to watch it.</p>
+          <p class="intro">Pick the services you have, then add an OpenRouter key so we can chat. You can add your watch history later, right in the chat.</p>
 
           <form id="onboarding-form">
-            <p id="onboarding-progress" class="note" aria-live="polite">Step 1 of 3</p>
+            <p id="onboarding-progress" class="note" aria-live="polite">Step 1 of 2</p>
 
             <fieldset class="field-group" data-onboarding-step="subscriptions">
               <legend>Your subscriptions</legend>
-              <p class="note">Select every service you currently pay for. Results are restricted to these.</p>
+              <p class="note">Pick every service you pay for. I'll stick to these unless you ask for free picks.</p>
               <div id="onboarding-provider-list" class="provider-grid"></div>
+              <div class="field">
+                <label for="onboarding-region-select">Region</label>
+                <select id="onboarding-region-select">
+                  <option value="IN" selected>India</option>
+                  <option value="US">United States</option>
+                  <option value="GB">United Kingdom</option>
+                  <option value="CA">Canada</option>
+                  <option value="AU">Australia</option>
+                  <option value="SG">Singapore</option>
+                  <option value="AE">United Arab Emirates</option>
+                </select>
+              </div>
+              <p class="note">Free links known to fail in this region are hidden. Apple links open in this region's store.</p>
             </fieldset>
 
             <fieldset class="field-group" data-onboarding-step="openrouter-key" hidden>
-              <legend>Connect a compatible model</legend>
+              <legend>Connect your AI</legend>
               <div class="field">
                 <label for="onboarding-llm-api-key">OpenRouter API key</label>
                 <input id="onboarding-llm-api-key" type="password" autocomplete="off">
               </div>
               <p class="note">Stored in this browser. Relevant context is sent to the model endpoint you configure.</p>
-            </fieldset>
-
-            <fieldset class="field-group" data-onboarding-step="watch-history" hidden>
-              <legend>Watch-history export (optional)</legend>
-              <div class="field">
-                <label for="onboarding-history-file">Choose a CSV, JSON, or ZIP export</label>
-                <input id="onboarding-history-file" type="file" accept=".csv,.json,.zip">
-              </div>
-              <p id="onboarding-history-summary" class="note" aria-live="polite"></p>
-              <p id="onboarding-history-status" class="note" aria-live="polite"></p>
-              <button id="onboarding-history-remove" type="button" hidden>Remove history file</button>
             </fieldset>
 
             <div id="onboarding-privacy" class="privacy-copy">
@@ -112,8 +114,10 @@
             </button>
 
             <section id="conversation-list" class="sidebar-block" aria-labelledby="conversation-list-title">
-              <h2 id="conversation-list-title">Conversations</h2>
-              <div id="conversation-list-items" role="list" aria-live="polite"></div>
+              <details class="earlier-chats">
+                <summary id="conversation-list-title">Earlier chats</summary>
+                <div id="conversation-list-items" role="list" aria-live="polite"></div>
+              </details>
             </section>
           </div>
 
@@ -159,21 +163,28 @@
             <div class="composer-dock">
               <div class="composer-inner">
                 <div id="chat-key-error" class="chat-key-error" role="alert" aria-live="assertive" hidden>
-                  <strong>An OpenRouter API key is required to use chat.</strong>
-                  <span>Open Settings in the sidebar, select a subscription, add your key under “Your model” → “API key,” then select Save.</span>
+                  <strong>Add your OpenRouter key to start chatting.</strong>
+                  <span>Open Settings in the sidebar, paste your key under “Your model” → “API key,” then select Save.</span>
                   <a href="https://openrouter.ai/keys" target="_blank" rel="noopener noreferrer">Create an OpenRouter API key</a>
                 </div>
                 <p id="chat-note" class="note" hidden aria-live="polite"></p>
 
                 <form id="query-form">
                   <label for="query-input">What would you like to watch?</label>
-                  <textarea id="query-input" rows="2" maxlength="6000" placeholder="Something short and funny for tonight — nothing I've already seen"></textarea>
+                  <textarea id="query-input" rows="2" maxlength="6000" placeholder="A mood, a title, how long you've got…"></textarea>
 
                   <div class="form-actions">
+                    <label class="composer-attach">
+                      <input id="chat-file" type="file" accept=".csv,.json,.html,.zip">
+                      <svg aria-hidden="true" viewBox="0 0 24 24" focusable="false">
+                        <path d="M8.2 12.4 14.6 6a3 3 0 0 1 4.2 4.2l-8.1 8.1a4.4 4.4 0 0 1-6.2-6.2l7.6-7.6" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+                      </svg>
+                      <span class="visually-hidden">Add a watch-history file</span>
+                    </label>
                     <button id="send-btn" type="submit">Send</button>
                     <button id="stop-btn" type="button" hidden>Stop</button>
                   </div>
-                  <p class="note composer-hint">Press Enter to send; use Shift+Enter for a new line.</p>
+                  <p class="note composer-hint">Enter to send. Add a watch-history file (CSV, JSON, HTML, or ZIP) with the paperclip and I'll skip what you've seen.</p>
                 </form>
               </div>
             </div>
@@ -218,10 +229,33 @@
       </div>
 
       <footer id="attribution">
-        This product uses the TMDB API but is not endorsed or certified by TMDB.
+        Titles, ratings, posters, and availability from
+        <a href="https://www.themoviedb.org/" target="_blank" rel="noopener noreferrer">TMDB</a>.
+        Free picks from
+        <a href="https://www.openculture.com/" target="_blank" rel="noopener noreferrer">Open Culture</a>.
         <a href="https://github.com/artvandelay/find-something-to-watch">Source on GitHub</a>.
       </footer>
     </div>
+
+    <dialog id="memory-dialog" aria-labelledby="memory-dialog-title">
+      <h2 id="memory-dialog-title">What I remember</h2>
+      <section aria-labelledby="memory-facts-title">
+        <h3 id="memory-facts-title">Learned facts</h3>
+        <div id="memory-facts" role="list" aria-live="polite"></div>
+      </section>
+      <section aria-labelledby="memory-marks-title">
+        <h3 id="memory-marks-title">Marked in chat</h3>
+        <div id="memory-marks" role="list" aria-live="polite"></div>
+      </section>
+      <section aria-labelledby="memory-imports-title">
+        <h3 id="memory-imports-title">Imported history</h3>
+        <p id="memory-imports" class="note"></p>
+        <button id="memory-import-remove" type="button">Remove imported history</button>
+      </section>
+      <div class="dialog-actions">
+        <button id="memory-close" type="button">Close</button>
+      </div>
+    </dialog>
 
     <dialog id="settings-dialog">
       <h2>Settings</h2>
@@ -255,11 +289,13 @@
               <input id="llm-model-search" type="search" placeholder="Search models"
                 autocomplete="off" aria-label="Search models">
               <div class="model-picker-columns">
-                <div id="llm-model-list" class="model-picker-list" role="listbox"
-                  aria-labelledby="llm-model-picker-label"></div>
+                <div class="model-picker-list-wrap">
+                  <div id="llm-model-list" class="model-picker-list" role="listbox"
+                    aria-labelledby="llm-model-picker-label"></div>
+                  <button type="button" id="llm-model-other" class="model-picker-other">Use a model ID</button>
+                </div>
                 <aside id="llm-model-detail" class="model-picker-detail" aria-live="polite"></aside>
               </div>
-              <button type="button" id="llm-model-other" class="model-picker-other">Other model ID…</button>
             </div>
           </div>
           <input id="llm-model-custom" name="llm-model-custom" type="text"
@@ -282,11 +318,29 @@
         search lets OpenRouter process relevant queries and can add cost.</p>
 
       <fieldset class="field-group">
+        <legend>Region</legend>
+        <div class="field">
+          <label for="region-select">Where you watch</label>
+          <select id="region-select">
+            <option value="IN" selected>India</option>
+            <option value="US">United States</option>
+            <option value="GB">United Kingdom</option>
+            <option value="CA">Canada</option>
+            <option value="AU">Australia</option>
+            <option value="SG">Singapore</option>
+            <option value="AE">United Arab Emirates</option>
+          </select>
+        </div>
+        <p class="note">Free links known to fail in this region are hidden. Apple Podcasts and Books links open in this region's store. If a link still fails, choose Can't open it.</p>
+      </fieldset>
+
+      <fieldset class="field-group">
         <legend>Local data</legend>
-        <p class="note">Exported backups are plain JSON and never contain your API key.</p>
+        <p class="note">Exported backups are plain JSON and never contain your API key. Start over keeps the API key, model, and base URL. Clear everything also removes the key.</p>
         <div class="button-row">
           <button id="export-backup-btn" type="button">Export backup</button>
-          <button id="clear-data-btn" class="danger-action" type="button">Clear local data</button>
+          <button id="reset-keep-key-btn" type="button">Start over (keep API key)</button>
+          <button id="clear-data-btn" class="danger-action" type="button">Clear everything</button>
         </div>
       </fieldset>
 
@@ -308,22 +362,16 @@
         <div class="field">
           <label for="memory-enabled">
             <input id="memory-enabled" name="memory-enabled" type="checkbox">
-            Use learned preferences in future requests
+            Remember what I like between chats
           </label>
         </div>
         <div id="learned-facts" role="list" aria-live="polite"></div>
         <button id="learned-clear" type="button" class="danger-action">Clear learned facts</button>
       </fieldset>
-      <p class="note">Only explicit, durable entertainment preferences are learned. Review, edit, disable,
-        or clear them here. Your manual You.md stays separate.</p>
-      <div class="field">
-        <label for="history-file">Watch-history export</label>
-        <input id="history-file" name="history-file" type="file" accept=".csv,.json,.zip">
-      </div>
+      <p class="note">Only explicit, durable preferences, viewing habits, and titles you say you watched are learned from your own words. Review, edit, disable, or clear them here. Your manual You.md stays separate.</p>
       <p id="history-summary" aria-live="polite"></p>
       <button id="history-remove" type="button">Remove imported history</button>
-      <p class="note">Your watch history is parsed and stored locally in this browser. Bounded samples may
-        be sent to the configured model endpoint only to infer an import layout.</p>
+      <p class="note">Add a watch-history file in the chat. This page shows the counts.</p>
       <p id="context-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">
         <button id="context-save" type="button">Save</button>

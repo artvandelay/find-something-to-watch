@@ -7,7 +7,7 @@ export const LEARNED_PREFERENCE_LIMITS = Object.freeze({
 });
 
 export const LEARNED_KINDS = Object.freeze([
-  "genre", "language", "theme", "pace", "creator", "format", "content"
+  "genre", "language", "theme", "pace", "creator", "format", "content", "habit"
 ]);
 
 const KIND_SET = new Set(LEARNED_KINDS);
@@ -89,6 +89,23 @@ export function validatePreferenceCandidates(candidates, query) {
   return valid;
 }
 
+export function validateWatchedCandidates(candidates, query) {
+  if (typeof query !== "string") return [];
+  const q = compact(query).toLocaleLowerCase();
+  const seen = new Set();
+  const out = [];
+  for (const candidate of Array.isArray(candidates) ? candidates : []) {
+    const title = compact(candidate?.title, LEARNED_PREFERENCE_LIMITS.valueCharacters);
+    const evidence = compact(candidate?.evidence, LEARNED_PREFERENCE_LIMITS.valueCharacters);
+    const key = title.toLocaleLowerCase();
+    if (!title || !evidence || seen.has(key) || !q.includes(evidence.toLocaleLowerCase())) continue;
+    seen.add(key);
+    out.push(title);
+    if (out.length === LEARNED_PREFERENCE_LIMITS.candidatesPerTurn) break;
+  }
+  return out;
+}
+
 function applyLearnedCandidate(items, candidate, now) {
   const key = `${candidate.kind}\u0000${candidate.value.toLocaleLowerCase()}`;
   const index = items.findIndex((item) => `${item.kind}\u0000${item.value.toLocaleLowerCase()}` === key);
@@ -98,7 +115,13 @@ function applyLearnedCandidate(items, candidate, now) {
     items[index].lastConfirmedAt = now;
     return polarityChanged;
   }
-  if (items.length >= LEARNED_PREFERENCE_LIMITS.items) return false;
+  if (items.length >= LEARNED_PREFERENCE_LIMITS.items) {
+    let oldest = 0;
+    for (let i = 1; i < items.length; i += 1) {
+      if (Date.parse(items[i].lastConfirmedAt) < Date.parse(items[oldest].lastConfirmedAt)) oldest = i;
+    }
+    items.splice(oldest, 1);
+  }
   items.push({ id: defaultId(), ...candidate, createdAt: now, lastConfirmedAt: now });
   return true;
 }

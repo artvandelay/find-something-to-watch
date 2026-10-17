@@ -257,6 +257,9 @@ export function createCatalogRuntime({
       const value = await withReady("seedQueue", payload, requestTimeoutMs, signal);
       return Array.isArray(value?.results) ? value.results : [];
     },
+    setRegion(region, signal = null) {
+      return withReady("setRegion", { region }, requestTimeoutMs, signal);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

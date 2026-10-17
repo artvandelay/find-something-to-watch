@@ -1,4 +1,5 @@
 import { buildIndex, filterIndices, search, seedQueue as rankSeedQueue } from "./catalog.js";
+import { DEFAULT_REGION, REGIONS, mergeFreeRecords } from "./providers.js";
 
 const V = 2;
 const EXECUTOR_READY_MS = 10_000;
@@ -10,6 +11,11 @@ let catalog = null;
 let richCatalog = null;
 let loading = null;
 let richLoading = null;
+let paidRecords = null;
+let catalogMeta = null;
+let freeDocument = null;
+let synopsisById = null;
+let viewerRegion = DEFAULT_REGION;
 const executors = new Map();
 const cancelled = new Set();
 const MAX_CANCELLED_REQUESTS = 256;
@@ -100,6 +106,41 @@ function projection(record, scope) {
   return result;
 }
 
+function setViewerRegion(region) {
+  const code = typeof region === "string" ? region.trim().toUpperCase() : "";
+  viewerRegion = REGIONS.includes(code) ? code : DEFAULT_REGION;
+}
+
+function mergedRecords() {
+  return mergeFreeRecords(paidRecords || [], freeDocument, { region: viewerRegion }).records;
+}
+
+function indexCatalog(records, meta) {
+  return {
+    meta: meta || {},
+    records,
+    index: buildIndex(records),
+    byId: new Map(records.map((record) => [record.id, record]))
+  };
+}
+
+function publishCatalog(epoch, announce) {
+  const records = mergedRecords();
+  catalog = indexCatalog(records, catalogMeta || {});
+  if (synopsisById) {
+    const richRecords = records.map((record) => ({
+      ...record,
+      s: typeof synopsisById[record.id] === "string" ? synopsisById[record.id] : record.s
+    }));
+    richCatalog = indexCatalog(richRecords, catalogMeta || {});
+    if (announce) setState(epoch, "READY_RICH", { meta: richCatalog.meta });
+  } else if (announce) {
+    richCatalog = null;
+    setState(epoch, "READY_BASIC", { meta: catalog.meta });
+  }
+  return catalog;
+}
+
 function requireCatalog() {
   if (!catalog) throw fault("NOT_READY", "Catalog is still loading.", true, "catalog");
   return richCatalog || catalog;
@@ -126,9 +167,17 @@ async function loadCatalog(epoch) {
     if (!data || !Array.isArray(data.records) || !data.records.every(validRecord)) {
       throw fault("CATALOG_INVALID", "Catalog data is invalid.", false, "catalog");
     }
-    const records = data.records;
-    catalog = { meta: data.meta || {}, records, index: buildIndex(records), byId: new Map(records.map((r) => [r.id, r])) };
-    setState(epoch, "READY_BASIC", { meta: catalog.meta });
+    let freeDoc = null;
+    try {
+      const freeRes = await fetch("../assets/free-sources.json", { cache: "default" });
+      if (freeRes.ok) freeDoc = await freeRes.json();
+    } catch {
+      freeDoc = null;
+    }
+    paidRecords = data.records;
+    catalogMeta = data.meta || {};
+    freeDocument = freeDoc;
+    publishCatalog(epoch, true);
     void loadSidecar(epoch);
     return catalog;
   })();
@@ -140,7 +189,7 @@ async function loadCatalog(epoch) {
 }
 
 async function loadSidecar(epoch) {
-  if (richCatalog || richLoading || !catalog) return richCatalog;
+  if (synopsisById || richLoading || !catalog) return richCatalog;
   richLoading = (async () => {
     const textFile = String(catalog.meta.text_file || "catalog.text.json");
     let response;
@@ -157,12 +206,8 @@ async function loadSidecar(epoch) {
       return null;
     }
     if (!data || !data.s || typeof data.s !== "object") return null;
-    const records = catalog.records.map((record) => ({
-      ...record,
-      s: typeof data.s[record.id] === "string" ? data.s[record.id] : record.s
-    }));
-    richCatalog = { ...catalog, records, index: buildIndex(records), byId: new Map(records.map((r) => [r.id, r])) };
-    setState(epoch, "READY_RICH", { meta: richCatalog.meta });
+    synopsisById = data.s;
+    publishCatalog(epoch, true);
     return richCatalog;
   })();
   try {
@@ -224,15 +269,15 @@ function describe(payload) {
   const { scope, indices } = scopedRecords(source, payload);
   const manifest = {
     fields: {
-      id: "Catalog id used only after it is observed in this tool result.",
+      id: "Catalog id used only after it is observed in this tool result. Ids starting with free: are free podcasts, films, and audiobooks.",
       t: "Display title.",
       y: "Release year or null.",
-      k: "movie or series.",
+      k: "movie, series, podcast, or audiobook.",
       rt: "Runtime in minutes or null.",
       s: "Synopsis, which may be empty while the rich index is loading.",
       im: "IMDb id or null.",
       r: "TMDB rating or null.",
-      p: "Subscribed provider slugs only.",
+      p: "Subscribed provider slugs, plus free-source slugs that start with free_.",
       l: "ISO-639-1 original language or null.",
       g: "Genre names.",
       v: "TMDB vote count."
@@ -368,8 +413,14 @@ async function executeTool(payload, key) {
 
 async function dispatch(op, payload, epoch, id) {
   if (op === "initialize") {
+    if (payload.region) setViewerRegion(payload.region);
     await loadCatalog(epoch);
     return { state: richCatalog ? "READY_RICH" : "READY_BASIC" };
+  }
+  if (op === "setRegion") {
+    setViewerRegion(payload.region);
+    if (paidRecords) publishCatalog(epoch, false);
+    return { region: viewerRegion };
   }
   if (op === "describe") return describe(payload);
   if (op === "keywordSearch") return keywordSearch(payload);

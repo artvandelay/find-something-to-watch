@@ -14,10 +14,14 @@ function archiveError(message, cause = null) {
 }
 
 function asBytes(value) {
-  if (value instanceof Uint8Array) return value;
-  if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  if (ArrayBuffer.isView(value)) {
-    return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (!value || typeof value === "string") throw archiveError("The ZIP upload must be binary data.");
+  try {
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    if (value instanceof ArrayBuffer || Object.prototype.toString.call(value) === "[object ArrayBuffer]") {
+      return new Uint8Array(value);
+    }
+  } catch (cause) {
+    throw archiveError("The ZIP upload must be binary data.", cause);
   }
   throw archiveError("The ZIP upload must be binary data.");
 }
@@ -76,11 +80,10 @@ function validateName(name) {
   ) {
     throw archiveError("The ZIP archive contains an unsafe entry name.");
   }
+  if (name.endsWith("/")) return null;
   const format = extension(name);
-  if (format !== "csv" && format !== "json") {
-    throw archiveError("ZIP archives may contain only CSV or JSON history files.");
-  }
-  return format;
+  if (format !== "csv" && format !== "json" && format !== "html" && format !== "htm") return null;
+  return format === "htm" ? "html" : format;
 }
 
 function assertText(bytes, name) {
@@ -156,6 +159,10 @@ function inspectEntries(bytes, limits, signal) {
 
     const name = decodeName(bytes.subarray(offset + 46, offset + 46 + nameLength));
     const format = validateName(name);
+    if (!format) {
+      offset = next;
+      continue;
+    }
     if (seenNames.has(name)) throw archiveError("The ZIP archive contains duplicate entry names.");
     seenNames.add(name);
     extractedBytes += uncompressedBytes;

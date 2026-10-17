@@ -1,4 +1,7 @@
 import { extractHistoryArchive } from "./archive.js";
+import { generateHistoryExtractorSource } from "./history-codegen.js";
+import { HistoryExtractError, readCsv, readHtml } from "./history-extract.js";
+import { createHistoryRuntime } from "./history-runtime.js";
 
 const SEASON_RE =
   /^(.+?): (?:Season \d+|Part \d+|Limited Series|Chapter \d+|Book \d+|Volume \d+|Series \d+|Collection \d+): (.+)$/;
@@ -68,78 +71,25 @@ function textFromBytes(value, name) {
 }
 
 function asBytes(value) {
-  if (value instanceof Uint8Array) return value;
-  if (value instanceof ArrayBuffer) return new Uint8Array(value);
-  if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+  if (!value || typeof value === "string") return null;
+  try {
+    if (ArrayBuffer.isView(value)) return new Uint8Array(value.buffer, value.byteOffset, value.byteLength);
+    if (value instanceof ArrayBuffer || Object.prototype.toString.call(value) === "[object ArrayBuffer]") {
+      return new Uint8Array(value);
+    }
+  } catch {
+    return null;
+  }
   return null;
 }
 
 function parseCsv(text, limits) {
-  let source = String(text || "");
-  if (source.charCodeAt(0) === 0xfeff) source = source.slice(1);
-  const rows = [];
-  let row = [];
-  let field = "";
-  let quoted = false;
-  let closedQuote = false;
-
-  function finishField() {
-    if (field.length > limits.fieldCharacters) {
-      throw fail("limit", `CSV fields may contain at most ${limits.fieldCharacters} characters.`);
-    }
-    if (row.length >= limits.fields) {
-      throw fail("limit", `CSV rows may contain at most ${limits.fields} fields.`);
-    }
-    row.push(field);
-    field = "";
-    closedQuote = false;
+  try {
+    return readCsv(text, limits);
+  } catch (cause) {
+    if (cause instanceof HistoryExtractError) throw fail(cause.code, cause.message, cause);
+    throw cause;
   }
-
-  function finishRow() {
-    finishField();
-    if (row.length !== 1 || row[0] !== "") {
-      if (rows.length >= limits.records + 1) {
-        throw fail("limit", `History files may contain at most ${limits.records} records.`);
-      }
-      rows.push(row);
-    }
-    row = [];
-  }
-
-  for (let index = 0; index < source.length; index += 1) {
-    const char = source[index];
-    if (quoted) {
-      if (char === "\"") {
-        if (source[index + 1] === "\"") {
-          field += "\"";
-          index += 1;
-        } else {
-          quoted = false;
-          closedQuote = true;
-        }
-      } else {
-        field += char;
-      }
-      continue;
-    }
-    if (closedQuote && char !== "," && char !== "\r" && char !== "\n") {
-      throw fail("input", "CSV contains text after a closing quoted field.");
-    }
-    if (char === "\"") {
-      if (field) throw fail("input", "CSV quotes must begin at the start of a field.");
-      quoted = true;
-    } else if (char === ",") {
-      finishField();
-    } else if (char === "\r" || char === "\n") {
-      if (char === "\r" && source[index + 1] === "\n") index += 1;
-      finishRow();
-    } else {
-      field += char;
-    }
-  }
-  if (quoted) throw fail("input", "CSV contains an unterminated quoted field.");
-  if (field || row.length) finishRow();
-  return rows;
 }
 
 function validateJsonValue(value, limits, depth = 0) {
@@ -216,12 +166,41 @@ function observedPaths(records, limits) {
   return Array.from(paths).sort().map((path) => path.split("."));
 }
 
+function inspectHtml(name, text, limits) {
+  const blocks = readHtml(text, limits);
+  const classes = [];
+  const seen = new Set();
+  for (const block of blocks) {
+    for (const className of block.classes) {
+      if (seen.has(className)) continue;
+      seen.add(className);
+      classes.push(className);
+      if (classes.length >= limits.fields) break;
+    }
+  }
+  return {
+    name,
+    format: "html",
+    text,
+    structure: { characters: text.length, classes },
+    sample: blocks.slice(0, 8).map((block) => ({
+      classes: block.classes.slice(0, 8),
+      text: block.text.slice(0, 500),
+      links: block.links.slice(0, 4).map((link) => ({
+        href: link.href.slice(0, 500),
+        text: link.text.slice(0, 500)
+      }))
+    }))
+  };
+}
+
 function inspectCsv(name, text, limits) {
   const rows = parseCsv(text, limits);
   const maxColumns = rows.reduce((maximum, row) => Math.max(maximum, row.length), 0);
   return {
     name,
     format: "csv",
+    text,
     rows,
     structure: {
       rows: rows.length,
@@ -250,6 +229,7 @@ function inspectJson(name, text, limits) {
   return {
     name,
     format: "json",
+    text,
     value,
     recordsPaths,
     recordSets,
@@ -288,7 +268,10 @@ function normalizeFileInput(input, limits, signal) {
       }
       const first = textFromBytes(bytes, "watch-history");
       const trimmed = first.trimStart();
-      files.push({ name: trimmed.startsWith("{") || trimmed.startsWith("[") ? "watch-history.json" : "watch-history.csv", text: first });
+      const name = trimmed.startsWith("{") || trimmed.startsWith("[")
+        ? "watch-history.json"
+        : trimmed.startsWith("<") ? "watch-history.html" : "watch-history.csv";
+      files.push({ name, text: first });
       continue;
     }
     if (!value || typeof value !== "object" || !validName(value.name)) {
@@ -319,8 +302,9 @@ export function inspectWatchHistoryFiles(input, { limits = HISTORY_IMPORT_LIMITS
   let textBytes = 0;
   const inspected = rawFiles.map(({ name, text }) => {
     checkAbort(signal);
-    if (!validName(name) || (extension(name) !== "csv" && extension(name) !== "json")) {
-      throw fail("input", "History imports accept only CSV, JSON, or ZIP files.");
+    const ext = extension(name);
+    if (!validName(name) || (ext !== "csv" && ext !== "json" && ext !== "html" && ext !== "htm")) {
+      throw fail("input", "History imports accept only CSV, JSON, HTML, or ZIP files.");
     }
     const bytes = TEXT_ENCODER.encode(text);
     if (bytes.byteLength > limits.candidateFileBytes) {
@@ -332,7 +316,8 @@ export function inspectWatchHistoryFiles(input, { limits = HISTORY_IMPORT_LIMITS
     if (textBytes > limits.extractedTextBytes) {
       throw fail("limit", "The upload exceeds the total extracted-text limit.");
     }
-    return extension(name) === "csv" ? inspectCsv(name, text, limits) : inspectJson(name, text, limits);
+    if (ext === "html" || ext === "htm") return inspectHtml(name, text, limits);
+    return ext === "csv" ? inspectCsv(name, text, limits) : inspectJson(name, text, limits);
   });
   return inspected;
 }
@@ -365,9 +350,11 @@ export function buildHistoryInferenceInput(files, { limits = HISTORY_IMPORT_LIMI
   return input;
 }
 
-function ownKeysOnly(value, keys) {
-  return value && typeof value === "object" && !Array.isArray(value) &&
-    Object.keys(value).every((key) => keys.includes(key)) && keys.every((key) => key in value);
+function ownKeysOnly(value, keys, optional = []) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) return false;
+  const allowed = new Set(keys.concat(optional));
+  const present = Object.keys(value);
+  return present.every((key) => allowed.has(key)) && keys.every((key) => key in value);
 }
 
 function validPath(path, optional = false) {
@@ -410,6 +397,9 @@ const JSON_KEYS = [
   "name", "format", "recordsPath", "titlePath", "datePath", "typePath",
   "seriesPath", "episodePath", "dateFormat", "typeMap"
 ];
+const HTML_KEYS = [
+  "name", "format", "itemClass", "titleLink", "requireHref", "skipIncludes", "dateFormat", "typeMap"
+];
 
 export function validateHistoryPlan(value, files, { limits = HISTORY_IMPORT_LIMITS } = {}) {
   if (!value || value.schema !== 1 || !Array.isArray(value.files) || value.files.length === 0 ||
@@ -429,7 +419,7 @@ export function validateHistoryPlan(value, files, { limits = HISTORY_IMPORT_LIMI
       throw fail("plan", "The history import plan has invalid date or type mappings.");
     }
     if (file.format === "csv") {
-      if (!ownKeysOnly(item, CSV_KEYS)) throw fail("plan", "The CSV plan contains unsupported fields.");
+      if (!ownKeysOnly(item, CSV_KEYS, ["titlePrefix"])) throw fail("plan", "The CSV plan contains unsupported fields.");
       for (const key of ["headerRow", "dataStartRow", "titleColumn"]) {
         if (!Number.isInteger(item[key]) || item[key] < 0) throw fail("plan", "The CSV plan contains invalid indices.");
       }
@@ -444,8 +434,28 @@ export function validateHistoryPlan(value, files, { limits = HISTORY_IMPORT_LIMI
           .some((index) => index !== null && index > maximumColumn)) {
         throw fail("plan", "The CSV plan references data outside the inspected file.");
       }
+      assertTitlePrefix(item, file.sample.map((row) => row[item.titleColumn]));
+    } else if (file.format === "html") {
+      if (!ownKeysOnly(item, HTML_KEYS)) throw fail("plan", "The HTML plan contains unsupported fields.");
+      if (typeof item.itemClass !== "string" || !item.itemClass || item.itemClass.length > limits.fieldCharacters ||
+        !file.structure.classes.includes(item.itemClass)) {
+        throw fail("plan", "The HTML plan references an unobserved class.");
+      }
+      if (!Number.isInteger(item.titleLink) || item.titleLink < 0 || item.titleLink > 7) {
+        throw fail("plan", "The HTML plan has an invalid link index.");
+      }
+      if (typeof item.requireHref !== "boolean" || !Array.isArray(item.skipIncludes) ||
+        item.skipIncludes.length > limits.fields) {
+        throw fail("plan", "The HTML plan has invalid skip text.");
+      }
+      const sampleText = file.sample.map((block) => block.text).join("\n");
+      for (const skip of item.skipIncludes) {
+        if (typeof skip !== "string" || !skip || skip.length > limits.fieldCharacters || !sampleText.includes(skip)) {
+          throw fail("plan", "The HTML plan references skip text that was not in the sample.");
+        }
+      }
     } else {
-      if (!ownKeysOnly(item, JSON_KEYS) || !validPath(item.recordsPath) || !validPath(item.titlePath)) {
+      if (!ownKeysOnly(item, JSON_KEYS, ["titlePrefix"]) || !validPath(item.recordsPath) || !validPath(item.titlePath)) {
         throw fail("plan", "The JSON plan contains invalid paths.");
       }
       for (const key of ["datePath", "typePath", "seriesPath", "episodePath"]) {
@@ -458,10 +468,27 @@ export function validateHistoryPlan(value, files, { limits = HISTORY_IMPORT_LIMI
           throw fail("plan", "The JSON plan references an unobserved field path.");
         }
       }
+      assertTitlePrefix(item, file.sample.map((record) => readPath(record, item.titlePath)));
     }
-    plan.files.push({ ...item, typeMap: { movie: item.typeMap.movie.slice(), series: item.typeMap.series.slice() } });
+    const copy = {
+      ...item,
+      typeMap: { movie: item.typeMap.movie.slice(), series: item.typeMap.series.slice() }
+    };
+    if (file.format === "html") copy.skipIncludes = item.skipIncludes.slice();
+    else copy.titlePrefix = item.titlePrefix || null;
+    plan.files.push(copy);
   }
   return plan;
+}
+
+function assertTitlePrefix(item, values) {
+  if (item.titlePrefix == null) return;
+  if (typeof item.titlePrefix !== "string" || item.titlePrefix.length < 1 || item.titlePrefix.length > 40) {
+    throw fail("plan", "The history import plan has an invalid title prefix.");
+  }
+  if (!values.some((value) => String(value || "").startsWith(item.titlePrefix))) {
+    throw fail("plan", "The history import plan title prefix was not in the sample.");
+  }
 }
 
 function realDate(year, month, day) {
@@ -566,7 +593,10 @@ export function applyHistoryPlan(value, files, {
       });
     }
   }
+  return assembleHistory(entries, sources, now, limits);
+}
 
+function assembleHistory(entries, sources, now, limits) {
   const prefixes = new Map();
   for (const entry of entries) {
     if (entry.kind !== null || entry.series || SEASON_RE.test(entry.title)) continue;
@@ -619,19 +649,218 @@ export function applyHistoryPlan(value, files, {
   return normalized;
 }
 
+function isYouTubeJson(value) {
+  return Array.isArray(value) && value.some((row) =>
+    row && typeof row === "object" && !Array.isArray(row) &&
+    (row.header === "YouTube" || row.header === "YouTube Music") &&
+    typeof row.title === "string" && row.title.startsWith("Watched ")
+  );
+}
+
+function isYouTubeHtml(text) {
+  return typeof text === "string" && /Watched\s*<a\s[^>]*href\s*=/i.test(text);
+}
+
+function youtubeRowFromJson(row) {
+  const titleRaw = typeof row?.title === "string" ? row.title : "";
+  if (!titleRaw.startsWith("Watched ")) return null;
+  const header = row.header;
+  if (header !== "YouTube" && header !== "YouTube Music") return null;
+  const details = Array.isArray(row.details) ? row.details : [];
+  if (details.some((item) => item && item.name === "From Google Ads")) return null;
+  if (/video that has been removed/i.test(titleRaw)) return null;
+  if (typeof row.titleUrl !== "string" || !row.titleUrl.trim()) return null;
+  const title = titleRaw.slice("Watched ".length).trim();
+  if (!title) return null;
+  const channel = Array.isArray(row.subtitles) && row.subtitles[0] && typeof row.subtitles[0].name === "string"
+    ? row.subtitles[0].name.trim()
+    : "";
+  return { title, date: typeof row.time === "string" ? row.time : null, channel };
+}
+
+function youtubeRowsFromHtml(text) {
+  const Parser = globalThis.DOMParser;
+  if (typeof Parser !== "function") throw fail("input", "This browser cannot read a YouTube HTML export.");
+  const doc = new Parser().parseFromString(String(text || ""), "text/html");
+  const cells = [...doc.querySelectorAll(".content-cell")];
+  const nodes = cells.length ? cells : [...doc.body.querySelectorAll("div, li, p")];
+  const rows = [];
+  for (const cell of nodes) {
+    if (cell.querySelector && cell.querySelector(".content-cell")) continue;
+    const html = cell.innerHTML || "";
+    const textContent = cell.textContent || "";
+    if (!/Watched\s*<a\s/i.test(html) && !/^\s*Watched\b/.test(textContent)) continue;
+    if (/From Google Ads/i.test(textContent)) continue;
+    if (/video that has been removed/i.test(textContent)) continue;
+    const link = cell.querySelector("a[href]");
+    const href = link ? (link.getAttribute("href") || "") : "";
+    if (!href.trim()) continue;
+    const title = String(link.textContent || "").replace(/\s+/g, " ").trim();
+    if (!title || /video that has been removed/i.test(title)) continue;
+    const anchors = [...cell.querySelectorAll("a")];
+    const channel = anchors.length > 1 ? String(anchors[1].textContent || "").replace(/\s+/g, " ").trim() : "";
+    rows.push({ title, date: null, channel });
+  }
+  return rows;
+}
+
+function finishNormalized(value, limits) {
+  if (TEXT_ENCODER.encode(JSON.stringify(value)).byteLength > limits.normalizedHistoryBytes) {
+    throw fail("limit", "The normalized history exceeds the 1 MiB storage limit.");
+  }
+  return value;
+}
+
+function historyFromYouTubeRows(file, rows, now, limits) {
+  const other = new Map();
+  const seen = new Set();
+  for (const row of rows) {
+    const key = normalizeTitle(row.title);
+    if (key) seen.add(key);
+    const current = other.get(row.title) || { title: row.title, lastWatched: null, channel: row.channel || "" };
+    if (row.date && (!current.lastWatched || row.date > current.lastWatched)) current.lastWatched = row.date;
+    if (row.channel) current.channel = row.channel;
+    other.set(row.title, current);
+  }
+  return finishNormalized({
+    schema: 2,
+    importedAt: importedAt(now),
+    sources: [{ name: file.name, kind: "youtube", format: file.format, records: rows.length }],
+    series: [],
+    movies: [],
+    other: Array.from(other.values()).sort((left, right) => sortTitles(left, right, "title")),
+    seen: Array.from(seen).sort()
+  }, limits);
+}
+
+function netflixFilePlan(file) {
+  const header = file.rows?.[0] || [];
+  const titleColumn = header.findIndex((value) => String(value).trim().toLowerCase() === "title");
+  const dateColumn = header.findIndex((value) => String(value).trim().toLowerCase() === "date");
+  if (titleColumn === -1 || dateColumn === -1) return null;
+  return {
+    name: file.name,
+    format: "csv",
+    headerRow: 0,
+    dataStartRow: 1,
+    titleColumn,
+    dateColumn,
+    typeColumn: null,
+    seriesColumn: null,
+    episodeColumn: null,
+    dateFormat: "mdy",
+    typeMap: { movie: [], series: [] }
+  };
+}
+
+function mergeImportedHistories(parts, now, limits) {
+  const seen = new Set();
+  const sources = [];
+  const series = [];
+  const movies = [];
+  const other = [];
+  for (const part of parts) {
+    for (const key of part.seen || []) seen.add(key);
+    sources.push(...(part.sources || []));
+    series.push(...(part.series || []));
+    movies.push(...(part.movies || []));
+    other.push(...(part.other || []));
+  }
+  return finishNormalized({
+    schema: 2,
+    importedAt: importedAt(now),
+    sources,
+    series,
+    movies,
+    other,
+    seen: Array.from(seen).sort()
+  }, limits);
+}
+
+export function detectKnownExport(files, { now = () => new Date(), limits = HISTORY_IMPORT_LIMITS } = {}) {
+  const parts = [];
+  for (const file of Array.isArray(files) ? files : []) {
+    if (file?.format === "json" && isYouTubeJson(file.value)) {
+      const rows = file.value.map(youtubeRowFromJson).filter(Boolean);
+      parts.push(historyFromYouTubeRows(file, rows, now, limits));
+      continue;
+    }
+    if (file?.format === "html" && isYouTubeHtml(file.text)) {
+      parts.push(historyFromYouTubeRows(file, youtubeRowsFromHtml(file.text), now, limits));
+      continue;
+    }
+    if (file?.format === "csv") {
+      const plan = netflixFilePlan(file);
+      if (!plan) continue;
+      const parsed = applyHistoryPlan(
+        { schema: 1, files: [plan] },
+        [file],
+        { limits, now, dateParser: netflixDate }
+      );
+      parsed.sources = parsed.sources.map((source) => ({ ...source, kind: "netflix" }));
+      parts.push(parsed);
+    }
+  }
+  if (parts.length === 0) return null;
+  if (parts.length === 1) return parts[0];
+  return mergeImportedHistories(parts, now, limits);
+}
+
+async function runGeneratedHistoryPlan(plan, files, { limits, now, signal }) {
+  const validated = validateHistoryPlan(plan, files, { limits });
+  const code = generateHistoryExtractorSource(validated);
+  const fileTexts = {};
+  for (const item of validated.files) fileTexts[item.name] = findFile(files, item.name).text;
+  checkAbort(signal);
+  let extracted;
+  try {
+    extracted = await createHistoryRuntime().run({ code, files: fileTexts, limits, signal });
+  } catch (cause) {
+    if (cause?.name === "AbortError") throw cause;
+    throw fail(cause?.code || "plan", cause?.message || "The generated history reader failed.", cause);
+  }
+  checkAbort(signal);
+  if (!Array.isArray(extracted) || extracted.length === 0) {
+    throw fail("input", "This file has no readable titles.");
+  }
+  const plans = new Map(validated.files.map((item) => [item.name, item]));
+  const counts = new Map();
+  const entries = [];
+  for (const row of extracted) {
+    const item = plans.get(row.file);
+    if (!item) throw fail("plan", "The generated history reader returned an unknown file.");
+    counts.set(item.name, (counts.get(item.name) || 0) + 1);
+    const rawType = row.type == null || row.type === "" ? undefined : row.type;
+    entries.push({
+      title: row.title,
+      date: row.date,
+      kind: rawType === undefined ? null : mappedType(rawType, item.typeMap),
+      series: row.series || null
+    });
+  }
+  const sources = validated.files.map((item) => ({
+    name: item.name,
+    format: item.format,
+    records: counts.get(item.name) || 0
+  }));
+  const history = assembleHistory(entries, sources, now, limits);
+  if (!history.seen.length) throw fail("input", "This file has no readable titles.");
+  return history;
+}
+
 export async function parseWatchHistoryExport(input, {
   inferPlan,
   now = () => new Date(),
   signal = null,
   limits = HISTORY_IMPORT_LIMITS
 } = {}) {
-  if (typeof inferPlan !== "function") throw fail("config", "No history schema inference adapter is configured.");
   const files = inspectWatchHistoryFiles(input, { limits, signal });
+  if (typeof inferPlan !== "function") throw fail("config", "No history schema inference adapter is configured.");
   const inferenceInput = buildHistoryInferenceInput(files, { limits });
   checkAbort(signal);
   const plan = await inferPlan(inferenceInput, { signal });
   checkAbort(signal);
-  return applyHistoryPlan(plan, files, { limits, now });
+  return runGeneratedHistoryPlan(plan, files, { limits, now, signal });
 }
 
 export function parseNetflixCsv(text) {
@@ -640,7 +869,7 @@ export function parseNetflixCsv(text) {
   const titleColumn = header.findIndex((value) => String(value).trim().toLowerCase() === "title");
   const dateColumn = header.findIndex((value) => String(value).trim().toLowerCase() === "date");
   if (titleColumn === -1 || dateColumn === -1) throw new Error("CSV must have Title and Date columns");
-  return applyHistoryPlan({
+  const parsed = applyHistoryPlan({
     schema: 1,
     files: [{
       name: "ViewingActivity.csv",
@@ -656,9 +885,20 @@ export function parseNetflixCsv(text) {
       typeMap: { movie: [], series: [] }
     }]
   }, files, { dateParser: netflixDate });
+  parsed.sources = parsed.sources.map((source) => ({ ...source, kind: "netflix" }));
+  return parsed;
 }
 
 export function summarize(parsed) {
   const other = Array.isArray(parsed?.other) && parsed.other.length ? `, ${parsed.other.length} other` : "";
   return `${parsed.series.length} series, ${parsed.movies.length} movies${other}, ${parsed.seen.length} titles seen`;
+}
+
+export function historyImportReply(filename, parsed) {
+  const series = Array.isArray(parsed?.series) ? parsed.series.length : 0;
+  const movies = Array.isArray(parsed?.movies) ? parsed.movies.length : 0;
+  const other = Array.isArray(parsed?.other) ? parsed.other.length : 0;
+  const seen = Array.isArray(parsed?.seen) ? parsed.seen.length : 0;
+  const noun = seen === 1 ? "title" : "titles";
+  return `Read ${filename}. Marked ${seen.toLocaleString("en-IN")} ${noun} seen. ${series.toLocaleString("en-IN")} series, ${movies.toLocaleString("en-IN")} movies, ${other.toLocaleString("en-IN")} other.`;
 }

@@ -60,46 +60,98 @@ export function createChatView(el, deps) {
     if (activeTurn.stickToBottom) scrollToEnd();
   }
 
-  function renderConversation(messages) {
+  function renderWelcome(welcome) {
+    const section = document.createElement("section");
+    section.className = "chat-welcome";
+    section.setAttribute("aria-label", "Welcome");
+    const headline = document.createElement("p");
+    headline.className = "chat-welcome-headline";
+    headline.textContent = welcome.headline || "";
+    section.appendChild(headline);
+    if (welcome.sub) {
+      const sub = document.createElement("p");
+      sub.className = "chat-welcome-sub";
+      sub.textContent = welcome.sub;
+      section.appendChild(sub);
+    }
+    const memory = document.createElement("p");
+    memory.className = "chat-welcome-memory";
+    if (welcome.memoryLine) {
+      const text = document.createElement("span");
+      text.textContent = welcome.memoryLine;
+      memory.appendChild(text);
+    }
+    const seeAll = document.createElement("button");
+    seeAll.type = "button";
+    seeAll.className = "chat-welcome-memory-link";
+    seeAll.textContent = welcome.memoryLine ? "See all" : "What I remember";
+    seeAll.addEventListener("click", () => deps.onOpenMemory?.());
+    memory.appendChild(seeAll);
+    section.appendChild(memory);
+    const chips = document.createElement("div");
+    chips.className = "chat-chips";
+    chips.setAttribute("role", "group");
+    chips.setAttribute("aria-label", "Suggestions");
+    for (const chip of Array.isArray(welcome.chips) ? welcome.chips : []) {
+      const button = document.createElement("button");
+      button.type = "button";
+      button.className = "chat-chip";
+      button.textContent = chip.label;
+      button.dataset.query = chip.query;
+      button.addEventListener("click", () => {
+        setQuery(chip.query);
+        if (!busy && sendReady) deps.onSubmit();
+        else el.queryInput.focus();
+      });
+      chips.appendChild(button);
+    }
+    section.appendChild(chips);
+    el.chatTranscript.appendChild(section);
+  }
+
+  function renderConversation(messages, view = {}) {
     cancelStreamFrame();
     activeTurn = null;
     el.chatTranscript.textContent = "";
-    if (messages.length === 0) {
-      const empty = document.createElement("p");
-      empty.className = "note chat-empty";
-      empty.textContent = "Ask for something to watch. Your subscriptions and taste shape the picks.";
-      el.chatTranscript.appendChild(empty);
-
-      const examples = document.createElement("div");
-      examples.className = "chat-examples";
-      examples.setAttribute("aria-label", "Example prompts");
-      for (const prompt of [
-        "A smart thriller under two hours",
-        "A funny show for tonight",
-        "Something new to me with no violence"
-      ]) {
-        const button = document.createElement("button");
-        button.type = "button";
-        button.className = "chat-example";
-        button.textContent = prompt;
-        button.addEventListener("click", () => {
-          setQuery(prompt);
-          el.queryInput.focus();
-        });
-        examples.appendChild(button);
+    const list = Array.isArray(messages) ? messages : [];
+    list.forEach((message, index) => {
+      const label = view.dividers?.[index];
+      if (label) {
+        const divider = document.createElement("div");
+        divider.className = "chat-divider";
+        divider.setAttribute("role", "separator");
+        divider.setAttribute("aria-label", label);
+        const span = document.createElement("span");
+        span.textContent = label;
+        divider.appendChild(span);
+        el.chatTranscript.appendChild(divider);
       }
-      el.chatTranscript.appendChild(examples);
-      return;
-    }
-    for (const m of messages) renderMessage(m.role, m.content);
+      renderMessage(message.role, message.content);
+      if (view.picks?.[index]?.length && typeof deps.renderInlinePicks === "function") {
+        const node = deps.renderInlinePicks(view.picks[index]);
+        if (node) el.chatTranscript.appendChild(node);
+      }
+    });
+    if (view.welcome) renderWelcome(view.welcome);
     scrollToEnd();
   }
 
+  function clearWelcome() {
+    el.chatTranscript.querySelector(".chat-welcome")?.remove();
+  }
+
   function appendMessage(role, content) {
-    if (el.chatTranscript.querySelector(".chat-empty")) el.chatTranscript.textContent = "";
+    clearWelcome();
     const message = renderMessage(role, content);
     scrollToEnd();
     return message;
+  }
+
+  function appendPicks(recs) {
+    const node = deps.renderInlinePicks?.(recs);
+    if (!node) return;
+    el.chatTranscript.appendChild(node);
+    scrollToEnd();
   }
 
   function createActivity() {
@@ -178,7 +230,7 @@ export function createChatView(el, deps) {
 
   function startTurn() {
     cancelStreamFrame();
-    if (el.chatTranscript.querySelector(".chat-empty")) el.chatTranscript.textContent = "";
+    clearWelcome();
     activeTurn = createActivity();
     el.chatTranscript.appendChild(activeTurn.wrap);
     setTurnStatus("Seeing what you can watch");
@@ -299,6 +351,15 @@ export function createChatView(el, deps) {
     el.chatNote.hidden = value === "";
   }
 
+  function localCommandReady() {
+    return !busy && typeof deps.isLocalCommand === "function" && deps.isLocalCommand(getQuery());
+  }
+
+  function syncSend() {
+    const local = localCommandReady();
+    el.sendBtn.disabled = busy || ((!keyAvailable || !sendReady) && !local);
+  }
+
   function setBusy(nextBusy) {
     const restoreFocus = !nextBusy && document.activeElement === el.stopBtn;
     busy = nextBusy;
@@ -306,7 +367,8 @@ export function createChatView(el, deps) {
     // Keep the composer editable during a turn so the next draft can be written
     // while this one runs; only submission is disabled until the turn ends.
     el.queryInput.disabled = false;
-    el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
+    el.chatFile.disabled = busy;
+    syncSend();
     el.stopBtn.hidden = !busy;
     el.sendBtn.hidden = busy;
     el.queryForm.classList.toggle("is-turn-active", busy);
@@ -315,14 +377,14 @@ export function createChatView(el, deps) {
 
   function setSendReady(ready) {
     sendReady = Boolean(ready);
-    el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
+    syncSend();
   }
 
   function setKeyAvailable(available) {
     keyAvailable = Boolean(available);
     el.chatKeyError.hidden = keyAvailable;
     el.queryForm.setAttribute("aria-disabled", keyAvailable ? "false" : "true");
-    el.sendBtn.disabled = busy || !keyAvailable || !sendReady;
+    syncSend();
   }
 
   function getQuery() {
@@ -342,21 +404,50 @@ export function createChatView(el, deps) {
     setQuery(value);
   }
 
+  function acceptFile(file) {
+    if (!file || typeof deps.onFile !== "function") return;
+    deps.onFile(file);
+  }
+
   el.queryForm.addEventListener("submit", (event) => {
     event.preventDefault();
     if (busy || el.sendBtn.disabled) return;
     deps.onSubmit();
   });
+  el.queryInput.addEventListener("input", () => syncSend());
   el.queryInput.addEventListener("keydown", (event) => {
     if (event.key !== "Enter" || event.shiftKey || event.isComposing) return;
     event.preventDefault();
     if (!busy && !el.sendBtn.disabled) el.queryForm.requestSubmit();
+  });
+  el.chatFile.addEventListener("change", () => {
+    const file = el.chatFile.files && el.chatFile.files[0];
+    el.chatFile.value = "";
+    acceptFile(file);
+  });
+  el.queryForm.addEventListener("dragover", (event) => {
+    const types = event.dataTransfer && event.dataTransfer.types;
+    if (!types || ![...types].includes("Files")) return;
+    event.preventDefault();
+    el.queryForm.classList.add("is-drop-target");
+  });
+  el.queryForm.addEventListener("dragleave", (event) => {
+    if (event.currentTarget.contains(event.relatedTarget)) return;
+    el.queryForm.classList.remove("is-drop-target");
+  });
+  el.queryForm.addEventListener("drop", (event) => {
+    const types = event.dataTransfer && event.dataTransfer.types;
+    if (!types || ![...types].includes("Files")) return;
+    event.preventDefault();
+    el.queryForm.classList.remove("is-drop-target");
+    acceptFile(event.dataTransfer.files && event.dataTransfer.files[0]);
   });
   el.stopBtn.addEventListener("click", () => deps.onStop());
 
   return {
     renderConversation,
     appendMessage,
+    appendPicks,
     startTurn,
     setTurnStatus,
     setTurnElapsed,

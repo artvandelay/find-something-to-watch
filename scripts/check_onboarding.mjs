@@ -9,7 +9,6 @@ class FakeElement {
     this.hidden = false;
     this.disabled = false;
     this.value = "";
-    this.files = [];
     this.checked = false;
     this.focused = false;
     this._textContent = "";
@@ -76,22 +75,20 @@ function flush() {
   return Promise.resolve().then(() => Promise.resolve());
 }
 
-function createFixture({ importHistoryFile = async () => ({ schema: 2 }) } = {}) {
+function createFixture() {
   const form = new FakeElement("form");
-  form.steps = [new FakeElement("fieldset"), new FakeElement("fieldset"), new FakeElement("fieldset")];
+  form.steps = [new FakeElement("fieldset"), new FakeElement("fieldset")];
   const el = {
     onboardingScreen: new FakeElement(),
     onboardingForm: form,
     onboardingProgress: new FakeElement(),
     onboardingProviderList: new FakeElement(),
     onboardingLlmApiKey: new FakeElement("input"),
-    onboardingHistoryFile: new FakeElement("input"),
-    onboardingHistorySummary: new FakeElement(),
-    onboardingHistoryStatus: new FakeElement(),
-    onboardingHistoryRemove: new FakeElement("button"),
+    onboardingRegionSelect: new FakeElement("select"),
     onboardingBack: new FakeElement("button"),
     onboardingNext: new FakeElement("button")
   };
+  el.onboardingRegionSelect.value = "IN";
   const errors = [];
   const savedLlm = [];
   const completed = [];
@@ -108,7 +105,6 @@ function createFixture({ importHistoryFile = async () => ({ schema: 2 }) } = {})
       baseUrl: "https://openrouter.ai/api/v1",
       model: "openai/gpt-4o-mini"
     },
-    importHistoryFile,
     onComplete: async (payload) => {
       completed.push(payload);
     },
@@ -126,101 +122,34 @@ function submit(el) {
   el.onboardingForm.emit("submit");
 }
 
-function advanceToHistory(fixture) {
-  fixture.view.show();
-  selectNetflix(fixture.el);
-  submit(fixture.el);
-  fixture.el.onboardingLlmApiKey.value = "key-123";
-  submit(fixture.el);
-}
-
 {
   const fixture = createFixture();
   fixture.view.show();
   submit(fixture.el);
   assert.equal(fixture.errors.at(-1), "Select at least one subscription to continue.");
-  assert.equal(fixture.el.onboardingProgress.textContent, "Step 1 of 3");
+  assert.equal(fixture.el.onboardingProgress.textContent, "Step 1 of 2");
+  assert.equal(fixture.el.onboardingNext.textContent, "Continue");
 
   selectNetflix(fixture.el);
   submit(fixture.el);
-  assert.equal(fixture.el.onboardingProgress.textContent, "Step 2 of 3");
+  assert.equal(fixture.el.onboardingProgress.textContent, "Step 2 of 2");
+  assert.equal(fixture.el.onboardingNext.textContent, "Finish");
   submit(fixture.el);
   assert.equal(fixture.errors.at(-1), "Enter your OpenRouter API key to continue.");
   assert.equal(fixture.el.onboardingLlmApiKey.focused, true);
 
   fixture.el.onboardingLlmApiKey.value = "key-123";
+  fixture.el.onboardingRegionSelect.value = "US";
   submit(fixture.el);
+  await flush();
   assert.deepEqual(fixture.savedLlm, [{
     baseUrl: "https://openrouter.ai/api/v1",
     apiKey: "key-123",
     model: "openai/gpt-4o-mini"
   }]);
-  assert.equal(fixture.el.onboardingProgress.textContent, "Step 3 of 3");
-  assert.equal(fixture.el.onboardingNext.textContent, "Continue without history");
-}
-
-{
-  let pendingSignal;
-  const fixture = createFixture({
-    importHistoryFile: (_file, { signal, onStatus }) => {
-      pendingSignal = signal;
-      onStatus("Inspecting export…");
-      return new Promise((resolve, reject) => {
-        signal.addEventListener("abort", () => reject(new Error("aborted")));
-      });
-    }
-  });
-  advanceToHistory(fixture);
-  fixture.el.onboardingHistoryFile.files = [{ name: "history.csv" }];
-  fixture.el.onboardingHistoryFile.emit("change");
-  assert.equal(fixture.el.onboardingNext.disabled, true);
-  assert.equal(fixture.el.onboardingBack.disabled, true);
-  assert.equal(fixture.el.onboardingHistoryStatus.textContent, "Inspecting export…");
-  fixture.view.hide();
-  assert.equal(pendingSignal.aborted, true);
-  await flush();
-}
-
-{
-  const fixture = createFixture({
-    importHistoryFile: async () => {
-      throw new Error("Unsupported export");
-    }
-  });
-  advanceToHistory(fixture);
-  fixture.el.onboardingHistoryFile.files = [{ name: "history.zip" }];
-  fixture.el.onboardingHistoryFile.emit("change");
-  await flush();
-  assert.equal(fixture.el.onboardingHistoryStatus.textContent, "Unsupported export");
-  assert.equal(fixture.el.onboardingHistoryRemove.hidden, false);
-  assert.equal(fixture.el.onboardingNext.textContent, "Continue without history");
-  fixture.el.onboardingHistoryRemove.emit("click");
-  assert.equal(fixture.el.onboardingHistoryFile.value, "");
-  assert.equal(fixture.el.onboardingHistoryStatus.textContent, "");
-  submit(fixture.el);
-  await flush();
-  assert.deepEqual(fixture.completed, [{ providers: ["netflix"], history: null }]);
-}
-
-{
-  const history = { schema: 2, movies: [{ name: "Film" }] };
-  const fixture = createFixture({
-    importHistoryFile: async (_file, { onStatus }) => {
-      onStatus("Reading sample…");
-      return history;
-    }
-  });
-  advanceToHistory(fixture);
-  fixture.el.onboardingHistoryFile.files = [{ name: "history.json" }];
-  fixture.el.onboardingHistoryFile.emit("change");
-  await flush();
-  assert.equal(fixture.el.onboardingHistorySummary.textContent, "Watch history imported.");
-  assert.equal(fixture.el.onboardingNext.textContent, "Finish");
-  submit(fixture.el);
-  await flush();
-  assert.deepEqual(fixture.completed, [{ providers: ["netflix"], history }]);
-  assert.deepEqual(Object.keys(fixture.completed[0]).sort(), ["history", "providers"]);
-  assert.equal("onboardingYoumdInput" in fixture.el, false);
+  assert.deepEqual(fixture.completed, [{ providers: ["netflix"], region: "US" }]);
+  assert.equal("history" in (fixture.completed[0] || {}), false);
+  assert.equal("onboardingHistoryFile" in fixture.el, false);
 }
 
 console.log("check_onboarding: OK");

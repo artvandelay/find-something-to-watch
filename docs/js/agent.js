@@ -4,7 +4,7 @@
 import { streamChatCompletion } from "./llm-client.js";
 import { isOpenRouterBaseUrl } from "./openrouter-models.js";
 import { sanitizeRecommendationQueue } from "./recommendations.js";
-import { validatePreferenceCandidates } from "./preferences.js";
+import { validatePreferenceCandidates, validateWatchedCandidates } from "./preferences.js";
 
 const TURN_CLASS_BUDGETS = Object.freeze({
   direct: { maxSteps: 0, maxMs: 90000 },
@@ -471,10 +471,11 @@ function parseDecision(text) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw Object.assign(new Error("The model did not return a decision object."), { code: "parse" });
   }
-  const allowed = new Set(["queue", "memoryCandidates"]);
+  const allowed = new Set(["queue", "memoryCandidates", "watched"]);
   if (Object.keys(value).some((key) => !allowed.has(key)) ||
     ("queue" in value && !Array.isArray(value.queue)) ||
-    ("memoryCandidates" in value && !Array.isArray(value.memoryCandidates))) {
+    ("memoryCandidates" in value && !Array.isArray(value.memoryCandidates)) ||
+    ("watched" in value && !Array.isArray(value.watched))) {
     throw Object.assign(new Error("The model returned an invalid decision shape."), { code: "parse" });
   }
   return value;
@@ -561,6 +562,7 @@ export async function runAgent(opts) {
     reply: "",
     queue: null,
     memoryCandidates: [],
+    watched: [],
     usage,
     billing: billing(),
     timing: timing(),
@@ -616,18 +618,22 @@ export async function runAgent(opts) {
 
     let queue = null;
     let memoryCandidates = [];
+    let watched = [];
     let messages = baseMessages.slice();
+    const livePart = (value, max) => (typeof value === "string" && value.trim() !== "" ? value.trim().slice(0, max) : "");
+    const live = [livePart(context?.temporal, 600), livePart(context?.recap, 1800)].filter(Boolean).join("\n\n");
+    const withLive = (text) => (live ? live + "\n\n" + text : text);
 
     if (turnClass === "direct") {
       status("Thinking about that one", "Thinking about that one", 1);
       messages.push({
         role: "user",
-        content: buildDirectPrompt(prompts, query, webSearchEnabled)
+        content: withLive(buildDirectPrompt(prompts, query, webSearchEnabled))
       });
     } else {
       messages.push({
         role: "user",
-        content: buildPlannerPrompt(prompts, query, webSearchEnabled)
+        content: withLive(buildPlannerPrompt(prompts, query, webSearchEnabled))
       });
       status("Seeing what you can watch", "Seeing what you can watch", 1);
 
@@ -730,6 +736,7 @@ export async function runAgent(opts) {
         }
       }
       memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
+      watched = validateWatchedCandidates(decision.watched, String(query || ""));
 
       status("Choosing a few to watch", "Choosing a few to watch", maxSteps + 1);
       messages.push({ role: "user", content: buildRerankPrompt(prompts, webSearchEnabled) });
@@ -771,6 +778,7 @@ export async function runAgent(opts) {
       reply,
       queue,
       memoryCandidates,
+      watched,
       usage,
       billing: billing(),
       timing: timing(),
@@ -783,6 +791,7 @@ export async function runAgent(opts) {
       reply,
       queue,
       memoryCandidates,
+      watched,
       usage,
       billing: result.billing,
       timing: result.timing,

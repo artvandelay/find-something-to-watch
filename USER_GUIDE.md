@@ -12,9 +12,9 @@ Open the live site: https://artvandelay.github.io/find-something-to-watch/
 Stored in this browser. Relevant context is sent to the model endpoint you configure. There is no account
 or sign-up. Your subscriptions, LLM key, You.md, watch history, conversations, ranked decisions, learned
 preferences, and playlists stay in this browser (the key in `localStorage`, everything else in IndexedDB).
-For a watch-history import, bounded filenames, structural metadata, and deterministic samples are sent to
-the configured model endpoint to infer the file layout. The complete export remains in the browser; there
-is no server, account, or cloud sync.
+A watch-history file is attached in the chat. A bounded sample of its filename, headers, and a few
+rows is sent to the model, which returns a layout. The app generates a reader from that layout and
+runs it locally. The complete export remains in the browser; there is no server, account, or cloud sync.
 
 Model-generated catalog analysis runs in a disposable Worker for fault containment; it is not a
 hostile-code security sandbox. The main thread keeps the trusted records used for recommendation cards,
@@ -33,12 +33,14 @@ The app opens directly into the main workspace. Before you can use chat:
    and model.
 4. Select **Save**.
 
-To personalize results, open **Profile & context**. You can add a You.md taste profile or import an
-optional `.csv`, `.json`, or `.zip` watch-history export. ZIP files may contain CSV or JSON candidates.
+To personalize results, open **Profile & context** and add a You.md taste profile. Add watch history
+from the chat box, with the paperclip or by dropping the file. The model describes the layout from a
+bounded sample. The app then generates a reader and runs it in this browser. An API key in Settings is
+required.
 
 ## Settings and optional web search
 
-**Settings** lets you change subscriptions, model endpoint, API key, and model name. It also has an
+**Settings** lets you change subscriptions, your region, model endpoint, API key, and model name. It also has an
 **Allow web search with OpenRouter (can add cost)** checkbox. The checkbox is available only when the
 base URL hostname is exactly `openrouter.ai`; changing to any other endpoint clears and disables it.
 
@@ -130,6 +132,56 @@ ordinary requests such as “horror recommendations” are not learned. In **Pro
 inspect, edit, remove, clear, or disable learned preferences. Disabling them prevents their use in future
 model requests; manual You.md remains separate.
 
+## What it remembers
+
+The chat is one long conversation. It stays in this browser, up to 400 messages. After a gap of about
+six hours, a date line separates the older messages. When you come back, the end of the chat can show
+a short line about the last visit and a few suggestions.
+
+A new chat also says what the app remembers, for example a like, an avoid, a habit, and how many titles
+are marked seen. **See all** opens **What I remember**. That panel lists learned facts, which you can
+edit or remove, and titles you marked seen or **Can't open it**, which you can remove. Imported history
+is shown as counts only. Removing an imported file does not remove titles you marked in chat.
+
+The app can remember a viewing habit you state in your own words, such as weeknights under 90 minutes.
+If you say you already watched a title, that title is marked seen and is not recommended again. A later
+message can use a short recall of earlier requests. Profile & context is still where you review, edit,
+disable, or clear what was learned. New chats share this memory. They do not start from a blank taste profile.
+
+## Importing history
+
+Add the file in the chat. Use the paperclip on the message box, or drop a `.csv`, `.json`, `.html`, or
+`.zip` file onto it. The filename is your message. Profile & context is not where you import the file.
+
+The app sends a bounded sample — the filename, the shape, and a few rows — to the model. The model
+returns a layout, not a parser. The app generates a reader from that layout and runs it in a disposable
+worker over the file. The reader only turns rows into titles and dates. A successful reply looks like
+“Read NetflixViewingHistory.csv. Marked 1,732 titles seen,” with the series, movie, other, and seen
+counts from that file. Those titles are marked seen, so they are not recommended again.
+
+If the layout is invalid, the reader fails, or the file has no titles, the reply is that error. Saved
+history is left as it was. Full files stay in this browser. Reading a file needs the API key from Settings.
+
+**Profile & context** shows the imported counts and can remove that import. It does not ask for the file.
+
+You can also set the region or your subscriptions in the same box, for example `region US`, `I watch in
+India`, or `I subscribe to Netflix and Prime Video`. A normal watch request is left to the assistant.
+
+## Region
+
+Settings, the first-run screen, and a clear chat command (`region US`, `I watch in India`) set the region.
+The default is India. Free links known to fail
+in that region are hidden. Apple Podcasts and Books links open in that region's store. Links with no
+region data stay visible. **Can't open it** is still the backup when a link fails for you. Changing the
+region updates the free links without a reload.
+
+## Free sources
+
+Besides your subscriptions, the catalog includes free podcasts, films, and audiobooks gathered from
+Open Culture. Ask for something free, for audio, or for a commute. Free cards are marked Free and link
+straight to the source. If a link does not open where you are, choose **Can't open it**. That title
+stays hidden in this browser.
+
 ## Exporting your results
 
 From **Playlists**, export any saved list as **Markdown**, **JSON**, or **CSV**. Your profile and
@@ -142,23 +194,24 @@ From **Settings**, under **Local data**:
 - **Export backup** downloads a `memory.json` snapshot of your profile, conversation, queue, You.md,
   watch history, learned preferences, and playlists (never your LLM key). Backup import is not available
   in this version.
-- **Clear local data** permanently deletes everything above from this browser, including your LLM key,
+- **Start over (keep API key)** removes conversations, the queue, learned facts, seen and blocked
+  titles, imported history, You.md, region, subscriptions, and layout. The API key, model, and base URL
+  stay. Opening the page with `?reset` does the same thing after you confirm.
+- **Clear everything** permanently deletes everything above from this browser, including your API key,
   after you confirm. This cannot be undone — export a backup first if you want to keep anything.
 
-## The TMDB note in the footer
+## Where the data comes from
 
-The footer says: *"This product uses the TMDB API but is not endorsed or certified by TMDB."*
-
-The catalog's titles, ratings, posters, and availability information come from TMDB (The Movie
-Database), and their terms require that line wherever their data is shown. It simply means the data
-is theirs while the app itself is independent — TMDB didn't make it and doesn't vouch for it.
+The footer credits the sources. Titles, ratings, posters, and availability come from TMDB (The Movie
+Database). The free picks come from Open Culture. The app is independent of both.
 
 ## Privacy in one paragraph
 
 Stored in this browser. Relevant context is sent to the model endpoint you configure. Chat sends your
-message plus bounded You.md, learned-preference, and recent-watch context; an import sends bounded
-filenames, structural metadata, and samples to infer CSV/JSON/ZIP layout. Full files stay local. Clearing
-browser site data — or using **Clear local data** in Settings — removes everything, completely and
+message plus bounded You.md, learned-preference, and recent-watch context. A history file sends a
+bounded sample so the model can describe the layout; the generated reader runs locally. Full files stay
+local. Clearing
+browser site data — or using **Clear everything** in Settings — removes everything, completely and
 irreversibly; this is not encrypted storage and is not a backup, so export a backup first if that matters
 to you.
 
@@ -169,7 +222,7 @@ to you.
 - **"rate" error** — you're sending requests too quickly for your plan. Wait a moment and retry.
 - **Web search is unavailable** — it is a Settings-only OpenRouter option. Set the base URL to an
   OpenRouter URL or leave web search off.
-- **Picks feel generic** — add a You.md and your viewing history under **Profile & context**.
+- **Picks feel generic** — add a You.md under **Profile & context**, and add a history file in the chat.
 - **The catalog line says it's still preparing** — search is blocked until the title index finishes
   building (usually under a second); a second note about "refining with synopses" may linger briefly
   after that while the fuller, synopsis-aware index finishes in the background.

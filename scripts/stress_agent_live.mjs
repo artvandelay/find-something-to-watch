@@ -8,7 +8,7 @@
 
 import { readFile } from "node:fs/promises";
 import path from "node:path";
-import { fileURLToPath } from "node:url";
+import { fileURLToPath, pathToFileURL } from "node:url";
 import { runAgent } from "../docs/js/agent.js";
 import { DEFAULT_LLM } from "../docs/js/store.js";
 import { createTools } from "../docs/js/tools.js";
@@ -65,7 +65,7 @@ const MATRIX_CASES = [
   }
 ];
 
-async function readKeyFromEnvFile(file) {
+export async function readKeyFromEnvFile(file) {
   let text;
   try {
     text = await readFile(file, "utf8");
@@ -144,7 +144,7 @@ function card(record, subscriptions) {
 
 // Browser catalog runtimes use a Worker. Node cannot, so live stress uses this
 // in-process adapter over the same scoped projection and trusted display cards.
-async function createLocalRuntimeAdapter() {
+export async function createLocalRuntimeAdapter({ extraRecords = [] } = {}) {
   const catalog = JSON.parse(await readFile(path.join(ROOT, "docs/assets/catalog.json"), "utf8"));
   const sidecar = JSON.parse(await readFile(path.join(ROOT, "docs/assets/catalog.text.json"), "utf8"));
   const leanRecords = Array.isArray(catalog) ? catalog : catalog.records;
@@ -154,7 +154,7 @@ async function createLocalRuntimeAdapter() {
   const records = leanRecords.map((record) => ({
     ...record,
     s: typeof synopses[record.id] === "string" ? synopses[record.id] : (record.s || "")
-  }));
+  })).concat(Array.isArray(extraRecords) ? extraRecords : []);
   const recordsById = new Map(records.map((record) => [record.id, record]));
 
   return {
@@ -232,6 +232,7 @@ function createObservedTools(runtime, subscriptions) {
   return { tools, observed };
 }
 
+async function main() {
 const argv = process.argv.slice(2);
 const limit = parseLimit(argv);
 const matrixMode = wantsMatrix(argv);
@@ -497,3 +498,8 @@ if (failed > maxFail) {
 }
 console.log("live stress OK");
 process.exit(0);
+}
+
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  await main();
+}

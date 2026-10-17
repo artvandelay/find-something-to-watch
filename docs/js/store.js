@@ -137,9 +137,10 @@ export function createStore(storage) {
     }
   }
 
-  function clearAll() {
+  function clearAll({ keepLlm = false } = {}) {
     let ok = true;
     for (const key of Object.values(KEYS)) {
+      if (keepLlm && key === KEYS.llm) continue;
       if (!remove(key)) ok = false;
     }
     return ok;

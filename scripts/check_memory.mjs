@@ -282,4 +282,69 @@ assert.equal((await memory.getQueue()).items.length, 0);
 assert.equal(idb.records.has(MEMORY_KEYS.playlists), false);
 assert.deepEqual((await memory.getPlaylists()).playlists, defaultPlaylists(() => new Date("2026-08-05T00:00:00.000Z")).playlists);
 
+const longChat = await memory.setConversation({
+  messages: Array.from({ length: 450 }, (_, index) => ({
+    role: index % 2 === 0 ? "user" : "assistant",
+    content: "m" + index,
+    createdAt: "2026-08-04T00:00:00.000Z"
+  }))
+});
+assert.equal(longChat.messages.length, 400);
+assert.equal(longChat.messages[0].content, "m50");
+assert.equal(MEMORY_LIMITS.conversationMessages, 400);
+
+const pickBase = await memory.getConversation();
+await memory.appendUserMessage(pickBase.id, "Show me a podcast");
+const picked = await memory.completeTurn(pickBase.id, {
+  content: "Try these.",
+  picks: [
+    { id: "tmdb:m1", reason: "x" },
+    { id: "free:p:radiolab", reason: "" },
+    { id: "tmdb:m1", reason: "dup" },
+    { id: " ", reason: "blank" },
+    { id: "tmdb:overflow", reason: "y".repeat(400) },
+    { id: "tmdb:fourth", reason: "nope" }
+  ]
+});
+assert.equal(picked.conversation.messages.some((message) => message.role === "user" && message.picks), false);
+assert.deepEqual(picked.conversation.messages.at(-1).picks, [
+  { id: "tmdb:m1", reason: "x" },
+  { id: "free:p:radiolab", reason: "" },
+  { id: "tmdb:overflow", reason: "y".repeat(300) }
+]);
+const reloaded = createBrowserMemory({
+  indexedDB: idb,
+  localStorage: storage,
+  now: () => new Date("2026-08-05T00:00:00.000Z")
+});
+await reloaded.initialize();
+assert.equal((await reloaded.getConversation()).messages.at(-1).picks[1].id, "free:p:radiolab");
+
+const withBlocked = await memory.setHistory({ seen: ["dark matter"], blocked: ["radiolab"] });
+assert.deepEqual(withBlocked.blocked, ["radiolab"]);
+assert.deepEqual((await memory.getHistory()).seen, ["dark matter"]);
+
+const marked = await memory.setHistory({
+  seen: ["dark matter", "imported film"],
+  blocked: ["radiolab"],
+  marks: [
+    { key: "dark matter", title: "Dark Matter", bucket: "seen", source: "button", at: "2026-08-04T00:00:00.000Z" },
+    { key: "bad", title: "", bucket: "seen", source: "button", at: "2026-08-04T00:00:00.000Z" },
+    { key: "radiolab", title: "Radiolab", bucket: "blocked", source: "button", at: "2026-08-04T00:00:00.000Z" }
+  ]
+});
+assert.equal(marked.marks.length, 2);
+assert.equal(marked.marks.some((mark) => mark.key === "bad"), false);
+
+const unmarked = await memory.unmarkTitle("Dark Matter");
+assert.deepEqual(unmarked.seen, ["imported film"]);
+assert.equal(unmarked.marks.some((mark) => mark.key === "dark matter"), false);
+assert.deepEqual(unmarked.blocked, ["radiolab"]);
+
+const regionIn = await memory.setProfile({ region: "us", providers: ["netflix"], onboardingComplete: true });
+assert.equal(regionIn.region, "US");
+const regionFallback = await memory.setProfile({ region: "ZZ", providers: ["netflix"] });
+assert.equal(regionFallback.region, "IN");
+assert.equal((await memory.getProfile()).region, "IN");
+
 console.log("check_memory OK");

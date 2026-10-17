@@ -1,20 +1,50 @@
+/* Fonts are self-hosted (OFL): no third-party font requests. */
+@font-face {
+  font-family: "Bricolage Grotesque";
+  src: url("../assets/fonts/bricolage-grotesque-latin-wght.woff2") format("woff2");
+  font-weight: 200 800;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Figtree";
+  src: url("../assets/fonts/figtree-latin-wght.woff2") format("woff2");
+  font-weight: 300 900;
+  font-display: swap;
+}
+
+/*
+  Movie night at home. A plum room lit by one warm lamp.
+  plum (page) / velvet (surfaces) / popcorn (do this) / tomato (chosen, ticket) / lilac (quiet text)
+*/
 :root {
-  --bg: #09090b;
-  --bg-raised: #111216;
-  --card: #181a20;
-  --card-2: #181a20;
-  --border: #2a2d35;
-  --border-strong: #454a56;
-  --fg: #f4f1ea;
-  --muted: #969aa3;
-  --faint: #747985;
-  --accent: #d42f43;
-  --accent-strong: #ee3d53;
-  --accent-soft: color-mix(in srgb, var(--accent) 20%, transparent);
-  --secondary: #79c7ff;
-  --control-border: #454a56;
-  --focus: #79c7ff;
-  --radius: 4px;
+  --font-display: "Bricolage Grotesque", "Figtree", ui-rounded, system-ui, sans-serif;
+  --font-body: "Figtree", ui-rounded, system-ui, -apple-system, "Segoe UI", sans-serif;
+  --bg: #1a1127;
+  --bg-raised: #22183a;
+  --card: #2b2047;
+  --card-2: #33265a;
+  --border: #3d3066;
+  --border-strong: #5a4a8c;
+  --fg: #fff3e2;
+  --muted: #bfb1de;
+  --faint: #9d8fc4;
+  --popcorn: #ffc93c;
+  --popcorn-strong: #ffd96b;
+  --popcorn-edge: #b98700;
+  --pop-text: var(--popcorn); /* accent for text on the page; popcorn is too pale on light */
+  --on-popcorn: #2a1a00;
+  --accent: #ff5a4d;
+  --accent-strong: #ff7a6e;
+  --accent-soft: color-mix(in srgb, var(--accent) 22%, transparent);
+  --secondary: #ffd96b;
+  --control-border: #5a4a8c;
+  --focus: #ffd96b;
+  --radius: 14px;
+  --radius-sm: 10px;
+  --ticket-bg: #ffe9bd;
+  --ticket-ink: #2a1a00;
+  --ticket-ink-soft: #6a4a12;
   --sidebar-w: 260px;
   --sidebar-collapsed-w: 56px;
   --rail-w: 380px;
@@ -27,22 +57,24 @@
 
 @media (prefers-color-scheme: light) {
   :root {
-    --bg: #f0efe9;
-    --bg-raised: #faf9f5;
+    --bg: #f6efff;
+    --bg-raised: #fbf7ff;
     --card: #ffffff;
-    --card-2: #f4f3ef;
-    --border: #d2d0ca;
-    --border-strong: #9b9a96;
-    --fg: #191a1e;
-    --muted: #5e626b;
-    --faint: #777b84;
-    --accent: #bb2036;
-    --accent-strong: #d32b43;
+    --card-2: #efe6ff;
+    --border: #d9cbf2;
+    --border-strong: #9a85c9;
+    --fg: #2a1747;
+    --muted: #5f4d86;
+    --faint: #6f5d99;
+    --accent: #d93b2e;
+    --accent-strong: #c22d21;
     --accent-soft: color-mix(in srgb, var(--accent) 12%, transparent);
-    --secondary: #066ca9;
-    --control-border: #9b9a96;
-    --focus: #006eaf;
+    --secondary: #6a3fd1;
+    --control-border: #9a85c9;
+    --focus: #6a3fd1;
     --danger: #c7243d;
+    --pop-text: #6a3fd1;
+    --ticket-bg: #fff0c9;
   }
 }
 
@@ -63,7 +95,7 @@ body {
   overflow: hidden;
   background: var(--bg);
   color: var(--fg);
-  font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  font-family: var(--font-body);
   font-size: 15px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -76,7 +108,9 @@ a {
 }
 
 h1, h2, h3 {
-  letter-spacing: -0.01em;
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.02em;
 }
 
 #app {
@@ -127,9 +161,9 @@ textarea,
 select {
   width: 100%;
   background: var(--bg-raised);
-  border: 1px solid var(--control-border);
-  border-radius: 4px;
-  padding: 10px 12px;
+  border: 2px solid var(--control-border);
+  border-radius: var(--radius-sm);
+  padding: 9px 12px;
 }
 
 textarea {
@@ -150,17 +184,59 @@ a:focus-visible,
 
 button {
   background: var(--card-2);
-  border: 1px solid var(--border-strong);
-  border-radius: 4px;
-  padding: 9px 14px;
+  border: 2px solid var(--border-strong);
+  border-radius: var(--radius-sm);
+  padding: 8px 16px;
   min-height: 44px;
+  font-weight: 600;
   cursor: pointer;
-  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease,
+    transform 0.14s ease, box-shadow 0.14s ease;
 }
 
 button:hover {
-  border-color: var(--secondary);
-  color: var(--secondary);
+  border-color: var(--popcorn);
+  color: var(--fg);
+}
+
+button:active:not(:disabled) {
+  transform: translateY(1px);
+}
+
+/* The one thing to do on a screen: a tactile popcorn "sticker" button. */
+#send-btn,
+#onboarding-next,
+#settings-save,
+#context-save,
+.dialog-actions button[type="submit"],
+.btn-primary {
+  background: var(--popcorn);
+  border-color: var(--popcorn);
+  color: var(--on-popcorn);
+  font-weight: 750;
+  box-shadow: 0 3px 0 var(--popcorn-edge);
+}
+
+#send-btn:hover:not(:disabled),
+#onboarding-next:hover:not(:disabled),
+#settings-save:hover:not(:disabled),
+#context-save:hover:not(:disabled),
+.dialog-actions button[type="submit"]:hover:not(:disabled),
+.btn-primary:hover:not(:disabled) {
+  background: var(--popcorn-strong);
+  border-color: var(--popcorn-strong);
+  color: var(--on-popcorn);
+  transform: translateY(-1px);
+  box-shadow: 0 4px 0 var(--popcorn-edge);
+}
+
+#send-btn:active:not(:disabled),
+#onboarding-next:active:not(:disabled),
+#settings-save:active:not(:disabled),
+#context-save:active:not(:disabled),
+.btn-primary:active:not(:disabled) {
+  transform: translateY(2px);
+  box-shadow: 0 1px 0 var(--popcorn-edge);
 }
 
 input:disabled,
@@ -266,29 +342,117 @@ button[hidden],
 }
 
 .provider-grid {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(156px, 1fr));
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-picks {
+  display: flex;
+  flex-wrap: wrap;
   gap: 8px;
 }
 
 .provider-opt {
-  display: flex;
+  position: relative;
+  display: inline-flex;
   align-items: center;
-  gap: 8px;
+  gap: 6px;
+  width: auto;
   margin: 0;
-  min-height: 44px;
-  padding: 8px 10px;
+  min-height: 40px;
+  padding: 6px 14px;
   border: 1px solid var(--border);
-  border-radius: 4px;
-  background: var(--card-2);
+  border-radius: var(--radius);
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  cursor: pointer;
+  user-select: none;
+  transition: background-color 0.14s ease, border-color 0.14s ease, color 0.14s ease;
+}
+
+.provider-opt:hover {
+  border-color: var(--border-strong);
+  background: var(--card);
+  color: var(--fg);
+}
+
+.provider-opt:has(input:checked) {
+  border-color: var(--accent);
+  background: var(--accent-soft);
+  color: var(--fg);
+}
+
+/* Selected is not color alone: a check mark joins the label. */
+.provider-opt:has(input:checked)::before {
+  content: "";
+  width: 4px;
+  height: 8px;
+  margin: -2px 2px 0 0;
+  border: solid var(--accent-strong);
+  border-width: 0 2px 2px 0;
+  transform: rotate(45deg);
+}
+
+.provider-opt:has(input:checked):hover {
+  border-color: var(--accent-strong);
+}
+
+@media (pointer: coarse), (max-width: 640px) {
+  .provider-opt {
+    min-height: 44px;
+  }
+
+  .provider-more summary {
+    min-height: 44px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .provider-opt {
+    transition: none;
+  }
+}
+
+.provider-more summary {
+  display: inline-flex;
+  align-items: center;
+  min-height: 32px;
+  color: var(--muted);
   font-size: 0.84rem;
+  font-weight: 500;
+  letter-spacing: 0;
+  list-style: none;
   cursor: pointer;
 }
 
+.provider-more summary::-webkit-details-marker {
+  display: none;
+}
+
+.provider-more summary::before {
+  content: "+";
+  width: 1.2em;
+  color: var(--faint);
+}
+
+.provider-more[open] summary::before {
+  content: "–";
+}
+
+.provider-more[open] summary {
+  margin-bottom: 8px;
+}
+
 .provider-opt input {
-  width: auto;
+  position: absolute;
+  width: 1px;
+  height: 1px;
   margin: 0;
-  accent-color: var(--accent);
+  opacity: 0;
 }
 
 .provider-opt:focus-within {
@@ -1211,8 +1375,55 @@ svg.nav-icon {
 
 .form-actions {
   display: flex;
-  flex-wrap: wrap;
+  flex-wrap: nowrap;
+  align-items: center;
   gap: 8px;
+}
+
+.composer-attach {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 44px;
+  min-width: 44px;
+  height: 44px;
+  margin: 0;
+  padding: 0;
+  border: 1px solid var(--border-strong);
+  border-radius: 4px;
+  background: var(--card-2);
+  color: inherit;
+  cursor: pointer;
+}
+
+.composer-attach:hover,
+#query-form.is-drop-target {
+  border-color: var(--secondary);
+}
+
+.composer-attach svg {
+  width: 18px;
+  height: 18px;
+}
+
+.composer-attach input {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  margin: -1px;
+  padding: 0;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+.composer-attach input:focus-visible {
+  outline: none;
+}
+
+.composer-attach:focus-within {
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
 }
 
 #send-btn,
@@ -1760,15 +1971,25 @@ dialog h3 {
   display: grid;
   grid-template-columns: minmax(0, 1.1fr) minmax(180px, 0.9fr);
   gap: 8px;
-  min-height: 240px;
-  max-height: 320px;
+  height: 320px;
+  min-height: 0;
+  overflow: hidden;
 }
 
-.model-picker-list {
-  overflow: auto;
+.model-picker-list-wrap {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  overflow: hidden;
   border: 1px solid var(--border);
   border-radius: 4px;
   background: var(--card);
+}
+
+.model-picker-list {
+  flex: 1 1 auto;
+  overflow: auto;
   min-height: 0;
 }
 
@@ -1909,24 +2130,32 @@ dialog h3 {
 }
 
 .model-picker-other {
+  flex: 0 0 auto;
   width: 100%;
-  justify-content: center;
   min-height: 40px;
+  padding: 8px 10px;
+  border: 0;
+  border-top: 1px solid var(--border);
+  border-radius: 0;
   background: transparent;
+  color: var(--muted);
+  text-align: left;
 }
 
 .model-picker-other:hover {
   color: var(--secondary);
+  background: color-mix(in srgb, var(--secondary) 12%, transparent);
 }
 
 @media (max-width: 640px) {
   .model-picker-columns {
     grid-template-columns: 1fr;
-    max-height: none;
+    height: auto;
+    overflow: visible;
   }
 
-  .model-picker-list {
-    max-height: 220px;
+  .model-picker-list-wrap {
+    max-height: 260px;
   }
 
   .model-picker-detail {
@@ -2323,6 +2552,10 @@ dialog h3 {
     width: 100%;
   }
 
+  .composer-attach {
+    flex: 0 0 auto;
+  }
+
   .form-actions button {
     flex: 1 1 auto;
   }
@@ -2351,5 +2584,710 @@ dialog h3 {
     transition: none !important;
     animation: none !important;
     scroll-behavior: auto !important;
+  }
+}
+
+.chat-divider {
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  max-width: var(--chat-measure);
+  margin: 1.25rem 0 0.75rem;
+  color: var(--muted);
+  font-size: 0.8125rem;
+}
+
+.chat-divider::before,
+.chat-divider::after {
+  content: "";
+  flex: 1;
+  border-top: 1px solid var(--border);
+}
+
+.chat-welcome {
+  max-width: var(--chat-measure);
+  margin-block: 0.75rem 0.5rem;
+}
+
+.chat-welcome-headline {
+  margin: 0 0 0.375rem;
+  color: var(--fg);
+  font-size: clamp(1.1875rem, 2.2vw, 1.5rem);
+  font-weight: 600;
+  line-height: 1.25;
+}
+
+.chat-welcome-sub {
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.chat-welcome-memory {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.35rem 0.75rem;
+  align-items: baseline;
+  margin: 0 0 0.75rem;
+  color: var(--muted);
+  line-height: 1.45;
+}
+
+.chat-welcome-memory-link {
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  background: none;
+  color: var(--fg);
+  font: inherit;
+  text-decoration: underline;
+  cursor: pointer;
+}
+
+#memory-dialog {
+  max-width: 640px;
+}
+
+.memory-mark {
+  display: flex;
+  justify-content: space-between;
+  gap: 8px;
+  align-items: center;
+  margin: 8px 0;
+}
+
+.memory-mark button {
+  min-height: 36px;
+  padding: 6px 9px;
+}
+
+.chat-chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.5rem;
+}
+
+.chat-chip {
+  min-height: 40px;
+  padding: 0.5rem 0.875rem;
+  border: 1px solid var(--control-border);
+  border-radius: var(--radius);
+  background: var(--bg-raised);
+  color: var(--fg);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.chat-chip:hover {
+  border-color: var(--border-strong);
+  background: var(--card);
+}
+
+.chat-chip:focus-visible,
+.earlier-chats summary:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+}
+
+.chat-picks {
+  display: grid;
+  gap: 0.5rem;
+  max-width: var(--chat-measure);
+  margin: 0.25rem 0 1rem;
+}
+
+.card-compact {
+  padding-block: 0.625rem;
+}
+
+.card-compact .card-poster,
+.card-compact .poster-fallback {
+  max-height: 88px;
+}
+
+.card-compact .card-description-compact {
+  display: none;
+}
+
+.badge-free {
+  color: var(--secondary);
+  font-weight: 600;
+}
+
+.earlier-chats summary {
+  display: flex;
+  align-items: center;
+  min-height: 32px;
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 0.68rem;
+  font-weight: 600;
+  letter-spacing: 0.09em;
+  text-transform: uppercase;
+  list-style: none;
+  cursor: pointer;
+}
+
+.earlier-chats summary::-webkit-details-marker {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  .chat-chip,
+  .card-feedback-btn {
+    min-height: 40px;
+  }
+}
+
+/* ======================================================================
+   Movie night layer
+   Rounder, warmer, tactile. One bold move: the top pick is a ticket stub.
+   Kept last so it wins over the structural rules above at equal specificity.
+   ====================================================================== */
+
+::selection {
+  background: var(--popcorn);
+  color: var(--on-popcorn);
+}
+
+/* ---- Surfaces ---- */
+
+.field-group {
+  border: 2px solid var(--border);
+  border-radius: 18px;
+  padding: 18px;
+}
+
+.field-group legend {
+  font-family: var(--font-display);
+  font-weight: 700;
+  font-size: 1.02rem;
+  padding: 0 8px;
+}
+
+dialog {
+  border: 2px solid var(--border-strong);
+  border-radius: 22px;
+  padding: 24px;
+}
+
+dialog::backdrop {
+  background: color-mix(in srgb, var(--bg) 78%, transparent);
+  backdrop-filter: blur(3px);
+}
+
+dialog h2 {
+  font-size: 1.5rem;
+  letter-spacing: -0.025em;
+}
+
+#error-banner,
+.chat-key-error {
+  border: 2px solid var(--popcorn);
+  border-left-width: 2px;
+  border-radius: 16px;
+  background: var(--card);
+}
+
+.chat-key-error strong {
+  font-family: var(--font-display);
+  font-size: 1.02rem;
+}
+
+.privacy-copy {
+  border: 2px dashed var(--border-strong);
+  border-radius: 18px;
+}
+
+/* ---- Onboarding ---- */
+
+#onboarding-screen {
+  background:
+    radial-gradient(52rem 24rem at 50% -8%, color-mix(in srgb, var(--popcorn) 16%, transparent), transparent 70%),
+    var(--bg);
+}
+
+.onboarding-card h1 {
+  font-size: clamp(2.4rem, 7vw, 3.8rem);
+  font-weight: 800;
+  line-height: 0.98;
+  letter-spacing: -0.04em;
+  margin-bottom: 10px;
+}
+
+.tagline {
+  font-family: var(--font-display);
+  font-size: clamp(1.1rem, 2.4vw, 1.35rem);
+  font-weight: 600;
+  letter-spacing: -0.01em;
+  color: var(--pop-text);
+}
+
+/* ---- Subscription chips: stickers you stick on, popcorn when chosen ---- */
+
+.provider-opt {
+  min-height: 44px;
+  padding: 6px 12px;
+  border: 2px solid var(--border-strong);
+  border-radius: 999px;
+  color: var(--fg);
+  font-weight: 600;
+}
+
+.provider-opt:hover {
+  border-color: var(--popcorn);
+  background: var(--card);
+  color: var(--fg);
+  transform: translateY(-1px);
+}
+
+.provider-opt:has(input:checked) {
+  border-color: var(--popcorn);
+  background: var(--popcorn);
+  color: var(--on-popcorn);
+  box-shadow: 0 2px 0 var(--popcorn-edge);
+}
+
+.provider-opt:has(input:checked)::before {
+  border-color: var(--on-popcorn);
+}
+
+.provider-opt:has(input:checked):hover {
+  border-color: var(--popcorn-strong);
+  background: var(--popcorn-strong);
+}
+
+.provider-more summary {
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.provider-more summary:hover {
+  color: var(--pop-text);
+}
+
+/* ---- Sidebar ---- */
+
+#sidebar {
+  background: var(--bg-raised);
+  border-right: 2px solid var(--border);
+}
+
+.brand-mark {
+  flex-basis: 34px;
+  width: 34px;
+  height: 34px;
+  border-radius: 11px;
+  background: var(--popcorn);
+  color: var(--on-popcorn);
+  font-family: var(--font-display);
+  font-size: 1.15rem;
+  font-weight: 800;
+  box-shadow: 0 2px 0 var(--popcorn-edge);
+  transform: rotate(-6deg);
+}
+
+.brand-name {
+  font-family: var(--font-display);
+  font-size: 1.08rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+#new-chat-btn {
+  background: var(--popcorn);
+  border-color: var(--popcorn);
+  color: var(--on-popcorn);
+  font-weight: 750;
+  box-shadow: 0 3px 0 var(--popcorn-edge);
+}
+
+#new-chat-btn:hover {
+  background: var(--popcorn-strong);
+  border-color: var(--popcorn-strong);
+  color: var(--on-popcorn);
+  transform: translateY(-1px);
+}
+
+.sidebar-nav button {
+  border-radius: 12px;
+  border: 2px solid transparent;
+  font-weight: 600;
+}
+
+.sidebar-nav button:hover {
+  background: var(--card-2);
+  border-color: transparent;
+  color: var(--fg);
+}
+
+.conversation-list-item {
+  border-radius: 12px;
+  border: 2px solid transparent;
+  font-weight: 500;
+}
+
+.conversation-list-item:hover {
+  background: var(--card);
+  color: var(--fg);
+  border-color: transparent;
+}
+
+.conversation-list-item[aria-current="page"] {
+  background: var(--card-2);
+  color: var(--fg);
+  border-color: transparent;
+}
+
+.sidebar-block h2,
+.earlier-chats summary {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: 0.07em;
+}
+
+#subscriptions-summary {
+  color: var(--fg);
+  font-weight: 500;
+}
+
+/* ---- Chat ---- */
+
+#chat-region {
+  background:
+    radial-gradient(46rem 20rem at 30% -6%, color-mix(in srgb, var(--popcorn) 9%, transparent), transparent 70%),
+    var(--bg);
+}
+
+.chat-welcome {
+  margin-block: clamp(8px, 4vh, 40px) 4px;
+}
+
+.chat-welcome-headline {
+  font-family: var(--font-display);
+  font-size: clamp(2rem, 4.6vw, 3.1rem);
+  font-weight: 800;
+  line-height: 1.02;
+  letter-spacing: -0.04em;
+  margin-bottom: 14px;
+  text-wrap: balance;
+}
+
+.chat-welcome-sub {
+  font-size: 1.02rem;
+}
+
+.chat-welcome-memory {
+  font-size: 0.95rem;
+}
+
+.chat-welcome-memory-link {
+  color: var(--pop-text);
+  font-weight: 650;
+  text-decoration-thickness: 2px;
+  text-underline-offset: 0.2em;
+}
+
+.chat-welcome-memory-link:hover {
+  color: var(--pop-text);
+  filter: brightness(1.15);
+  background: none;
+}
+
+.chat-chips {
+  gap: 10px;
+}
+
+.chat-chip,
+.chat-example {
+  min-height: 44px;
+  padding: 8px 18px;
+  border: 2px solid var(--border-strong);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--fg);
+  font-weight: 600;
+  transition: transform 0.16s ease, border-color 0.14s ease, background-color 0.14s ease;
+}
+
+/* A little hand-stuck tilt, alternating. Straightens on hover. */
+.chat-chip:nth-child(odd) {
+  transform: rotate(-0.7deg);
+}
+
+.chat-chip:nth-child(even) {
+  transform: rotate(0.7deg);
+}
+
+.chat-chip:hover,
+.chat-example:hover {
+  border-color: var(--popcorn);
+  background: var(--card-2);
+  color: var(--fg);
+  transform: rotate(0) translateY(-2px);
+}
+
+.chat-msg-user .chat-bubble {
+  border: 0;
+  border-radius: 20px 20px 6px 20px;
+  background: var(--card-2);
+  padding: 10px 16px;
+}
+
+.chat-msg-assistant .chat-bubble {
+  font-size: 1.02rem;
+  line-height: 1.55;
+}
+
+.chat-msg-assistant .chat-bubble code {
+  border-radius: 6px;
+}
+
+/* ---- Composer ---- */
+
+#query-form {
+  border: 2px solid var(--border-strong);
+  border-radius: 22px;
+  background: var(--bg-raised);
+  padding: 10px 10px 10px 18px;
+}
+
+#query-form:focus-within {
+  border-color: var(--popcorn);
+  background: var(--card);
+  box-shadow: 0 0 0 4px color-mix(in srgb, var(--popcorn) 20%, transparent);
+}
+
+#query-form > label {
+  font-family: var(--font-display);
+  color: var(--faint);
+}
+
+#query-input::placeholder {
+  color: var(--faint);
+}
+
+.composer-attach {
+  border: 2px solid var(--border-strong);
+  border-radius: 14px;
+  background: var(--card-2);
+}
+
+.composer-attach:hover,
+#query-form.is-drop-target {
+  border-color: var(--popcorn);
+}
+
+#send-btn,
+#stop-btn {
+  border-radius: 14px;
+  padding-inline: 20px;
+}
+
+/* ---- Picks rail ---- */
+
+#queue-region {
+  border-left: 2px solid var(--border);
+  background: var(--bg-raised);
+}
+
+#queue-header h2 {
+  font-size: 1.3rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.queue-group-title {
+  color: var(--muted);
+  font-family: var(--font-display);
+  font-size: 0.82rem;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.queue-more-toggle {
+  border: 2px dashed var(--border-strong);
+  border-radius: 14px;
+  min-height: 44px;
+  text-align: center;
+  color: var(--muted);
+  font-weight: 650;
+}
+
+.queue-more-toggle:hover {
+  border-color: var(--popcorn);
+  color: var(--fg);
+}
+
+#queue-empty {
+  font-size: 0.98rem;
+}
+
+.card {
+  border-radius: 16px;
+  padding: 10px;
+  border-bottom: 0;
+}
+
+.card:hover {
+  background: var(--card);
+}
+
+.card-poster,
+.poster-fallback {
+  border-radius: 10px;
+}
+
+.card-title {
+  font-family: var(--font-display);
+  font-weight: 700;
+  letter-spacing: -0.015em;
+}
+
+.card-save {
+  border-radius: 12px;
+}
+
+.card-feedback-btn {
+  min-height: 30px;
+  padding: 3px 11px;
+  border: 1.5px solid var(--border-strong);
+  border-radius: 999px;
+  font-weight: 600;
+}
+
+.card-feedback-btn:hover {
+  border-color: var(--popcorn);
+  color: var(--fg);
+}
+
+.card-links a {
+  font-weight: 650;
+}
+
+/* ---- Signature: the top pick is a ticket stub ----
+   Notches are cut with a mask, the tear line is a dashed rule.
+   Colors are re-pointed locally so every child reads on cream. */
+
+.card-rank-1 {
+  --fg: var(--ticket-ink);
+  --muted: var(--ticket-ink-soft);
+  --faint: var(--ticket-ink-soft);
+  --border: color-mix(in srgb, var(--ticket-ink) 22%, transparent);
+  --border-strong: color-mix(in srgb, var(--ticket-ink) 45%, transparent);
+  --secondary: #a3260f;
+  --card: color-mix(in srgb, var(--ticket-ink) 8%, var(--ticket-bg));
+  --card-2: color-mix(in srgb, var(--ticket-ink) 12%, var(--ticket-bg));
+  position: relative;
+  gap: 22px;
+  padding: 18px 14px 18px 14px;
+  margin-bottom: 4px;
+  border-radius: 18px;
+  background: var(--ticket-bg);
+  color: var(--ticket-ink);
+  box-shadow: none;
+  -webkit-mask:
+    radial-gradient(circle 11px at 113px 0, #0000 96%, #000) top / 100% 51% no-repeat,
+    radial-gradient(circle 11px at 113px 100%, #0000 96%, #000) bottom / 100% 51% no-repeat;
+  mask:
+    radial-gradient(circle 11px at 113px 0, #0000 96%, #000) top / 100% 51% no-repeat,
+    radial-gradient(circle 11px at 113px 100%, #0000 96%, #000) bottom / 100% 51% no-repeat;
+}
+
+.card-rank-1:hover {
+  background: var(--ticket-bg);
+}
+
+.card-rank-1::before {
+  content: "";
+  position: absolute;
+  left: 113px;
+  top: 16px;
+  bottom: 16px;
+  border-left: 2px dashed color-mix(in srgb, var(--ticket-ink) 38%, transparent);
+  pointer-events: none;
+}
+
+.card-rank-1 .card-poster,
+.card-rank-1 .poster-fallback {
+  flex-basis: 88px;
+  width: 88px;
+  height: 132px;
+  border-radius: 8px;
+  box-shadow: 0 6px 14px color-mix(in srgb, var(--ticket-ink) 28%, transparent);
+}
+
+.card-rank-1 .poster-fallback {
+  background: var(--card-2);
+}
+
+.card-rank-1 .card-title {
+  font-size: 1.28rem;
+  font-weight: 800;
+  letter-spacing: -0.03em;
+}
+
+.card-rank-1 button:hover,
+.card-rank-1 .card-feedback-btn:hover {
+  border-color: var(--ticket-ink);
+  background: color-mix(in srgb, var(--ticket-ink) 10%, transparent);
+  color: var(--ticket-ink);
+}
+
+/* Disabled primaries read as "not yet", not as a faded yellow. */
+#send-btn:disabled,
+#onboarding-next:disabled,
+#settings-save:disabled,
+#context-save:disabled {
+  background: var(--card-2);
+  border-color: var(--border-strong);
+  color: var(--faint);
+  box-shadow: none;
+  opacity: 1;
+}
+
+/* ---- Settings model picker + misc controls pick up the rounder vocabulary ---- */
+
+.model-picker-trigger,
+.model-picker-panel,
+.model-picker-list-wrap,
+.model-picker-option,
+.model-picker-other,
+.model-picker-detail {
+  border-radius: var(--radius-sm);
+}
+
+.model-picker-panel {
+  border-width: 2px;
+  border-radius: 16px;
+}
+
+.icon-button {
+  border-radius: 12px;
+}
+
+#attribution {
+  color: var(--faint);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .chat-chip,
+  .chat-example,
+  .provider-opt,
+  #new-chat-btn {
+    transition: none;
+  }
+
+  .chat-chip:hover,
+  .chat-example:hover,
+  .provider-opt:hover,
+  #new-chat-btn:hover,
+  #send-btn:hover:not(:disabled),
+  #onboarding-next:hover:not(:disabled),
+  #settings-save:hover:not(:disabled),
+  #context-save:hover:not(:disabled) {
+    transform: none;
   }
 }

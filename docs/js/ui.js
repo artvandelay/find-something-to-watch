@@ -1,11 +1,12 @@
 import { normalizeTitle, seedQueue } from "./catalog.js";
-import { parseWatchHistoryExport, summarize } from "./history.js";
+import { historyImportReply, parseWatchHistoryExport, summarize } from "./history.js";
+import { parseChatCommand, regionCommandReply, subscriptionCommandReply } from "./chat-commands.js";
 import { createHistoryPlanInferer } from "./history-model.js";
 import { createTools } from "./tools.js";
 import { runAgent } from "./agent.js";
 import { createCatalogRuntime } from "./catalog-runtime.js";
 import { createStore, DEFAULT_LLM } from "./store.js";
-import { createBrowserMemory } from "./memory.js";
+import { createBrowserMemory, rememberMark } from "./memory.js";
 import { generateConversationTitle } from "./conversation-title.js";
 import {
   DEFAULT_RECOMMENDATION_REASON,
@@ -14,7 +15,8 @@ import {
   sanitizeRecommendationQueue
 } from "./recommendations.js";
 import { mergeLearnedPreferences, renderLearnedContext, upsertLearnedPreference } from "./preferences.js";
-import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER } from "./providers.js";
+import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER, DEFAULT_REGION, FREE_PROVIDER_SLUGS, mergeFreeRecords, dailyFreePick } from "./providers.js";
+import { WELCOME_GAP_MS, buildTemporalBlock, buildRecapBlock, buildDividers, buildWelcome, buildMemoryLine } from "./tonight.js";
 import {
   addToPlaylist,
   createPlaylist,
@@ -29,14 +31,17 @@ import { createPaneLayoutView } from "./views/panes.js";
 import { createSidebarView } from "./views/sidebar.js";
 import { createChatView } from "./views/chat.js";
 import { createQueueView } from "./views/queue.js";
-import { createDialogs } from "./views/dialogs.js";
+import { createDialogs, renderLearnedFacts } from "./views/dialogs.js";
 import { createPlaylistsView } from "./views/playlists.js";
 import { createTitleDetailsView } from "./views/title-details.js";
 import { downloadText } from "./views/dom.js";
 import { readTestMode } from "./test-mode.js";
 
 const store = createStore(window.localStorage);
-const memory = createBrowserMemory({ onIssue: (issue) => console.warn("ui: browser-memory issue", issue) });
+const memory = createBrowserMemory({
+  onIssue: (issue) => console.warn("ui: browser-memory issue", issue),
+  now: () => new Date(Date.now())
+});
 
 // Keep onboarding available while the app opens directly into chat. Set this
 // to false to restore the profile-based first-run flow.
@@ -46,13 +51,13 @@ const DOM_IDS = [
   "app", "error-banner",
   "onboarding-screen", "onboarding-form", "onboarding-provider-list",
   "onboarding-title", "onboarding-progress", "onboarding-llm-api-key",
-  "onboarding-history-file", "onboarding-history-summary", "onboarding-history-status",
-  "onboarding-history-remove", "onboarding-back", "onboarding-next",
+  "onboarding-region-select",
+  "onboarding-back", "onboarding-next",
   "shell", "sidebar-toggle", "sidebar", "sidebar-collapse", "sidebar-collapse-icon", "backdrop", "new-chat-btn",
   "conversation-list", "conversation-list-items", "subscriptions-summary", "subscriptions-edit",
   "playlists-btn", "context-btn", "settings-btn", "catalog-status",
   "workspace", "chat-region", "chat-transcript", "chat-key-error", "chat-note",
-  "query-form", "query-input", "send-btn", "stop-btn",
+  "query-form", "query-input", "chat-file", "send-btn", "stop-btn",
   "pane-separator", "queue-region", "queue-collapse", "queue-restore",
   "queue-status", "queue-feedback", "queue-source", "queue-viewport", "queue-track", "queue-empty",
   "queue-top-pick", "queue-alternatives", "queue-more",
@@ -64,9 +69,10 @@ const DOM_IDS = [
   "llm-model-search", "llm-model-list", "llm-model-detail", "llm-model-other",
   "llm-model-custom", "llm-model-note", "llm-model-openrouter-field",
   "llm-model-compat-field", "llm-model",
-  "llm-web-search", "export-backup-btn", "clear-data-btn",
+  "llm-web-search", "region-select", "export-backup-btn", "reset-keep-key-btn", "clear-data-btn",
+  "memory-dialog", "memory-facts", "memory-marks", "memory-imports", "memory-import-remove", "memory-close",
   "settings-feedback", "settings-save", "settings-close",
-  "context-dialog", "youmd-input", "history-file", "history-summary", "history-remove",
+  "context-dialog", "youmd-input", "history-summary", "history-remove",
   "memory-enabled", "learned-facts", "learned-clear", "context-feedback", "context-save", "context-close",
   "disclosure-dialog", "catalog-detail", "trace",
   "export-md", "export-json", "export-csv", "export-youmd", "disclosure-feedback",
@@ -97,6 +103,7 @@ let prompts = null;
 let records = [];
 let recordsById = new Map();
 let catalogMeta = null;
+let catalogProviderOrder = null;
 let displayCatalogReady = false;
 let richIndexReady = false;
 let catalogRuntimeState = "BOOTING";
@@ -106,13 +113,20 @@ let cachedCatalogManifestKey = null;
 
 let profile = null;
 let subscriptions = new Set();
+let paidCount = 0;
+let freeCount = 0;
+let paidRecords = [];
+let freeDoc = null;
+const scopeProviders = () => new Set([...subscriptions, ...FREE_PROVIDER_SLUGS]);
 let conversation = null;
 let recommendationQueue = defaultRecommendationQueue();
 let learned = null;
 let playlists = null;
 let seenKeysCache = [];
+let historyCache = null;
 
 let controller = null;
+let localExchange = false;
 let historyController = null;
 let stateGeneration = 0;
 let activeTurnId = null;
@@ -282,8 +296,12 @@ async function fetchJson(url) {
 }
 
 function providerOrder() {
-  const order = catalogMeta && Array.isArray(catalogMeta.provider_order) ? catalogMeta.provider_order : null;
-  return order && order.length > 0 ? order : DEFAULT_PROVIDER_ORDER;
+  // The worker manifest narrows provider_order to the current subscriptions.
+  // The picker needs the full catalog order captured at load, or a saved
+  // Netflix subscription would be the only checkbox.
+  return catalogProviderOrder && catalogProviderOrder.length > 0
+    ? catalogProviderOrder
+    : DEFAULT_PROVIDER_ORDER;
 }
 
 function cancelActiveHistoryImport() {
@@ -291,41 +309,47 @@ function cancelActiveHistoryImport() {
   historyController = null;
 }
 
-async function importHistoryFile(file, { signal = null, onStatus = null } = {}) {
+async function importHistoryFile(file, { signal = null } = {}) {
   if (!file || typeof file.arrayBuffer !== "function") {
     throw new Error("Could not read that watch-history file.");
   }
 
-  cancelActiveTurn();
   cancelActiveHistoryImport();
   const activeController = new AbortController();
   historyController = activeController;
   const abortFromCaller = () => activeController.abort();
-  if (signal) signal.addEventListener("abort", abortFromCaller, { once: true });
-  const status = typeof onStatus === "function" ? onStatus : () => {};
+  if (signal) {
+    if (signal.aborted) activeController.abort();
+    else signal.addEventListener("abort", abortFromCaller, { once: true });
+  }
 
   try {
-    status("Reading watch history locally…");
     const bytes = await file.arrayBuffer();
     if (activeController.signal.aborted) {
       const error = new Error("The history import was cancelled.");
       error.name = "AbortError";
       throw error;
     }
-    if (!prompts || typeof prompts.history_plan !== "string") {
-      throw new Error("The history import prompt is unavailable.");
-    }
-    status("Inferring the file layout from a bounded sample…");
-    const inferPlan = createHistoryPlanInferer({
-      config: store.getLlm(),
-      prompt: prompts.history_plan
-    });
-    const history = await parseWatchHistoryExport(
+    const inferPlan = async (input, options) => {
+      if (typeof window.__OTT_TEST_HISTORY_PLAN__ === "function") {
+        return window.__OTT_TEST_HISTORY_PLAN__(input, options);
+      }
+      if (!store.hasKey()) {
+        throw new Error("An OpenRouter API key is required to read this file. Add the key in Settings.");
+      }
+      if (!prompts || typeof prompts.history_plan !== "string") {
+        throw new Error("The history import prompt is unavailable.");
+      }
+      const infer = createHistoryPlanInferer({
+        config: store.getLlm(),
+        prompt: prompts.history_plan
+      });
+      return infer(input, options);
+    };
+    return await parseWatchHistoryExport(
       { name: file.name, bytes },
       { inferPlan, signal: activeController.signal }
     );
-    status("Watch history imported.");
-    return history;
   } finally {
     if (signal) signal.removeEventListener("abort", abortFromCaller);
     if (historyController === activeController) historyController = null;
@@ -335,9 +359,12 @@ async function importHistoryFile(file, { signal = null, onStatus = null } = {}) 
 // ---- Catalog + search index readiness -------------------------------------
 
 function updateCatalogStatusLine() {
-  const count = typeof (catalogMeta && catalogMeta.count) === "number" ? catalogMeta.count : records.length;
+  const count = paidCount > 0
+    ? paidCount
+    : (typeof (catalogMeta && catalogMeta.count) === "number" ? catalogMeta.count : records.length);
   const builtAt = String((catalogMeta && catalogMeta.built_at) || "").slice(0, 10);
   let line = count.toLocaleString("en-IN") + " titles";
+  if (freeCount > 0) line += " + " + freeCount.toLocaleString("en-IN") + " free to watch or listen";
   if (builtAt) line += " · snapshot " + builtAt;
   line += " · availability may have changed";
   if (!displayCatalogReady) line += " · preparing catalog…";
@@ -371,12 +398,12 @@ function setShellBusy(busy) {
 }
 
 function currentScope() {
-  return { subscriptions: [...subscriptions] };
+  return { subscriptions: [...scopeProviders()] };
 }
 
 function catalogManifestCacheKey(scope = currentScope()) {
   const subscriptions = Array.isArray(scope.subscriptions) ? scope.subscriptions : [];
-  return subscriptions
+  return (profile?.region || DEFAULT_REGION) + "\0" + subscriptions
     .filter((value) => typeof value === "string" && value)
     .slice()
     .sort()
@@ -390,7 +417,7 @@ function invalidateCatalogManifestCache() {
 
 async function getCatalogManifest({ signal = null } = {}) {
   if (hasDeterministicAgent()) {
-    return { count: records.length, providers: [...subscriptions] };
+    return { count: records.length, providers: [...scopeProviders()] };
   }
   const key = catalogManifestCacheKey();
   if (cachedCatalogManifest && cachedCatalogManifestKey === key) {
@@ -465,17 +492,42 @@ function titleIsWatched(title, seen = seenKeySet()) {
 
 async function refreshSeenKeys() {
   try {
-    seenKeysCache = (await memory.getHistory())?.seen ?? [];
+    historyCache = await memory.getHistory();
+    seenKeysCache = [...(historyCache?.seen ?? []), ...(historyCache?.blocked ?? [])];
   } catch {
+    historyCache = null;
     seenKeysCache = [];
   }
   return seenKeysCache;
 }
 
+function currentRegion() {
+  return profile?.region || DEFAULT_REGION;
+}
+
+function applyFreeMerge(region = currentRegion()) {
+  const merged = mergeFreeRecords(paidRecords, freeDoc, { region });
+  records = merged.records;
+  freeCount = merged.added;
+  recordsById = new Map();
+  for (const rec of records) recordsById.set(rec.id, rec);
+  displayCatalogReady = records.length > 0;
+  invalidateCatalogManifestCache();
+}
+
+async function syncRegion(region = currentRegion()) {
+  applyFreeMerge(region);
+  try {
+    await runtime.setRegion(region);
+  } catch (err) {
+    console.warn("ui: could not update the catalog region.", err && err.message ? err.message : err);
+  }
+}
+
 function hydrate(id, reason = "", { includeWatched = false } = {}) {
   const full = recordsById.get(id);
   if (!full) return null;
-  const scoped = intersectProviders(full, subscriptions);
+  const scoped = intersectProviders(full, scopeProviders());
   if (scoped.p.length === 0) return null; // no longer available on current subscriptions
   if (!includeWatched && titleIsWatched(scoped.t)) return null;
   return {
@@ -510,7 +562,7 @@ function resolveTitleDetails(id) {
     return {
       slug,
       label: providerLabel(slug),
-      subscribed: subscriptions.has(slug),
+      subscribed: scopeProviders().has(slug),
       url,
       cta: url ? watchCta(slug, url) : null
     };
@@ -637,7 +689,7 @@ async function seedRecommendationQueue({ force = false } = {}) {
     }
   }
   if (ids.length === 0) {
-    ids = seedQueue(records, { providers: subscriptions, excludeKeys: seenKeys, limit: 20 });
+    ids = seedQueue(records, { providers: scopeProviders(), excludeKeys: seenKeys, limit: 20 });
   }
   // Keep the stored fallback reason for schema compatibility; the picks rail hides filler copy.
   await persistQueue({
@@ -668,8 +720,63 @@ async function pruneUnavailableAndWatched({ reseedsIfEmpty = true, includeWatche
   }
 }
 
+function recallTurns(archivedItems, messages) {
+  const archived = (Array.isArray(archivedItems) ? archivedItems : [])
+    .slice(0, 3)
+    .slice()
+    .reverse()
+    .flatMap((thread) => thread.messages || []);
+  const older = (Array.isArray(messages) ? messages : []).slice(0, Math.max(0, messages.length - 6));
+  const combined = archived.concat(older);
+  const turns = [];
+  for (let i = 0; i < combined.length; i += 1) {
+    if (combined[i]?.role !== "user") continue;
+    const next = combined[i + 1];
+    turns.push({ user: combined[i], assistant: next?.role === "assistant" ? next : null });
+  }
+  return turns.slice(-40);
+}
+
 function renderConversation() {
-  chat.renderConversation(conversation.messages);
+  const now = new Date(Date.now());
+  const messages = conversation?.messages || [];
+  const picks = messages.map(() => []);
+  let shown = 0;
+  for (let i = messages.length - 1; i >= 0 && shown < 3; i -= 1) {
+    const message = messages[i];
+    if (message.role !== "assistant" || !Array.isArray(message.picks) || message.picks.length === 0) continue;
+    picks[i] = message.picks
+      .map((pick) => hydrate(pick.id, pick.reason))
+      .filter(Boolean);
+    shown += 1;
+  }
+  const last = messages.at(-1) || null;
+  const lastTs = last ? Date.parse(last.createdAt) : NaN;
+  const showWelcome = !last || (last.role === "assistant" && (!Number.isFinite(lastTs) || now.getTime() - lastTs >= WELCOME_GAP_MS));
+  let lastPickTitle = null;
+  if (showWelcome) {
+    for (let i = messages.length - 1; i >= 0 && !lastPickTitle; i -= 1) {
+      const pick = Array.isArray(messages[i]?.picks) ? messages[i].picks[0] : null;
+      if (pick?.id) lastPickTitle = recordsById.get(pick.id)?.t || null;
+    }
+  }
+  const welcome = showWelcome ? buildWelcome({
+    now,
+    lastActivityIso: last?.createdAt ?? null,
+    lastPickTitle,
+    hasMessages: messages.length > 0,
+    dailyFree: dailyFreePick(records, now, (rec) => titleIsWatched(rec.t)),
+    memoryLine: buildMemoryLine({
+      facts: learned?.items || [],
+      seenCount: Array.isArray(historyCache?.seen) ? historyCache.seen.length : 0,
+      blockedCount: Array.isArray(historyCache?.blocked) ? historyCache.blocked.length : 0
+    })
+  }) : null;
+  chat.renderConversation(messages, {
+    welcome,
+    dividers: buildDividers(messages, now),
+    picks
+  });
   void refreshConversationList();
 }
 
@@ -788,22 +895,40 @@ async function removeTitleFromQueue(titleId) {
   });
 }
 
-async function markTitleSeen(rec) {
+function stampMark(history, { key, title, bucket, source }) {
+  return rememberMark(history?.marks, {
+    key,
+    title,
+    bucket,
+    source,
+    at: new Date(Date.now()).toISOString()
+  });
+}
+
+async function markTitleSeen(rec, bucket = "seen") {
   const title = typeof rec?.t === "string" ? rec.t.trim() : "";
   const key = normalizeTitle(title);
   if (!key) return;
-  const now = new Date().toISOString();
+  const now = new Date(Date.now()).toISOString();
   const existing = await memory.getHistory();
+  const blocked = bucket === "blocked";
+  const marks = stampMark(existing, { key, title, bucket: blocked ? "blocked" : "seen", source: "button" });
   if (!existing) {
     await memory.setHistory({
       schema: 2,
       importedAt: now,
-      sources: [{ name: "Marked in picks", kind: "manual" }],
-      series: rec?.k === "tv" ? [{ name: title, episodes: 1, lastWatched: null }] : [],
-      movies: rec?.k === "tv" ? [] : [{ title, lastWatched: null }],
+      sources: [{ name: blocked ? "Hidden in picks" : "Marked in picks", kind: "manual" }],
+      series: !blocked && rec?.k === "tv" ? [{ name: title, episodes: 1, lastWatched: null }] : [],
+      movies: blocked || rec?.k === "tv" ? [] : [{ title, lastWatched: null }],
       other: [],
-      seen: [key]
+      seen: blocked ? [] : [key],
+      blocked: blocked ? [key] : [],
+      marks
     });
+  } else if (blocked) {
+    const keys = new Set(Array.isArray(existing.blocked) ? existing.blocked : []);
+    keys.add(key);
+    await memory.setHistory({ ...existing, blocked: Array.from(keys).sort(), marks });
   } else {
     const seen = new Set(Array.isArray(existing.seen) ? existing.seen : []);
     seen.add(key);
@@ -819,10 +944,50 @@ async function markTitleSeen(rec) {
       ...existing,
       movies,
       series,
-      seen: Array.from(seen).sort()
+      seen: Array.from(seen).sort(),
+      marks
     });
   }
   await refreshSeenKeys();
+  renderConversation();
+}
+
+async function markTitlesSeen(titles) {
+  const named = (Array.isArray(titles) ? titles : [])
+    .map((title) => ({ title: String(title || "").trim(), key: normalizeTitle(title) }))
+    .filter((item) => item.key);
+  if (named.length === 0) return;
+  const now = new Date(Date.now()).toISOString();
+  const existing = await memory.getHistory();
+  const seen = new Set(Array.isArray(existing?.seen) ? existing.seen : []);
+  let marks = existing?.marks;
+  for (const item of named) {
+    seen.add(item.key);
+    marks = stampMark({ marks }, { key: item.key, title: item.title, bucket: "seen", source: "chat" });
+  }
+  if (!existing) {
+    await memory.setHistory({
+      schema: 2,
+      importedAt: now,
+      sources: [{ name: "Marked in picks", kind: "manual" }],
+      series: [],
+      movies: named.map((item) => ({ title: item.title, lastWatched: null })),
+      other: [],
+      seen: Array.from(seen).sort(),
+      marks
+    });
+  } else {
+    const movies = Array.isArray(existing.movies) ? existing.movies.slice() : [];
+    const series = Array.isArray(existing.series) ? existing.series : [];
+    for (const item of named) {
+      const inMovies = movies.some((entry) => normalizeTitle(entry?.title) === item.key);
+      const inSeries = series.some((entry) => normalizeTitle(entry?.name) === item.key);
+      if (!inMovies && !inSeries) movies.push({ title: item.title, lastWatched: null });
+    }
+    await memory.setHistory({ ...existing, movies, seen: Array.from(seen).sort(), marks });
+  }
+  await refreshSeenKeys();
+  renderConversation();
 }
 
 async function onPickFeedback(titleId, action, rec) {
@@ -850,6 +1015,13 @@ async function onPickFeedback(titleId, action, rec) {
       await markTitleSeen(rec);
       await removeTitleFromQueue(titleId);
       queueView?.setFeedbackNote("Marked as seen — will not recommend it again.");
+      return;
+    }
+    if (action === "blocked") {
+      await markTitleSeen(rec, "blocked");
+      await removeTitleFromQueue(titleId);
+      renderConversation();
+      queueView?.setFeedbackNote("Hidden. I will not suggest it again.");
       return;
     }
     if (action === "tonight") {
@@ -954,14 +1126,135 @@ function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgr
   };
 }
 
+function fileLabel(file) {
+  const name = String(file && file.name || "").trim();
+  return name || "file";
+}
+
+async function postLocalTurn(userText, produceReply) {
+  if (controller || historyController) {
+    chat.setNote("Finish the current turn first.");
+    return;
+  }
+  const turnGeneration = stateGeneration;
+  clearError();
+  let pendingUser = null;
+  try {
+    const saved = await memory.appendUserMessage(conversation.id, userText);
+    conversation = saved.conversation;
+    const appended = conversation.messages.at(-1);
+    pendingUser = { content: appended.content, createdAt: appended.createdAt };
+    renderConversation();
+  } catch (error) {
+    showError(error && error.message ? error.message : "Could not save your message.");
+    return;
+  }
+
+  const thisController = new AbortController();
+  controller = thisController;
+  activePendingUser = pendingUser;
+  localExchange = true;
+  chat.setBusy(true);
+  setShellBusy(true);
+  try {
+    const reply = await produceReply(thisController.signal);
+    if (turnGeneration !== stateGeneration || controller !== thisController) return;
+    const text = String(reply || "").trim() || "Done.";
+    const saved = await memory.completeTurn(conversation.id, {
+      content: text,
+      meta: { status: "complete" }
+    });
+    if (turnGeneration !== stateGeneration || controller !== thisController) return;
+    conversation = saved.conversation;
+    activePendingUser = null;
+    renderConversation();
+  } catch (err) {
+    const aborted = Boolean(err && err.name === "AbortError")
+      || turnGeneration !== stateGeneration
+      || controller !== thisController;
+    if (aborted) {
+      await rollbackPendingUserTurn(conversation.id, pendingUser);
+      if (turnGeneration === stateGeneration) renderConversation();
+      return;
+    }
+    const text = err && err.message ? err.message : "That did not work.";
+    try {
+      const saved = await memory.completeTurn(conversation.id, {
+        content: text,
+        meta: { status: "complete" }
+      });
+      if (turnGeneration !== stateGeneration || controller !== thisController) return;
+      conversation = saved.conversation;
+      activePendingUser = null;
+      renderConversation();
+    } catch (saveErr) {
+      await rollbackPendingUserTurn(conversation.id, pendingUser);
+      showError(saveErr && saveErr.message ? saveErr.message : "Could not save the reply.");
+      renderConversation();
+    }
+  } finally {
+    if (controller === thisController) {
+      controller = null;
+      activePendingUser = null;
+      localExchange = false;
+      chat.setBusy(false);
+      setShellBusy(false);
+      refreshSendReadiness();
+    } else {
+      localExchange = false;
+    }
+  }
+}
+
+async function onHistoryFile(file) {
+  if (!file) return;
+  const filename = fileLabel(file);
+  await postLocalTurn(filename, async (signal) => {
+    const parsed = await importHistoryFile(file, { signal });
+    if (!Array.isArray(parsed?.seen) || parsed.seen.length === 0) {
+      throw new Error(`"${filename}" has no readable titles.`);
+    }
+    await memory.setHistory(parsed);
+    await refreshSeenKeys();
+    try {
+      await pruneUnavailableAndWatched({
+        reseedsIfEmpty: conversation.messages.length === 0
+      });
+      if (!recommendationQueue.source && recommendationQueue.items.length === 0) {
+        await seedRecommendationQueue({ force: true });
+      }
+    } catch (err) {
+      console.warn("ui: could not refresh the queue after import.", err && err.message ? err.message : err);
+    }
+    return historyImportReply(filename, parsed);
+  });
+}
+
+async function runChatCommand(query, command) {
+  chat.clearQuery();
+  await postLocalTurn(query, async () => {
+    if (command.kind === "region") {
+      await applyScope([...profile.providers], { region: command.region }, { reseedSeeded: true });
+      return regionCommandReply(command.region);
+    }
+    await applyScope(command.providers, { region: currentRegion() }, { reseedSeeded: true });
+    return subscriptionCommandReply(command.providers);
+  });
+}
+
 async function onSubmit() {
-  if (controller) return;
+  if (controller || historyController) return;
+  const query = chat.getQuery();
+  if (!query) return;
+  const command = parseChatCommand(query);
+  if (command) {
+    await runChatCommand(query, command);
+    return;
+  }
   if (!store.hasKey()) {
     refreshSendReadiness();
     return;
   }
-  const query = chat.getQuery();
-  if (!query) return;
   const turnId = makeTurnId();
   const turnTiming = createTurnTiming(turnId);
   let agentStartedAt = null;
@@ -1021,7 +1314,7 @@ async function onSubmit() {
   let youmd = "";
   let history = null;
   let seenKeys = [];
-  let catalogManifest = { count: records.length, providers: [...subscriptions] };
+  let catalogManifest = { count: records.length, providers: [...scopeProviders()] };
 
   try {
     // The label is intentionally resolved before catalog/model work. It gives the
@@ -1042,7 +1335,8 @@ async function onSubmit() {
       memory.getYouMd(),
       memory.getHistory(),
       memory.getLearned(),
-      memory.getProfile()
+      memory.getProfile(),
+      memory.getThreads()
     ]).then((values) => {
       turnTiming.end(contextTiming);
       return values;
@@ -1062,12 +1356,22 @@ async function onSubmit() {
     const [contextResult, manifestResult] = await Promise.allSettled([contextPromise, manifestPromise]);
     if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
 
+    let regionCode = currentRegion();
+    let recap = "";
     if (contextResult.status === "fulfilled") {
-      const [manualYoumd, savedHistory, savedLearned, savedProfile] = contextResult.value;
+      const [manualYoumd, savedHistory, savedLearned, savedProfile, savedThreads] = contextResult.value;
+      if (savedProfile?.region) regionCode = savedProfile.region;
       youmd = manualYoumd + (savedProfile.memoryEnabled === false ? "" : `\n\n${renderLearnedContext(savedLearned)}`);
       history = savedHistory;
-      seenKeys = savedHistory?.seen ?? [];
+      seenKeys = [...(savedHistory?.seen ?? []), ...(savedHistory?.blocked ?? [])];
       seenKeysCache = seenKeys;
+      if (savedProfile?.memoryEnabled !== false) {
+        recap = buildRecapBlock({
+          turns: recallTurns(savedThreads?.items, priorMessages),
+          query,
+          resolveTitle: (id) => recordsById.get(id)?.t
+        });
+      }
     } else {
       showError("Personalization data is unavailable; continuing without saved context.");
     }
@@ -1087,7 +1391,15 @@ async function onSubmit() {
     }
 
     if (turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
+    const temporal = buildTemporalBlock({
+      now: new Date(Date.now()),
+      lastActivityIso: priorMessages.at(-1)?.createdAt ?? null,
+      region: regionCode
+    });
     const runner = hasDeterministicAgent() ? window.__OTT_TEST_RUN_AGENT__ : runAgent;
+    const regionPrompts = prompts && typeof prompts.system === "string"
+      ? { ...prompts, system: prompts.system.replaceAll("{region}", regionCode) }
+      : prompts;
     const includeWatched = allowsRewatch(query);
     const scopedQueue = {
       ...recommendationQueue,
@@ -1099,14 +1411,16 @@ async function onSubmit() {
     let firstVisibleTokenRecorded = false;
     const result = await runner({
       config: store.getLlm(),
-      prompts,
+      prompts: regionPrompts,
       tools: makeTools(includeWatched ? [] : seenKeys, currentQueue?.items || []),
       context: {
         youmd,
         history,
         mood: "",
         catalogManifest,
-        recommendationQueue: currentQueue
+        recommendationQueue: currentQueue,
+        temporal,
+        recap
       },
       query,
       conversation: priorMessages,
@@ -1137,6 +1451,11 @@ async function onSubmit() {
     }
 
     const replyText = result.reply || prompts.no_results || "I couldn't come up with anything this time.";
+    const watchedTitles = profile?.memoryEnabled !== false && Array.isArray(result.watched) ? result.watched : [];
+    if (watchedTitles.length) {
+      await markTitlesSeen(watchedTitles);
+      seenKeys = seenKeysCache;
+    }
     let nextQueue = recommendationQueue;
     if (Array.isArray(result.queue)) {
       const includeWatched = allowsRewatch(query);
@@ -1155,6 +1474,14 @@ async function onSubmit() {
         };
       }
     }
+    if (watchedTitles.length) {
+      const watchedKeys = new Set(watchedTitles.map((title) => normalizeTitle(title)).filter(Boolean));
+      nextQueue = {
+        ...nextQueue,
+        items: nextQueue.items.filter((item) => !watchedKeys.has(normalizeTitle(recordsById.get(item.id)?.t || "")))
+      };
+    }
+    const picks = nextQueue.items.slice(0, 3).map((item) => ({ id: item.id, reason: item.reason || "" }));
     const priorLearned = learned || await memory.getLearned();
     const nextLearned = Array.isArray(result.memoryCandidates) && profile?.memoryEnabled !== false
       ? mergeLearnedPreferences(priorLearned, result.memoryCandidates, query)
@@ -1168,7 +1495,8 @@ async function onSubmit() {
         usage: result.usage,
         billing: result.billing
       },
-      learned: nextLearned
+      learned: nextLearned,
+      picks
     });
     conversation = saved.conversation;
     activePendingUser = null;
@@ -1181,8 +1509,11 @@ async function onSubmit() {
       timing: metricsTiming,
       catalogCount: typeof catalogMeta?.count === "number" ? catalogMeta.count : records.length
     });
+    const inlineRecs = picks.map((pick) => hydrate(pick.id, pick.reason)).filter(Boolean);
+    if (inlineRecs.length) chat.appendPicks(inlineRecs);
     const learnedNote = describeLearnedChange(priorLearned, learned);
     if (learnedNote) queueView?.setFeedbackNote(learnedNote);
+    else if (watchedTitles.length) queueView?.setFeedbackNote("Marked " + watchedTitles.join(", ") + " as seen.");
   } catch (err) {
     if (turnGeneration === stateGeneration && activeTurnId === turnId) {
       await rollbackPendingUserTurn(conversation.id, pendingUser);
@@ -1210,10 +1541,12 @@ async function onStop() {
   if (!controller) return;
   const conversationId = conversation.id;
   const pendingUser = activePendingUser;
-  chat.failTurn({ message: "Stopped.", status: "Stopped" });
+  const local = localExchange;
+  if (!local) chat.failTurn({ message: "Stopped.", status: "Stopped" });
   cancelActiveTurn();
   await rollbackPendingUserTurn(conversationId, pendingUser);
-  chat.restoreQueryIfEmpty(pendingUser?.content);
+  if (local) renderConversation();
+  else chat.restoreQueryIfEmpty(pendingUser?.content);
 }
 
 // ---- New chat / subscriptions / context / backup ---------------------------
@@ -1289,18 +1622,20 @@ async function onDeleteConversation(conversationId) {
   clearError();
 }
 
-async function onSubscriptionsChange(newProviders) {
-  cancelActiveTurn();
-  profile = await memory.setProfile({ ...profile, providers: newProviders, onboardingComplete: true });
+async function applyScope(newProviders, extra = {}, { reseedSeeded = false } = {}) {
+  const region = typeof extra.region === "string" && extra.region ? extra.region : currentRegion();
+  const regionChanged = region !== currentRegion();
+  profile = await memory.setProfile({ ...profile, providers: newProviders, region, onboardingComplete: true });
   subscriptions = new Set(profile.providers);
-  invalidateCatalogManifestCache();
+  if (regionChanged || extra.region) await syncRegion(profile.region);
   updateRuntimeCatalogMetadata();
   sidebar.renderSubscriptions(profile.providers);
   renderPlaylists();
   titleDetailsView?.refresh();
   await refreshSeenKeys();
-  if (conversation.messages.length === 0) {
-    // Empty chats should rebuild the seed for the new subscription scope.
+  const reseed = conversation.messages.length === 0 || (reseedSeeded && !recommendationQueue.source);
+  if (reseed) {
+    // Empty chats, and chat commands against a seed queue, rebuild for the new scope.
     await seedRecommendationQueue({ force: true });
   } else {
     const available = filterQueueItems(recommendationQueue.items);
@@ -1315,6 +1650,12 @@ async function onSubscriptionsChange(newProviders) {
     }
   }
   refreshSendReadiness();
+}
+
+async function onSubscriptionsChange(newProviders, extra = {}) {
+  cancelActiveTurn();
+  await applyScope(newProviders, extra);
+  renderConversation();
 }
 
 function exportMeta() {
@@ -1338,6 +1679,7 @@ async function onSaveContextMemory(payload) {
       reseedsIfEmpty: conversation.messages.length === 0
     });
   }
+  renderConversation();
   return saved;
 }
 
@@ -1350,18 +1692,167 @@ async function onExportBackup() {
   }
 }
 
+const RESET_CONFIRM = "Start over? This removes conversations, your queue, learned facts, seen and blocked titles, imported history, You.md, region, subscriptions, and layout. Your API key stays.";
+
+function reloadApp() {
+  const url = new URL(window.location.href);
+  url.searchParams.delete("reset");
+  const next = url.pathname + url.search + url.hash;
+  try {
+    window.history.replaceState(null, "", next);
+  } catch {
+    // Some embedded browsers refuse replaceState. The reload still drops ?reset when assigned below.
+  }
+  try {
+    window.location.reload();
+  } catch {
+    window.location.href = next;
+  }
+}
+
+async function onResetKeepKey() {
+  if (!window.confirm(RESET_CONFIRM)) return;
+  try {
+    cancelActiveOperations();
+    await memory.clear();
+    if (!store.clearAll({ keepLlm: true })) throw new Error("Local data could not be reset.");
+    reloadApp();
+  } catch (err) {
+    showError("Could not start over. " + (err && err.message ? err.message : ""));
+  }
+}
+
 async function onClearData() {
-  if (!window.confirm("Clear all local data? This removes your conversation, queue, subscriptions, You.md, watch history, and LLM key from this browser and cannot be undone.")) {
+  if (!window.confirm("Clear everything? This removes your conversation, queue, subscriptions, You.md, watch history, and API key from this browser and cannot be undone.")) {
     return;
   }
   try {
     cancelActiveOperations();
     await memory.clear();
     if (!store.clearAll()) throw new Error("The saved API key could not be removed.");
-    location.reload();
+    reloadApp();
   } catch (err) {
     showError("Could not clear local data. " + (err && err.message ? err.message : ""));
   }
+}
+
+function importedHistoryLine(history) {
+  const sources = Array.isArray(history?.sources) ? history.sources : [];
+  const counts = { netflix: 0, youtube: 0 };
+  const named = [];
+  for (const source of sources) {
+    const count = Number(source?.records);
+    if (!Number.isFinite(count) || count <= 0) continue;
+    const kind = source?.kind;
+    if (kind === "netflix" || kind === "youtube") counts[kind] += count;
+    else if (typeof source?.name === "string" && source.name) {
+      named.push(source.name + ": " + count.toLocaleString("en-IN"));
+    }
+  }
+  const parts = [];
+  if (counts.netflix) {
+    parts.push("Netflix: " + counts.netflix.toLocaleString("en-IN") + (counts.netflix === 1 ? " title" : " titles"));
+  }
+  if (counts.youtube) {
+    parts.push("YouTube: " + counts.youtube.toLocaleString("en-IN") + (counts.youtube === 1 ? " video" : " videos"));
+  }
+  parts.push(...named);
+  return parts.length ? parts.join(" · ") : "No imported history.";
+}
+
+function markedRows(history) {
+  const marks = Array.isArray(history?.marks) ? history.marks : [];
+  const seen = marks
+    .filter((mark) => mark.bucket === "seen" && (mark.source === "chat" || mark.source === "button"))
+    .sort((left, right) => String(right.at || "").localeCompare(String(left.at || "")))
+    .slice(0, 50);
+  const blocked = marks.filter((mark) => mark.bucket === "blocked");
+  const known = new Set(blocked.map((mark) => mark.key));
+  const extra = (Array.isArray(history?.blocked) ? history.blocked : [])
+    .filter((key) => typeof key === "string" && key && !known.has(key))
+    .map((key) => ({ key, title: key, bucket: "blocked", source: "button", at: "" }));
+  return seen.concat(blocked, extra);
+}
+
+function wireMemoryDialog() {
+  async function onLearnedChange(draft) {
+    learned = await memory.setLearned(draft);
+    renderConversation();
+  }
+  el.memoryClose.addEventListener("click", () => el.memoryDialog.close());
+  el.memoryImportRemove.addEventListener("click", () => {
+    void (async () => {
+      const existing = await memory.getHistory();
+      const marks = Array.isArray(existing?.marks) ? existing.marks : [];
+      if (!existing || marks.length === 0) {
+        await memory.setHistory(null);
+      } else {
+        const seen = marks.filter((mark) => mark.bucket === "seen").map((mark) => mark.key);
+        const blocked = marks.filter((mark) => mark.bucket === "blocked").map((mark) => mark.key);
+        await memory.setHistory({
+          schema: 2,
+          importedAt: null,
+          sources: [],
+          series: [],
+          movies: [],
+          other: [],
+          seen: [...new Set(seen)].sort(),
+          blocked: [...new Set(blocked)].sort(),
+          marks
+        });
+      }
+      await refreshSeenKeys();
+      renderConversation();
+      if (conversation.messages.length === 0) await seedRecommendationQueue({ force: true });
+      await openMemoryDialog();
+    })().catch((err) => showError(err && err.message ? err.message : "Could not remove imported history."));
+  });
+  return onLearnedChange;
+}
+
+let onMemoryLearnedChange = null;
+
+async function openMemoryDialog() {
+  const history = await memory.getHistory();
+  learned = await memory.getLearned();
+  historyCache = history;
+  renderLearnedFacts(el.memoryFacts, learned, onMemoryLearnedChange);
+  el.memoryMarks.textContent = "";
+  const rows = markedRows(history);
+  if (rows.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "note";
+    empty.textContent = "Nothing marked in chat yet.";
+    el.memoryMarks.appendChild(empty);
+  } else {
+    for (const mark of rows) {
+      const row = document.createElement("div");
+      row.className = "memory-mark";
+      row.setAttribute("role", "listitem");
+      const label = document.createElement("span");
+      const kind = mark.bucket === "blocked" ? "Can't open it" : "Seen";
+      label.textContent = mark.title + " · " + kind;
+      const remove = document.createElement("button");
+      remove.type = "button";
+      remove.textContent = "Remove";
+      remove.addEventListener("click", () => {
+        void (async () => {
+          await memory.unmarkTitle(mark.key);
+          await refreshSeenKeys();
+          renderConversation();
+          if (conversation.messages.length === 0) await seedRecommendationQueue({ force: true });
+          else await pruneUnavailableAndWatched({ reseedsIfEmpty: false });
+          await openMemoryDialog();
+        })().catch((err) => showError(err && err.message ? err.message : "Could not remove that title."));
+      });
+      row.append(label, remove);
+      el.memoryMarks.appendChild(row);
+    }
+  }
+  el.memoryImports.textContent = importedHistoryLine(history);
+  const imported = importedHistoryLine(history) !== "No imported history.";
+  el.memoryImportRemove.hidden = !imported;
+  if (!el.memoryDialog.hasAttribute("open")) el.memoryDialog.showModal();
 }
 
 async function reloadFromMemory() {
@@ -1388,9 +1879,11 @@ async function onOnboardingComplete(payload) {
   if (payload.history) await memory.setHistory(payload.history);
   profile = await memory.setProfile({
     providers: payload.providers,
+    region: payload.region || DEFAULT_REGION,
     onboardingComplete: true
   });
   subscriptions = new Set(profile.providers);
+  await syncRegion(profile.region);
   updateRuntimeCatalogMetadata();
   await showShell();
 }
@@ -1411,12 +1904,14 @@ async function loadCatalog() {
     fetchJson("./assets/catalog.json")
   ]);
   prompts = promptsDoc;
-  records = Array.isArray(catalogDoc.records) ? catalogDoc.records : [];
-  recordsById = new Map();
-  for (const rec of records) recordsById.set(rec.id, rec);
+  paidRecords = Array.isArray(catalogDoc.records) ? catalogDoc.records : [];
+  paidCount = typeof catalogDoc.meta?.count === "number" ? catalogDoc.meta.count : paidRecords.length;
+  freeDoc = await fetchJson("./assets/free-sources.json").catch(() => null);
   catalogMeta = catalogDoc.meta || {};
+  const loadedOrder = Array.isArray(catalogMeta.provider_order) ? catalogMeta.provider_order : [];
+  catalogProviderOrder = loadedOrder.filter((slug) => typeof slug === "string" && slug);
+  applyFreeMerge(DEFAULT_REGION);
   // Main thread keeps display/resolve projections only; the Worker owns search indexing.
-  displayCatalogReady = records.length > 0;
 }
 
 function initializeCatalogRuntime() {
@@ -1455,13 +1950,13 @@ async function init() {
     getHistory: () => memory.getHistory(),
     setHistory: (v) => memory.setHistory(v),
     summarizeHistory: summarize,
-    importHistoryFile,
     onSubscriptionsChange,
     catalogMeta: () => catalogMeta,
     getExportPicks,
     exportMeta,
     onExportBackup,
     onClearData,
+    onResetKeepKey,
     onError: showError
   });
 
@@ -1484,7 +1979,20 @@ async function init() {
     setLayout: (layout) => store.setPaneLayout(layout)
   });
 
-  chat = createChatView(el, { onSubmit, onStop });
+  onMemoryLearnedChange = wireMemoryDialog();
+
+  chat = createChatView(el, {
+    onSubmit,
+    onFile: (file) => {
+      void onHistoryFile(file);
+    },
+    isLocalCommand: (query) => parseChatCommand(query) !== null,
+    onStop,
+    onOpenMemory: () => {
+      void openMemoryDialog().catch((err) => showError(err && err.message ? err.message : "Could not open what I remember."));
+    },
+    renderInlinePicks: (recs) => queueView?.renderInline(recs) ?? null
+  });
 
   titleDetailsView = createTitleDetailsView(el, { resolveDetails: resolveTitleDetails });
 
@@ -1511,7 +2019,6 @@ async function init() {
     providerOrder,
     store,
     DEFAULT_LLM,
-    importHistoryFile,
     onComplete: onOnboardingComplete,
     onError: (message) => showError(message)
   });
@@ -1527,7 +2034,24 @@ async function init() {
       console.warn("ui: browser-memory reported issues during initialize()", initResult.issues);
     }
 
+    const resetRequested = new URLSearchParams(window.location.search).has("reset");
+    if (resetRequested) {
+      if (window.confirm(RESET_CONFIRM)) {
+        await memory.clear();
+        if (!store.clearAll({ keepLlm: true })) throw new Error("Local data could not be reset.");
+        reloadApp();
+        return;
+      }
+      const url = new URL(window.location.href);
+      url.searchParams.delete("reset");
+      window.history.replaceState(null, "", url.pathname + url.search + url.hash);
+    }
+
     profile = await memory.getProfile();
+    applyFreeMerge(profile.region || DEFAULT_REGION);
+    void runtime.setRegion(profile.region || DEFAULT_REGION).catch((err) => {
+      console.warn("ui: could not set the catalog region.", err && err.message ? err.message : err);
+    });
     const testMode = readTestMode(window.location);
     if (testMode) {
       profile = await memory.setProfile({
@@ -1539,7 +2063,8 @@ async function init() {
     subscriptions = new Set(profile.providers);
     updateRuntimeCatalogMetadata();
 
-    if (!BYPASS_ONBOARDING && !profile.onboardingComplete) {
+    const needsOnboarding = !profile.onboardingComplete && (!BYPASS_ONBOARDING || store.hasKey());
+    if (needsOnboarding) {
       onboarding.show();
     } else {
       await showShell();

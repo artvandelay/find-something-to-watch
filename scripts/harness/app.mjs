@@ -30,8 +30,12 @@ export async function bootApp({
   storage = null,
   sidecar = null,
   agentFixture = null,
+  historyPlanFixture = null,
+  freeDoc = undefined,
+  providerOrder = null,
   requestIdleCallback = null,
-  quiet = true
+  quiet = true,
+  prepare = null
 } = {}) {
   const html = await readFile(join(docsDir, "index.html"), "utf8");
   const prompts = JSON.parse(await readFile(join(docsDir, "assets", "prompts.json"), "utf8"));
@@ -61,7 +65,9 @@ export async function bootApp({
       region: "IN",
       built_at: "2026-08-04",
       count: (records || defaultRecords()).length,
-      provider_order: ["netflix", "prime", "hotstar"],
+      provider_order: Array.isArray(providerOrder) && providerOrder.length > 0
+        ? providerOrder
+        : ["netflix", "prime", "hotstar"],
       providers: { netflix: 2, prime: 2, hotstar: 1 }
     },
     records: records || defaultRecords()
@@ -76,6 +82,7 @@ export async function bootApp({
     fetchOptions.push({ href, cache: init.cache || "default" });
     if (href.includes("prompts.json")) return jsonResponse(prompts);
     if (href.includes("catalog.json")) return jsonResponse(catalog);
+    if (href.includes("/assets/free-sources.json") && freeDoc !== undefined) return jsonResponse(freeDoc);
     if (href.includes("catalog.text.json")) {
       if (sidecar === "deferred") {
         return await new Promise((resolve) => { resolveDeferredSidecar = resolve; });
@@ -92,8 +99,21 @@ export async function bootApp({
   }
 
   const globals = swapGlobals(window);
-  if (now) window.Date.now = () => now;
+  let restoreClock = null;
+  if (typeof now === "number") {
+    const savedNow = Date.now;
+    const savedWindowNow = window.Date.now;
+    const frozen = () => now;
+    Date.now = frozen;
+    window.Date.now = frozen;
+    restoreClock = () => {
+      Date.now = savedNow;
+      window.Date.now = savedWindowNow;
+    };
+  }
   if (agentFixture) window.__OTT_TEST_RUN_AGENT__ = createAgentFixture(window, agentFixture);
+  if (typeof historyPlanFixture === "function") window.__OTT_TEST_HISTORY_PLAN__ = historyPlanFixture;
+  if (typeof prepare === "function") prepare(window);
 
   // The missing synopsis sidecar is expected here and warns on every boot.
   const warn = console.warn;
@@ -158,6 +178,7 @@ export async function bootApp({
     },
     restore: () => {
       if (storage) saveLocalStorage(window, storage.local);
+      restoreClock?.();
       restoreGlobals(globals);
       window.close();
     }
