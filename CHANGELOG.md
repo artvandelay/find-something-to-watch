@@ -45,7 +45,24 @@ All notable changes to this project will be documented here.
 - "Start over (keep API key)" in Settings, and the same action from `?reset`. "Clear everything" still
   removes the API key.
 
+- The assistant decides how many titles go on the rail and whether they replace the list or
+  are added after it (`queue`, `queueMode`, `showAll`). The screen does not guess that from
+  the message. **Ask for more picks** only sends "More, please".
+- Taste actions on a pick are an icon row (more like this, not for me, already seen, not tonight,
+  and can't open it on free titles). The words stay in the accessible name and a tooltip.
+- A "Skip to conversation" link is the first keyboard stop in the app.
+
 ### Changed
+
+- Pick reasons are shown in full. The plot line on a card can still be shortened; the title
+  opens the full synopsis.
+- New chat is a neutral button. Send stays the filled primary.
+- Body text and the composer are 16px.
+- Light mode has its own success color. Danger is a separate crimson from the tomato accent,
+  and destructive buttons use that color for the border.
+- Errors that stop a turn, a save, or a reset say what to do next.
+- The profile toggle says "Remember what you like between chats". Empty learned facts and
+  empty playlists say how they get filled.
 
 - Watch history attached in chat is read by asking the model for a layout, generating a reader from that
   layout, and running it in a disposable worker. The reply states the counts, or the error if the layout

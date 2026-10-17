@@ -32,7 +32,7 @@ const prompts = JSON.parse(await readFile(
 ));
 const config = { baseUrl: "https://fake/v1", apiKey: "sk-test", model: "m" };
 
-assert.equal(prompts.version, 6);
+assert.equal(prompts.version, 7);
 assert.match(prompts.system, /The user's region is \{region\}/);
 assert.match(prompts.system, /free:/);
 assert.match(prompts.planner, /watched/);
@@ -716,6 +716,39 @@ function ok(payload) {
   assert.match(requests[0].messages.at(-1).content, /## Right now/);
   assert.equal(result.ok, true);
   assert.deepEqual(result.watched, ["Dark Matter"]);
+}
+
+// Rail hooks: the agent's queueMode and showAll pass through; junk values are dropped.
+{
+  assert.match(prompts.planner, /queueMode/);
+  assert.match(prompts.planner, /showAll/);
+  assert.match(prompts.planner, /at most 20/);
+  for (const [decisionObject, mode, all] of [
+    [{ queue: [], queueMode: "append", showAll: true }, "append", true],
+    [{ queue: [], queueMode: "replace", showAll: false }, "replace", false],
+    [{ queue: [], queueMode: "sideways", showAll: "yes" }, null, null],
+    [{ queue: [] }, null, null]
+  ]) {
+    const requests = [];
+    const fetchImpl = async (_url, init) => {
+      requests.push(JSON.parse(init.body));
+      const content = requests.length === 1 ? JSON.stringify(decisionObject) : "Done.";
+      return ok({ choices: [{ message: { role: "assistant", content } }] });
+    };
+    const result = await runAgent({
+      config,
+      prompts,
+      tools,
+      context: { youmd: "", history: null, mood: "", recommendationQueue: { source: null, items: [{ id: "a", t: "A", reason: "r", rank: "top" }] } },
+      query: "more, please",
+      conversation: [],
+      fetchImpl
+    });
+    assert.equal(result.ok, true);
+    assert.equal(result.queueMode, mode);
+    assert.equal(result.showAll, all);
+    assert.ok(requests[0].messages.some((m) => /rail holds at most 20 titles; 1 is on screen/.test(String(m.content))));
+  }
 }
 
 console.log("check_agent OK");

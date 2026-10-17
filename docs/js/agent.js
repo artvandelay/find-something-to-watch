@@ -3,7 +3,7 @@
 
 import { streamChatCompletion } from "./llm-client.js";
 import { isOpenRouterBaseUrl } from "./openrouter-models.js";
-import { sanitizeRecommendationQueue } from "./recommendations.js";
+import { RECOMMENDATION_LIMITS, sanitizeRecommendationQueue } from "./recommendations.js";
 import { validatePreferenceCandidates, validateWatchedCandidates } from "./preferences.js";
 
 const TURN_CLASS_BUDGETS = Object.freeze({
@@ -222,7 +222,8 @@ function buildContextBlock(context) {
 function buildQueueContextBlock(context) {
   const queue = context && context.recommendationQueue;
   const items = Array.isArray(queue?.items) ? queue.items : [];
-  const instruction = "Resolve pronouns such as \"it\", \"that one\", and \"the last pick\" against this list. Factual follow-ups about an existing pick do not require new recommendations unless the viewer asks for alternatives.";
+  const capNote = ` The rail holds at most ${RECOMMENDATION_LIMITS.items} titles; ${items.length} ${items.length === 1 ? "is" : "are"} on screen now. You choose how many titles to return and whether they replace or append (see "queueMode").`;
+  const instruction = capNote.trim() + "\n\n" + "Resolve pronouns such as \"it\", \"that one\", and \"the last pick\" against this list. Factual follow-ups about an existing pick do not require new recommendations unless the viewer asks for alternatives.";
   if (items.length === 0) {
     const content = "## Current recommendations\nNone active yet.\n\n" + instruction;
     return {
@@ -471,7 +472,7 @@ function parseDecision(text) {
   if (!value || typeof value !== "object" || Array.isArray(value)) {
     throw Object.assign(new Error("The model did not return a decision object."), { code: "parse" });
   }
-  const allowed = new Set(["queue", "memoryCandidates", "watched"]);
+  const allowed = new Set(["queue", "queueMode", "showAll", "memoryCandidates", "watched"]);
   if (Object.keys(value).some((key) => !allowed.has(key)) ||
     ("queue" in value && !Array.isArray(value.queue)) ||
     ("memoryCandidates" in value && !Array.isArray(value.memoryCandidates)) ||
@@ -561,6 +562,8 @@ export async function runAgent(opts) {
     ok: false,
     reply: "",
     queue: null,
+    queueMode: null,
+    showAll: null,
     memoryCandidates: [],
     watched: [],
     usage,
@@ -617,6 +620,8 @@ export async function runAgent(opts) {
     ];
 
     let queue = null;
+    let queueMode = null;
+    let showAll = null;
     let memoryCandidates = [];
     let watched = [];
     let messages = baseMessages.slice();
@@ -735,6 +740,9 @@ export async function runAgent(opts) {
           queue = rawItems.filter((item) => found.has(item.id));
         }
       }
+      // Rail hooks, passed through for the UI to obey. Unknown values are dropped, not guessed.
+      if (decision.queueMode === "replace" || decision.queueMode === "append") queueMode = decision.queueMode;
+      if (typeof decision.showAll === "boolean") showAll = decision.showAll;
       memoryCandidates = validatePreferenceCandidates(decision.memoryCandidates, String(query || ""));
       watched = validateWatchedCandidates(decision.watched, String(query || ""));
 
@@ -777,6 +785,8 @@ export async function runAgent(opts) {
       ok: true,
       reply,
       queue,
+      queueMode,
+      showAll,
       memoryCandidates,
       watched,
       usage,
@@ -790,6 +800,8 @@ export async function runAgent(opts) {
       turnId,
       reply,
       queue,
+      queueMode,
+      showAll,
       memoryCandidates,
       watched,
       usage,

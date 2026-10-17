@@ -7,8 +7,55 @@ import { isUsefulReason } from "../recommendations.js";
  * roughly six picks are readable at once without paging. Has its own loading
  * and empty states, independent of the chat column's status note.
  */
+const SVG_NS = "http://www.w3.org/2000/svg";
+
+// 24px grid, currentColor, 1.8 stroke: the same drawing rules as the nav icons in index.html.
+const FEEDBACK_ICONS = {
+  like: ["M12 20.2S4.5 15.7 4.5 9.9A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.3c0 5.8-7.5 10.3-7.5 10.3z"],
+  pass: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z", "M6 6l12 12"],
+  seen: ["M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z", "M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z"],
+  tonight: ["M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z"],
+  blocked: ["M10.2 13.8a3.6 3.6 0 0 0 5 0l2.6-2.6a3.6 3.6 0 0 0-5-5L11.7 7.3", "M13.8 10.2a3.6 3.6 0 0 0-5 0l-2.6 2.6a3.6 3.6 0 0 0 5 5l1.1-1.1", "M4 4l16 16"]
+};
+
+function buildFeedbackIcon(id) {
+  const svg = document.createElementNS(SVG_NS, "svg");
+  svg.setAttribute("class", "feedback-icon");
+  svg.setAttribute("viewBox", "0 0 24 24");
+  svg.setAttribute("aria-hidden", "true");
+  svg.setAttribute("focusable", "false");
+  for (const d of FEEDBACK_ICONS[id] || []) {
+    const path = document.createElementNS(SVG_NS, "path");
+    path.setAttribute("d", d);
+    path.setAttribute("fill", "none");
+    path.setAttribute("stroke", "currentColor");
+    path.setAttribute("stroke-width", "1.8");
+    path.setAttribute("stroke-linecap", "round");
+    path.setAttribute("stroke-linejoin", "round");
+    svg.appendChild(path);
+  }
+  return svg;
+}
+
 export function createQueueView(el, deps) {
   let expanded = false;
+  let busy = false;
+
+  // One persistent "More" button at the end of the rail. It is a dumb hook: it sends a
+  // short chat message through deps.onShowMore. The agent decides what comes back.
+  const requestMore = document.createElement("button");
+  requestMore.type = "button";
+  requestMore.className = "queue-more-request";
+  requestMore.textContent = "Ask for more picks";
+  requestMore.setAttribute("aria-label", "Ask for more picks");
+  requestMore.hidden = true;
+  requestMore.addEventListener("click", () => deps.onShowMore?.());
+  el.queueTrack.appendChild(requestMore);
+
+  function syncRequestMore(count) {
+    requestMore.hidden = !(typeof deps.onShowMore === "function" && count > 0);
+    requestMore.disabled = busy;
+  }
 
   function titleInitials(title) {
     const words = String(title || "").trim().split(/\s+/).filter(Boolean);
@@ -159,7 +206,10 @@ export function createQueueView(el, deps) {
       button.type = "button";
       button.className = "card-feedback-btn";
       button.dataset.feedback = action.id;
-      button.textContent = action.label;
+      // Icon only. The full words stay in the accessible name; data-label feeds the CSS tooltip.
+      button.setAttribute("aria-label", action.label);
+      button.dataset.label = action.label;
+      button.appendChild(buildFeedbackIcon(action.id));
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         deps.onFeedback?.(rec.id, action.id, rec);
@@ -208,7 +258,18 @@ export function createQueueView(el, deps) {
     }
   }
 
-  function render(records, emptyText, source = null) {
+  // A short rail shows everything. A long one folds after the first few, unless the
+  // agent said showAll. The fold follows the queue length; it is not a fixed three.
+  const FOLD_WHEN_LONGER_THAN = 6;
+  const FOLD_AFTER = 5;
+
+  /**
+   * opts.showAll: agent hook, no fold. opts.revealFrom: index of the first title the
+   * agent just appended; the fold opens and that card scrolls into view.
+   */
+  function render(records, emptyText, source = null, opts = {}) {
+    const showAll = opts?.showAll === true;
+    const revealFrom = Number.isInteger(opts?.revealFrom) ? opts.revealFrom : null;
     expanded = false;
     for (const group of [el.queueTopPick, el.queueAlternatives, el.queueMore]) {
       group.textContent = "";
@@ -216,6 +277,7 @@ export function createQueueView(el, deps) {
     }
     el.queueSource.textContent = "";
     el.queueSource.hidden = true;
+    requestMore.hidden = true;
     if (!records || records.length === 0) {
       el.queueEmpty.hidden = false;
       el.queueEmpty.textContent = emptyText || "Nothing queued yet.";
@@ -229,33 +291,55 @@ export function createQueueView(el, deps) {
       el.queueSource.hidden = false;
     }
 
+    const foldAfter = showAll || records.length <= FOLD_WHEN_LONGER_THAN ? records.length : FOLD_AFTER;
     const top = records.slice(0, 1);
     const alternatives = records.slice(1, 3);
-    const more = records.slice(3);
+    const more = records.slice(3, foldAfter);
+    const folded = records.slice(foldAfter);
     fillSection(el.queueTopPick, "Top pick", top, 1);
     fillSection(el.queueAlternatives, "Alternatives", alternatives, 2);
-    if (more.length) {
+    if (more.length || folded.length) {
       const group = el.queueMore;
       group.hidden = false;
-      const toggle = document.createElement("button");
-      toggle.type = "button";
-      toggle.className = "queue-more-toggle";
-      toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-      toggle.textContent = expanded ? "Hide more options" : "Show " + more.length + " more";
-      const list = document.createElement("div");
-      list.className = "queue-group-list";
-      list.setAttribute("role", "list");
-      list.hidden = !expanded;
-      more.forEach((rec, index) => list.appendChild(buildCard(rec, index + 4)));
-      toggle.addEventListener("click", () => {
-        expanded = !expanded;
+      if (more.length) {
+        const heading = document.createElement("h3");
+        heading.className = "queue-group-title";
+        heading.textContent = "More picks";
+        const list = document.createElement("div");
+        list.className = "queue-group-list";
+        list.setAttribute("role", "list");
+        more.forEach((rec, index) => list.appendChild(buildCard(rec, index + 4)));
+        group.append(heading, list);
+      }
+      if (folded.length) {
+        // Appended titles run to the end of the list, so they always reach into the fold.
+        expanded = revealFrom !== null;
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "queue-more-toggle";
+        const label = () => (expanded ? "Hide more options" : "Show " + folded.length + " more");
         toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
-        toggle.textContent = expanded ? "Hide more options" : "Show " + more.length + " more";
+        toggle.textContent = label();
+        const list = document.createElement("div");
+        list.className = "queue-group-list";
+        list.setAttribute("role", "list");
         list.hidden = !expanded;
-      });
-      group.append(toggle, list);
+        folded.forEach((rec, index) => list.appendChild(buildCard(rec, foldAfter + index + 1)));
+        toggle.addEventListener("click", () => {
+          expanded = !expanded;
+          toggle.setAttribute("aria-expanded", expanded ? "true" : "false");
+          toggle.textContent = label();
+          list.hidden = !expanded;
+        });
+        group.append(toggle, list);
+      }
     }
+    syncRequestMore(records.length);
     el.queueViewport.scrollTop = 0;
+    if (revealFrom !== null) {
+      const cards = el.queueTrack.querySelectorAll(".card");
+      cards[Math.min(revealFrom, cards.length - 1)]?.scrollIntoView?.({ block: "start" });
+    }
   }
 
   function renderInline(recs) {
@@ -267,10 +351,17 @@ export function createQueueView(el, deps) {
     recs.forEach((rec, index) => {
       const card = buildCard(rec, index + 1);
       card.classList.add("card-compact");
+      // Same box as the other chat cards. The ticket stub stays on the rail.
+      if (index === 0) card.classList.add("card-chat-lead");
       list.appendChild(card);
     });
     return list;
   }
 
-  return { render, renderInline, setCatalogStatus, setFeedbackNote };
+  function setBusy(value) {
+    busy = Boolean(value);
+    requestMore.disabled = busy;
+  }
+
+  return { render, renderInline, setCatalogStatus, setFeedbackNote, setBusy };
 }

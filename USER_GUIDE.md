@@ -58,12 +58,11 @@ an IMDb or NYT list) can be looked up, then limited to titles that are actually 
 - **Chat (middle)** — your conversation transcript with the composer pinned to the bottom of the
   column. Message text is capped at a comfortable reading width. Describe what you want in natural
   language and send.
-- **Your picks (right)** — a ranked decision: one **Top pick**, two **Alternatives**, then optional
-  **More options** from a maximum of 20 titles. Before you send your first message, this is seeded
-  instantly from your subscriptions' highest-rated unwatched titles — no model call needed. Each agent
-  reply may replace this list; turns that are just clarifying questions leave it exactly as it was. On
-  desktop, drag the divider to resize this panel or use its arrow to hide it. On narrow screens it moves
-  below the chat column.
+- **Your picks (right)** — the titles the assistant chose, up to 20. A short list shows every title.
+  A longer one shows the first five, then **Show N more**. **Ask for more picks** sends "More, please"
+  and lets the assistant decide whether to add titles or replace the list. Before you send your first
+  message, the rail is seeded from your subscriptions' highest-rated unwatched titles. On desktop, drag
+  the divider to resize this panel or use its arrow to hide it. On narrow screens it moves below the chat.
 
 ## Having a conversation
 
@@ -179,8 +178,8 @@ region updates the free links without a reload.
 
 Besides your subscriptions, the catalog includes free podcasts, films, and audiobooks gathered from
 Open Culture. Ask for something free, for audio, or for a commute. Free cards are marked Free and link
-straight to the source. If a link does not open where you are, choose **Can't open it**. That title
-stays hidden in this browser.
+straight to the source. If a link does not open where you are, select the unlink icon on that card
+(**Can't open it**). That title stays hidden in this browser.
 
 ## Exporting your results
 

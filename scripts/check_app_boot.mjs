@@ -985,21 +985,20 @@ async function streamedTurnRendersDecisionActivityAndMetrics() {
         && app.text("#queue-alternatives")?.includes("Second Choice")
         && app.text("#queue-alternatives")?.includes("Third Choice"),
       app.text("#queue-track"));
-    check("ranked rail exposes Top pick, Alternatives, and More labels",
+    check("ranked rail exposes Top pick, Alternatives, and More picks labels",
       app.$("#queue-top-pick .queue-group-title")?.textContent === "Top pick"
         && app.$("#queue-alternatives .queue-group-title")?.textContent === "Alternatives"
-        && /Show 2 more/.test(app.text("#queue-more") || ""),
+        && app.$("#queue-more .queue-group-title")?.textContent === "More picks",
       app.text("#queue-track"));
     check("rail connects its decision to the source query and fit reasons",
       /For “I like comedy”/.test(app.text("#queue-source") || "")
         && /Fit reason 1/.test(app.text("#queue-top-pick") || ""));
-    check("more options stay collapsed until requested",
-      app.$("#queue-more .queue-group-list").hidden === true
-        && /Show 2 more/.test(app.text("#queue-more") || ""));
-    await app.click("#queue-more .queue-more-toggle");
-    check("more options expand only on request",
-      app.$("#queue-more .queue-group-list").hidden === false
-        && /Fourth Choice/.test(app.text("#queue-more") || ""));
+    check("a short queue shows every title the agent returned, no fold",
+      !app.$("#queue-more .queue-more-toggle")
+        && /Fourth Choice/.test(app.text("#queue-more") || "")
+        && /Fifth Choice/.test(app.text("#queue-more") || "")
+        && app.$$("#queue-track .card").length === 5,
+      app.text("#queue-track"));
   } finally {
     app.restore();
   }

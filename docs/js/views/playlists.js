@@ -178,7 +178,7 @@ export function createPlaylistsView(el, deps) {
     if (!playlist || titleCount(playlist) === 0) {
       const empty = document.createElement("p");
       empty.className = "note";
-      empty.textContent = "No saved titles in this playlist yet.";
+      empty.textContent = "No saved titles yet. Use the + button on any pick to add titles.";
       el.playlistItems.appendChild(empty);
       return;
     }
@@ -218,7 +218,7 @@ export function createPlaylistsView(el, deps) {
           await deps.onRemove(playlist.id, titleId);
           feedback(`Removed from ${playlist.name}.`);
         } catch (error) {
-          feedback(messageFor(error, "Could not remove that title."));
+          feedback(messageFor(error, "Could not remove that title. Reload the page and try again."));
         } finally {
           setBusy(false);
         }

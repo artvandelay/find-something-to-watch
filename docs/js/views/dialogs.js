@@ -20,7 +20,7 @@ export function renderLearnedFacts(container, draft, onChange = null) {
   if (items.length === 0) {
     const empty = document.createElement("p");
     empty.className = "note";
-    empty.textContent = "No learned preferences yet.";
+    empty.textContent = "No learned preferences yet. Preferences appear here as you chat.";
     container.appendChild(empty);
     return;
   }

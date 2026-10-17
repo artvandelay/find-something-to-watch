@@ -34,6 +34,16 @@ function safeSource(value) {
   return { conversationId, turnId, query };
 }
 
+/**
+ * The agent's decision says how its queue meets the one on screen. The frontend does
+ * not infer this from the viewer's words; anything but "append" means replace.
+ */
+export const QUEUE_MODES = Object.freeze(["replace", "append"]);
+
+export function normalizeQueueMode(value) {
+  return value === "append" ? "append" : "replace";
+}
+
 export function defaultRecommendationQueue() {
   return {
     schema: RECOMMENDATION_SCHEMA_VERSION,
@@ -64,12 +74,15 @@ export function sanitizeRecommendationQueue(value, { updatedAt = null } = {}) {
     if (items.length === RECOMMENDATION_LIMITS.items) break;
   }
 
-  return {
+  const queue = {
     schema: RECOMMENDATION_SCHEMA_VERSION,
     updatedAt: typeof value.updatedAt === "string" ? value.updatedAt : updatedAt,
     source: safeSource(value.source),
     items
   };
+  // Agent hook: show every title, no fold. Stored only when true.
+  if (value.showAll === true) queue.showAll = true;
+  return queue;
 }
 
 export function recommendationQueuesEqual(left, right) {

@@ -306,11 +306,13 @@ const picked = await memory.completeTurn(pickBase.id, {
     { id: "tmdb:fourth", reason: "nope" }
   ]
 });
+// Stored inline picks are bounded by the rail cap (20), not by a fixed three.
 assert.equal(picked.conversation.messages.some((message) => message.role === "user" && message.picks), false);
 assert.deepEqual(picked.conversation.messages.at(-1).picks, [
   { id: "tmdb:m1", reason: "x" },
   { id: "free:p:radiolab", reason: "" },
-  { id: "tmdb:overflow", reason: "y".repeat(300) }
+  { id: "tmdb:overflow", reason: "y".repeat(300) },
+  { id: "tmdb:fourth", reason: "nope" }
 ]);
 const reloaded = createBrowserMemory({
   indexedDB: idb,

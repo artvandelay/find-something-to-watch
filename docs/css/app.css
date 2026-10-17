@@ -51,7 +51,7 @@
   --separator-w: 9px;
   --rail-collapsed-w: 40px;
   --chat-measure: 70ch;
-  --danger: #ff6673;
+  --danger: #ff2a55;
   --success: #7fd9ad;
 }
 
@@ -72,7 +72,8 @@
     --secondary: #6a3fd1;
     --control-border: #9a85c9;
     --focus: #6a3fd1;
-    --danger: #c7243d;
+    --danger: #b81434;
+    --success: #1b7a43;
     --pop-text: #6a3fd1;
     --ticket-bg: #fff0c9;
   }
@@ -96,7 +97,7 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-body);
-  font-size: 15px;
+  font-size: 1rem;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -webkit-text-size-adjust: 100%;
@@ -208,6 +209,8 @@ button:active:not(:disabled) {
 #onboarding-next,
 #settings-save,
 #context-save,
+#playlist-new,
+#playlist-create,
 .dialog-actions button[type="submit"],
 .btn-primary {
   background: var(--popcorn);
@@ -221,6 +224,8 @@ button:active:not(:disabled) {
 #onboarding-next:hover:not(:disabled),
 #settings-save:hover:not(:disabled),
 #context-save:hover:not(:disabled),
+#playlist-new:hover:not(:disabled),
+#playlist-create:hover:not(:disabled),
 .dialog-actions button[type="submit"]:hover:not(:disabled),
 .btn-primary:hover:not(:disabled) {
   background: var(--popcorn-strong);
@@ -234,6 +239,8 @@ button:active:not(:disabled) {
 #onboarding-next:active:not(:disabled),
 #settings-save:active:not(:disabled),
 #context-save:active:not(:disabled),
+#playlist-new:active:not(:disabled),
+#playlist-create:active:not(:disabled),
 .btn-primary:active:not(:disabled) {
   transform: translateY(2px);
   box-shadow: 0 1px 0 var(--popcorn-edge);
@@ -491,26 +498,7 @@ button[hidden],
   justify-content: flex-end;
 }
 
-#onboarding-next,
-#new-chat-btn,
-#send-btn,
-#playlist-new,
-#playlist-create {
-  background: var(--accent);
-  border-color: var(--accent);
-  color: #fff;
-  font-weight: 600;
-}
-
-#onboarding-next:hover,
-#new-chat-btn:hover,
-#send-btn:hover,
-#playlist-new:hover,
-#playlist-create:hover {
-  background: var(--accent-strong);
-  border-color: var(--accent-strong);
-  color: #fff;
-}
+/* Primary buttons (Send, Continue, Save, New chat, playlist create) are styled once, in the sticker block near the top and the Movie night layer. */
 
 #onboarding-progress {
   display: flex;
@@ -548,6 +536,26 @@ button[hidden],
 }
 
 /* ================================= Shell ================================= */
+
+.skip-link {
+  position: absolute;
+  z-index: 200;
+  left: 12px;
+  top: 12px;
+  padding: 8px 14px;
+  border-radius: var(--radius-sm);
+  background: var(--popcorn);
+  color: var(--on-popcorn);
+  font-weight: 700;
+  text-decoration: none;
+  transform: translateY(-200%);
+}
+
+.skip-link:focus {
+  transform: none;
+  outline: 3px solid var(--focus);
+  outline-offset: 3px;
+}
 
 #shell {
   flex: 1;
@@ -910,7 +918,7 @@ svg.nav-icon {
 
 .danger-action {
   color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 60%, var(--border));
+  border-color: var(--danger);
 }
 
 .danger-action:hover {
@@ -1360,6 +1368,7 @@ svg.nav-icon {
   outline: 0;
   background: transparent;
   padding: 7px 0;
+  font-size: 1rem;
   resize: none;
 }
 
@@ -1683,16 +1692,12 @@ svg.nav-icon {
   margin: 2px 0 0;
   color: var(--fg);
   font-size: 0.8rem;
-  line-height: 1.35;
+  line-height: 1.4;
   overflow-wrap: anywhere;
-  display: -webkit-box;
-  -webkit-box-orient: vertical;
-  -webkit-line-clamp: 3;
-  overflow: hidden;
 }
 
 /* Signature: Top pick reads as one poster-led decision, quieter than a card stack. */
-.card-rank-1 {
+#queue-region .card-rank-1 {
   gap: 14px;
   padding: 14px 12px;
   margin-bottom: 2px;
@@ -1704,13 +1709,13 @@ svg.nav-icon {
   box-shadow: inset 3px 0 0 var(--accent);
 }
 
-.card-rank-1:hover {
+#queue-region .card-rank-1:hover {
   background:
     linear-gradient(180deg, color-mix(in srgb, var(--card) 100%, transparent), color-mix(in srgb, var(--card) 40%, transparent));
 }
 
-.card-rank-1 .card-poster,
-.card-rank-1 .poster-fallback {
+#queue-region .card-rank-1 .card-poster,
+#queue-region .card-rank-1 .poster-fallback {
   flex-basis: 96px;
   width: 96px;
   height: 144px;
@@ -1718,19 +1723,22 @@ svg.nav-icon {
   box-shadow: 0 12px 28px color-mix(in srgb, #000 42%, transparent);
 }
 
-.card-rank-1 .card-title {
+#queue-region .card-rank-1 .card-title {
   font-size: 1.16rem;
   letter-spacing: -0.015em;
   line-height: 1.2;
 }
 
-.card-rank-1 .card-description,
-.card-rank-1 .card-reason {
+#queue-region .card-rank-1 .card-description {
   -webkit-line-clamp: 3;
   font-size: 0.84rem;
 }
 
-.card-rank-1 .card-links {
+#queue-region .card-rank-1 .card-reason {
+  font-size: 0.84rem;
+}
+
+#queue-region .card-rank-1 .card-links {
   margin-top: 8px;
   font-size: 0.78rem;
 }
@@ -2693,8 +2701,9 @@ dialog h3 {
 .chat-picks {
   display: grid;
   gap: 0.5rem;
+  width: min(100%, var(--chat-measure));
   max-width: var(--chat-measure);
-  margin: 0.25rem 0 1rem;
+  margin: 0.25rem auto 1rem;
 }
 
 .card-compact {
@@ -2896,18 +2905,18 @@ dialog h2 {
 }
 
 #new-chat-btn {
-  background: var(--popcorn);
-  border-color: var(--popcorn);
-  color: var(--on-popcorn);
-  font-weight: 750;
-  box-shadow: 0 3px 0 var(--popcorn-edge);
+  background: var(--card-2);
+  border-color: var(--border-strong);
+  color: var(--fg);
+  font-weight: 650;
+  box-shadow: none;
 }
 
 #new-chat-btn:hover {
-  background: var(--popcorn-strong);
-  border-color: var(--popcorn-strong);
-  color: var(--on-popcorn);
-  transform: translateY(-1px);
+  background: var(--card);
+  border-color: var(--popcorn);
+  color: var(--fg);
+  transform: none;
 }
 
 .sidebar-nav button {
@@ -3167,11 +3176,12 @@ dialog h2 {
   font-weight: 650;
 }
 
-/* ---- Signature: the top pick is a ticket stub ----
+/* ---- Signature: the rail top pick is a ticket stub ----
    Notches are cut with a mask, the tear line is a dashed rule.
-   Colors are re-pointed locally so every child reads on cream. */
+   Colors are re-pointed locally so every child reads on cream.
+   Scoped to #queue-region so inline chat picks never wear it. */
 
-.card-rank-1 {
+#queue-region .card-rank-1 {
   --fg: var(--ticket-ink);
   --muted: var(--ticket-ink-soft);
   --faint: var(--ticket-ink-soft);
@@ -3196,11 +3206,11 @@ dialog h2 {
     radial-gradient(circle 11px at 113px 100%, #0000 96%, #000) bottom / 100% 51% no-repeat;
 }
 
-.card-rank-1:hover {
+#queue-region .card-rank-1:hover {
   background: var(--ticket-bg);
 }
 
-.card-rank-1::before {
+#queue-region .card-rank-1::before {
   content: "";
   position: absolute;
   left: 113px;
@@ -3210,8 +3220,8 @@ dialog h2 {
   pointer-events: none;
 }
 
-.card-rank-1 .card-poster,
-.card-rank-1 .poster-fallback {
+#queue-region .card-rank-1 .card-poster,
+#queue-region .card-rank-1 .poster-fallback {
   flex-basis: 88px;
   width: 88px;
   height: 132px;
@@ -3219,18 +3229,18 @@ dialog h2 {
   box-shadow: 0 6px 14px color-mix(in srgb, var(--ticket-ink) 28%, transparent);
 }
 
-.card-rank-1 .poster-fallback {
+#queue-region .card-rank-1 .poster-fallback {
   background: var(--card-2);
 }
 
-.card-rank-1 .card-title {
+#queue-region .card-rank-1 .card-title {
   font-size: 1.28rem;
   font-weight: 800;
   letter-spacing: -0.03em;
 }
 
-.card-rank-1 button:hover,
-.card-rank-1 .card-feedback-btn:hover {
+#queue-region .card-rank-1 button:hover,
+#queue-region .card-rank-1 .card-feedback-btn:hover {
   border-color: var(--ticket-ink);
   background: color-mix(in srgb, var(--ticket-ink) 10%, transparent);
   color: var(--ticket-ink);
@@ -3240,7 +3250,9 @@ dialog h2 {
 #send-btn:disabled,
 #onboarding-next:disabled,
 #settings-save:disabled,
-#context-save:disabled {
+#context-save:disabled,
+#playlist-new:disabled,
+#playlist-create:disabled {
   background: var(--card-2);
   border-color: var(--border-strong);
   color: var(--faint);
@@ -3289,5 +3301,242 @@ dialog h2 {
   #settings-save:hover:not(:disabled),
   #context-save:hover:not(:disabled) {
     transform: none;
+  }
+}
+
+/* ======================================================================
+   Quiet feedback row + rail "More" button
+   Four icon buttons per pick card instead of text pills. Quiet at rest,
+   clearer on hover/focus, words live in aria-label and a CSS tooltip.
+   ====================================================================== */
+
+:root {
+  --tip-bg: #120a1e;
+  --tip-fg: #fff3e2;
+}
+
+@media (prefers-color-scheme: light) {
+  :root {
+    --tip-bg: #2a1747;
+  }
+}
+
+/* The row runs under the "+" column (the card body reserves 36px there for the top-right save button). */
+.card-feedback {
+  gap: 2px;
+  margin: 4px -36px 0 -7px;
+}
+
+.card-feedback-btn {
+  position: relative;
+  display: inline-grid;
+  place-items: center;
+  width: 32px;
+  min-width: 32px;
+  height: 32px;
+  min-height: 32px;
+  padding: 0;
+  border: 0;
+  border-radius: 10px;
+  background: transparent;
+  color: var(--faint);
+  font-size: 0;
+  line-height: 0;
+}
+
+.card-feedback-btn .feedback-icon {
+  display: block;
+  width: 18px;
+  height: 18px;
+  pointer-events: none;
+}
+
+.card-feedback-btn:hover,
+.card-feedback-btn:focus-visible {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--fg) 9%, transparent);
+  color: var(--fg);
+}
+
+.card-feedback-btn:focus-visible {
+  outline: 3px solid var(--focus);
+  outline-offset: 1px;
+}
+
+/* Tooltip: sits above the button, inside the card, so the card's overflow never clips it. */
+.card-feedback-btn::after {
+  content: attr(data-label);
+  position: absolute;
+  left: 0;
+  bottom: calc(100% + 6px);
+  z-index: 5;
+  padding: 3px 9px;
+  border-radius: 8px;
+  background: var(--tip-bg);
+  color: var(--tip-fg);
+  font: 600 0.72rem/1.3 var(--font-body);
+  white-space: nowrap;
+  pointer-events: none;
+  opacity: 0;
+  visibility: hidden;
+  transform: translateY(2px);
+  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0s linear 0.12s;
+}
+
+.card-feedback-btn:hover::after {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0.25s;
+}
+
+.card-feedback-btn:focus-visible::after {
+  opacity: 1;
+  visibility: visible;
+  transform: none;
+  transition-delay: 0s;
+}
+
+/* Ticket stub: cream surface, so ink-colored hover and focus. */
+#queue-region .card-rank-1 .card-feedback-btn:hover,
+#queue-region .card-rank-1 .card-feedback-btn:focus-visible {
+  border-color: transparent;
+  background: color-mix(in srgb, var(--ticket-ink) 10%, transparent);
+  color: var(--ticket-ink);
+}
+
+#queue-region .card-rank-1 .card-feedback-btn:focus-visible {
+  outline-color: var(--ticket-ink);
+}
+
+/* Touch: full 44px hit area, and no sticky hover tooltips (the feedback note confirms the tap). */
+@media (pointer: coarse) {
+  .card-feedback {
+    gap: 0;
+    margin-left: -12px;
+  }
+
+  .card-feedback-btn {
+    width: 44px;
+    min-width: 44px;
+    height: 44px;
+    min-height: 44px;
+  }
+
+  .card-feedback-btn .feedback-icon {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (hover: none) {
+  .card-feedback-btn::after {
+    display: none;
+  }
+}
+
+/* Rail "More": end-of-list action, same dashed family as "Show N more". */
+.queue-more-request {
+  width: 100%;
+  min-height: 44px;
+  padding: 8px 14px;
+  border: 2px dashed var(--border-strong);
+  border-radius: 14px;
+  background: transparent;
+  color: var(--muted);
+  font-weight: 650;
+  text-align: center;
+}
+
+.queue-more-request:hover:not(:disabled) {
+  border-color: var(--popcorn);
+  background: color-mix(in srgb, var(--popcorn) 8%, transparent);
+  color: var(--fg);
+}
+
+.queue-more-request:disabled {
+  border-style: dotted;
+  border-color: var(--border);
+  background: color-mix(in srgb, var(--card) 45%, transparent);
+  color: var(--faint);
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .card-feedback-btn,
+  .card-feedback-btn::after,
+  .queue-more-request {
+    transition: none;
+  }
+
+  .card-feedback-btn:active:not(:disabled),
+  .queue-more-request:active:not(:disabled) {
+    transform: none;
+  }
+}
+
+/* Inline chat picks: one column with the reply. Same box, same text edge.
+   The first pick can be a little stronger. It does not get the rail ticket. */
+.chat-picks .card {
+  gap: 12px;
+  width: 100%;
+  margin: 0;
+  padding: 10px;
+  -webkit-mask: none;
+  mask: none;
+}
+
+.chat-picks .card-rank-1::before {
+  content: none;
+}
+
+.chat-picks .card-poster,
+.chat-picks .poster-fallback {
+  flex: 0 0 56px;
+  width: 56px;
+  height: 84px;
+  max-height: 84px;
+}
+
+.chat-picks .card-title {
+  font-size: 0.95rem;
+  font-weight: 700;
+  letter-spacing: -0.015em;
+  line-height: 1.2;
+}
+
+.chat-picks .card-chat-lead .card-title {
+  font-weight: 800;
+}
+
+.chat-picks .card-description,
+.chat-picks .card-reason {
+  font-size: 0.8rem;
+}
+
+.chat-picks .card-links {
+  margin-top: auto;
+  margin-left: 0;
+  margin-right: 0;
+}
+
+/* Title, synopsis, link, and icons share the text column. One row, inside the card. */
+.chat-picks .card-feedback {
+  flex-wrap: nowrap;
+  align-items: center;
+  gap: 2px;
+  margin: 4px 0 0;
+  max-width: 100%;
+}
+
+@media (max-width: 420px) {
+  .chat-picks .card {
+    gap: 10px;
+    padding: 8px;
+  }
+
+  .chat-picks .card-feedback {
+    gap: 0;
   }
 }

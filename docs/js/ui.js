@@ -11,6 +11,8 @@ import { generateConversationTitle } from "./conversation-title.js";
 import {
   DEFAULT_RECOMMENDATION_REASON,
   allowsRewatch,
+  RECOMMENDATION_LIMITS,
+  normalizeQueueMode,
   defaultRecommendationQueue,
   sanitizeRecommendationQueue
 } from "./recommendations.js";
@@ -395,6 +397,7 @@ function refreshSendReadiness() {
 function setShellBusy(busy) {
   if (sidebar) sidebar.setBusy(busy);
   if (dialogs) dialogs.setBusy(busy);
+  if (queueView) queueView.setBusy(busy);
 }
 
 function currentScope() {
@@ -594,7 +597,7 @@ function hydratedQueue({ includeWatched = false } = {}) {
     .filter(Boolean);
 }
 
-function renderQueue() {
+function renderQueue({ revealFrom = null } = {}) {
   const list = hydratedQueue();
   let emptyText = "Still preparing the catalog…";
   if (displayCatalogReady) {
@@ -602,7 +605,10 @@ function renderQueue() {
       ? "Choose subscriptions in Settings to fill your picks."
       : "Nothing queued for your current subscriptions yet.";
   }
-  queueView.render(list, emptyText, recommendationQueue.source);
+  queueView.render(list, emptyText, recommendationQueue.source, {
+    showAll: recommendationQueue.showAll === true,
+    revealFrom
+  });
 }
 
 function renderPlaylists() {
@@ -1146,7 +1152,7 @@ async function postLocalTurn(userText, produceReply) {
     pendingUser = { content: appended.content, createdAt: appended.createdAt };
     renderConversation();
   } catch (error) {
-    showError(error && error.message ? error.message : "Could not save your message.");
+    showError(error && error.message ? error.message : "Could not save your message. Reload the page and try again.");
     return;
   }
 
@@ -1242,9 +1248,28 @@ async function runChatCommand(query, command) {
   });
 }
 
-async function onSubmit() {
+// Rail "More" button: a plain chat message. It carries no count and no append flag;
+// the agent reads it like any other turn and decides what to put on the rail.
+const MORE_MESSAGE = "More, please";
+
+function onShowMoreRequest() {
   if (controller || historyController) return;
-  const query = chat.getQuery();
+  if (recommendationQueue.items.length === 0) return;
+  if (!store.hasKey()) {
+    // Same gate as the chat box: show the key banner, send nothing, change nothing.
+    refreshSendReadiness();
+    queueView?.setFeedbackNote("Add your API key in Settings to get more picks.");
+    return;
+  }
+  void onSubmit({ query: MORE_MESSAGE });
+}
+
+async function onSubmit(options) {
+  if (controller || historyController) return;
+  // The chat box passes no options (or a DOM event). The rail button passes a fixed
+  // query, which must not touch whatever the viewer is typing.
+  const override = typeof options?.query === "string" && options.query.trim() ? options.query.trim() : null;
+  const query = override ?? chat.getQuery();
   if (!query) return;
   const command = parseChatCommand(query);
   if (command) {
@@ -1273,7 +1298,7 @@ async function onSubmit() {
     return;
   }
 
-  chat.clearQuery();
+  if (!override) chat.clearQuery();
   const turnGeneration = stateGeneration;
   const priorMessages = conversation.messages.slice();
   let pendingUser = null;
@@ -1284,8 +1309,8 @@ async function onSubmit() {
     pendingUser = { content: appended.content, createdAt: appended.createdAt };
     renderConversation();
   } catch (error) {
-    showError(error && error.message ? error.message : "Could not save your message.");
-    chat.setQuery(query);
+    showError(error && error.message ? error.message : "Could not save your message. Reload the page and try again.");
+    if (!override) chat.setQuery(query);
     return;
   }
 
@@ -1373,7 +1398,7 @@ async function onSubmit() {
         });
       }
     } else {
-      showError("Personalization data is unavailable; continuing without saved context.");
+      showError("Saved preferences are temporarily unavailable; continuing without saved context.");
     }
 
     if (manifestResult.status === "fulfilled") {
@@ -1444,9 +1469,9 @@ async function onSubmit() {
     const metricsTiming = result.timing && Number.isFinite(result.timing.totalMs) ? result.timing : timing;
     if (!result.ok) {
       appendTelemetryTrace({ timing: metricsTiming, usage: result.usage, billing: result.billing });
-      chat.failTurn({ message: "The turn did not complete.", timing: metricsTiming });
+      chat.failTurn({ message: "The turn did not complete. Check your connection or API key in Settings, then try again.", timing: metricsTiming });
       await rollbackPendingUserTurn(conversation.id, pendingUser);
-      chat.restoreQueryIfEmpty(query);
+      if (!override) chat.restoreQueryIfEmpty(query);
       return;
     }
 
@@ -1456,7 +1481,12 @@ async function onSubmit() {
       await markTitlesSeen(watchedTitles);
       seenKeys = seenKeysCache;
     }
+    // The agent owns the rail. result.queue is the list, result.queueMode says whether it
+    // replaces or is added after what is on screen, result.showAll says whether to fold.
+    // The UI applies that, plus the hard cap, and nothing else.
     let nextQueue = recommendationQueue;
+    let shownIds = new Set(); // ids this turn surfaced, for the inline chat cards
+    let overflow = 0;
     if (Array.isArray(result.queue)) {
       const includeWatched = allowsRewatch(query);
       const grounded = sanitizeRecommendationQueue({
@@ -1468,10 +1498,26 @@ async function onSubmit() {
         items: result.queue
       });
       if (grounded) {
-        nextQueue = {
-          ...grounded,
-          items: filterQueueItems(grounded.items, { includeWatched })
-        };
+        const filtered = filterQueueItems(grounded.items, { includeWatched });
+        const showAll = typeof result.showAll === "boolean" ? result.showAll : null;
+        if (normalizeQueueMode(result.queueMode) === "append") {
+          // Keep what is on screen as it is now (a card dismissed mid-turn stays gone).
+          const have = new Set(recommendationQueue.items.map((item) => item.id));
+          const added = filtered.filter((item) => !have.has(item.id));
+          const merged = [...recommendationQueue.items, ...added];
+          overflow = Math.max(0, merged.length - RECOMMENDATION_LIMITS.items);
+          const items = merged.slice(0, RECOMMENDATION_LIMITS.items);
+          const kept = new Set(added.map((item) => item.id));
+          shownIds = new Set(items.filter((item) => kept.has(item.id)).map((item) => item.id));
+          nextQueue = {
+            ...recommendationQueue,
+            items,
+            showAll: (showAll ?? recommendationQueue.showAll === true) || undefined
+          };
+        } else {
+          nextQueue = { ...grounded, items: filtered, showAll: showAll === true || undefined };
+          shownIds = new Set(filtered.map((item) => item.id));
+        }
       }
     }
     if (watchedTitles.length) {
@@ -1481,7 +1527,10 @@ async function onSubmit() {
         items: nextQueue.items.filter((item) => !watchedKeys.has(normalizeTitle(recordsById.get(item.id)?.t || "")))
       };
     }
-    const picks = nextQueue.items.slice(0, 3).map((item) => ({ id: item.id, reason: item.reason || "" }));
+    // Inline chat cards mirror what the agent surfaced this turn, however many that is.
+    // A turn that left the rail alone (no queue in the decision) attaches nothing.
+    const pickItems = nextQueue.items.filter((item) => shownIds.has(item.id));
+    const picks = pickItems.map((item) => ({ id: item.id, reason: item.reason || "" }));
     const priorLearned = learned || await memory.getLearned();
     const nextLearned = Array.isArray(result.memoryCandidates) && profile?.memoryEnabled !== false
       ? mergeLearnedPreferences(priorLearned, result.memoryCandidates, query)
@@ -1502,7 +1551,11 @@ async function onSubmit() {
     activePendingUser = null;
     recommendationQueue = saved.queue;
     learned = saved.learned ?? nextLearned;
-    renderQueue();
+    // Titles the agent appended are the ones the person just asked to see: unfold the
+    // rail and scroll to the first of them instead of leaving them behind a toggle.
+    const appended = normalizeQueueMode(result.queueMode) === "append" && shownIds.size > 0;
+    const firstNew = appended ? recommendationQueue.items.findIndex((item) => shownIds.has(item.id)) : -1;
+    renderQueue({ revealFrom: firstNew >= 0 ? firstNew : null });
     appendTelemetryTrace({ timing: metricsTiming, usage: result.usage, billing: result.billing });
     chat.completeTurn({
       reply: replyText,
@@ -1514,6 +1567,9 @@ async function onSubmit() {
     const learnedNote = describeLearnedChange(priorLearned, learned);
     if (learnedNote) queueView?.setFeedbackNote(learnedNote);
     else if (watchedTitles.length) queueView?.setFeedbackNote("Marked " + watchedTitles.join(", ") + " as seen.");
+    if (overflow > 0) {
+      queueView?.setFeedbackNote("The rail holds " + RECOMMENDATION_LIMITS.items + " picks at most, so " + overflow + " did not fit.");
+    }
   } catch (err) {
     if (turnGeneration === stateGeneration && activeTurnId === turnId) {
       await rollbackPendingUserTurn(conversation.id, pendingUser);
@@ -1523,7 +1579,7 @@ async function onSubmit() {
         message: err && err.message ? err.message : "The search failed.",
         timing
       });
-      chat.restoreQueryIfEmpty(query);
+      if (!override) chat.restoreQueryIfEmpty(query);
     }
   } finally {
     window.clearInterval(activityTimer);
@@ -1594,7 +1650,7 @@ async function onActivateConversation(conversationId) {
     });
     clearError();
   } catch (error) {
-    showError(error && error.message ? error.message : "Could not open that conversation.");
+    showError(error && error.message ? error.message : "Could not open that conversation. Select another chat or start a new one.");
   }
 }
 
@@ -1688,7 +1744,7 @@ async function onExportBackup() {
     const backup = await memory.exportBackup();
     downloadText("memory.json", "application/json;charset=utf-8", JSON.stringify(backup, null, 2));
   } catch (err) {
-    showError("Could not export a backup. " + (err && err.message ? err.message : ""));
+    showError("Could not export a backup. Check your browser storage settings and try again.");
   }
 }
 
@@ -1718,7 +1774,7 @@ async function onResetKeepKey() {
     if (!store.clearAll({ keepLlm: true })) throw new Error("Local data could not be reset.");
     reloadApp();
   } catch (err) {
-    showError("Could not start over. " + (err && err.message ? err.message : ""));
+    showError("Could not start over. Reload the page and try again.");
   }
 }
 
@@ -1732,7 +1788,7 @@ async function onClearData() {
     if (!store.clearAll()) throw new Error("The saved API key could not be removed.");
     reloadApp();
   } catch (err) {
-    showError("Could not clear local data. " + (err && err.message ? err.message : ""));
+    showError("Could not clear local data. Reload the page and try again.");
   }
 }
 
@@ -1805,7 +1861,7 @@ function wireMemoryDialog() {
       renderConversation();
       if (conversation.messages.length === 0) await seedRecommendationQueue({ force: true });
       await openMemoryDialog();
-    })().catch((err) => showError(err && err.message ? err.message : "Could not remove imported history."));
+    })().catch((err) => showError(err && err.message ? err.message : "Could not remove imported history. Reload the page and try again."));
   });
   return onLearnedChange;
 }
@@ -1843,7 +1899,7 @@ async function openMemoryDialog() {
           if (conversation.messages.length === 0) await seedRecommendationQueue({ force: true });
           else await pruneUnavailableAndWatched({ reseedsIfEmpty: false });
           await openMemoryDialog();
-        })().catch((err) => showError(err && err.message ? err.message : "Could not remove that title."));
+        })().catch((err) => showError(err && err.message ? err.message : "Could not remove that title. Reload the page and try again."));
       });
       row.append(label, remove);
       el.memoryMarks.appendChild(row);
@@ -2000,7 +2056,8 @@ async function init() {
     watchCta,
     onOpenPlaylistPicker: (titleId, title) => playlistsView.openPicker(titleId, title),
     onOpenTitleDetails: (titleId, trigger) => titleDetailsView.open(titleId, trigger),
-    onFeedback: onPickFeedback
+    onFeedback: onPickFeedback,
+    onShowMore: onShowMoreRequest
   });
 
   playlistsView = createPlaylistsView(el, {

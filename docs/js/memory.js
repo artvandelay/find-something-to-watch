@@ -3,6 +3,7 @@ import { normalizeTitle } from "./catalog.js";
 import { DEFAULT_REGION, PROVIDER_SLUGS, REGIONS } from "./providers.js";
 import { defaultPlaylists, sanitizePlaylists } from "./playlists.js";
 import {
+  RECOMMENDATION_LIMITS,
   defaultRecommendationQueue,
   sanitizeRecommendationQueue
 } from "./recommendations.js";
@@ -253,7 +254,7 @@ function sanitizePicks(value) {
     seen.add(id);
     const reason = typeof item.reason === "string" ? item.reason.slice(0, 300) : "";
     picks.push({ id, reason });
-    if (picks.length === 3) break;
+    if (picks.length === RECOMMENDATION_LIMITS.items) break;
   }
   return picks;
 }

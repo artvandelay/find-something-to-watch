@@ -336,7 +336,7 @@ export function createChatView(el, deps) {
     }
     finishActivityShell({ error: true });
     activeTurn.status.textContent = status;
-    activeTurn.error.textContent = String(message || "The turn did not complete.");
+    activeTurn.error.textContent = String(message || "The turn did not complete. Check your connection or API key in Settings, then try again.");
     activeTurn.error.hidden = false;
     if (Number.isFinite(timing?.totalMs)) {
       activeTurn.status.textContent = status + " · " + (timing.totalMs / 1000).toFixed(1) + "s";

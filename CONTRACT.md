@@ -841,7 +841,9 @@ guidance is catalog-only by default; when `webSearch` is enabled for OpenRouter 
 also permits web search during planning for external reception on factual follow-ups,
 and for an external published list the viewer named. Those list titles must then be
 checked with `run_catalog_js`; queue ids still come only from ids observed there.
-strict internal JSON containing optional ranked queue items and optional learned-memory
+strict internal JSON containing optional ranked queue items, optional rail hooks
+(`queueMode`: `"replace"` or `"append"`, default replace; `showAll`: boolean; the UI obeys both and
+infers neither from the viewer's words) and optional learned-memory
 candidates. Final presentation emits direct safe Markdown, not JSON. `ok` is `true`
 only for a successfully parsed final response. Authentication, configuration,
 catalog-runtime, network, abort, budget, and parse failures return `ok: false`;
@@ -979,10 +981,16 @@ queue-alternatives, queue-more
 The rail scrolls vertically. `#queue-source` renders the bounded source query for the
 latest queue update. `#queue-feedback` briefly confirms taste actions and newly learned
 preferences. `#queue-top-pick` contains rank one, `#queue-alternatives`
-contains ranks two and three, and `#queue-more` is a collapsed control/container for
-ranks four through 20. Recommendation cards retain poster, title, metadata, synopsis,
-provider links, a `+` save button, and taste actions (`More like this`, `Not for me`,
-`Already seen`, `Not tonight`); the title is a real details trigger. Save, provider,
+contains ranks two and three, and `#queue-more` holds ranks four through 20. A queue of
+six or fewer shows every title; a longer one folds after the first five behind a
+"Show N more" toggle unless the agent set `showAll`. When the agent appends titles the
+fold opens and the first new card scrolls into view. A persistent **Ask for more picks**
+button at the end of the rail sends the plain chat message "More, please"; the agent decides
+what to do with it. Recommendation cards retain poster, title, metadata, synopsis, provider links, a `+`
+save button, and taste actions as an icon-only row (`More like this`, `Not for me`,
+`Already seen`, `Not tonight`, plus `Can't open it` for free titles). Each action is a real
+button with `data-feedback`, an `aria-label` carrying the full words, and a CSS tooltip from
+`data-label`; the title is a real details trigger. Save, provider,
 and feedback actions are independent interactive descendants and never open details.
 On desktop, `#pane-separator` supports pointer and keyboard resizing,
 `#queue-collapse` hides the rail, and `#queue-restore` restores it. The stored layout
