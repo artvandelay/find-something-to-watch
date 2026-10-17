@@ -48,8 +48,9 @@ All notable changes to this project will be documented here.
 - The assistant decides how many titles go on the rail and whether they replace the list or
   are added after it (`queue`, `queueMode`, `showAll`). The screen does not guess that from
   the message. **Ask for more picks** only sends "More, please".
-- Taste actions on a pick are an icon row (more like this, not for me, already seen, not tonight,
-  and can't open it on free titles). The words stay in the accessible name and a tooltip.
+- Taste actions on a pick are an icon row (more like this, not for me, already seen, dismiss,
+  and can't open it on free titles). Dismiss only removes the title from the current list.
+  The words stay in the accessible name and a tooltip.
 - A "Skip to conversation" link is the first keyboard stop in the app.
 
 ### Changed

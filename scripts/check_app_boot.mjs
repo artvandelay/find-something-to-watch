@@ -177,9 +177,9 @@ async function shellRespectsSubscriptions() {
       JSON.stringify(learned.items));
     await app.click("#queue-track .card .card-feedback-btn[data-feedback=tonight]");
     await app.settle();
-    check("not-tonight removes the title from the current picks",
+    check("dismiss removes the title from the current picks",
       !app.$$("#queue-track .card-title").some((node) => node.textContent === topTitle)
-        && /Skipped for tonight/i.test(app.text("#queue-feedback") || ""),
+        && /Dismissed/i.test(app.text("#queue-feedback") || ""),
       app.text("#queue-track"));
   } finally {
     app.restore();

@@ -1032,7 +1032,7 @@ async function onPickFeedback(titleId, action, rec) {
     }
     if (action === "tonight") {
       await removeTitleFromQueue(titleId);
-      queueView?.setFeedbackNote("Skipped for tonight.");
+      queueView?.setFeedbackNote("Dismissed.");
     }
   } catch (error) {
     showError(error && error.message ? error.message : "Could not save that feedback.");

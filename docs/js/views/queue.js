@@ -14,7 +14,7 @@ const FEEDBACK_ICONS = {
   like: ["M12 20.2S4.5 15.7 4.5 9.9A4.1 4.1 0 0 1 12 7.6a4.1 4.1 0 0 1 7.5 2.3c0 5.8-7.5 10.3-7.5 10.3z"],
   pass: ["M12 3.5a8.5 8.5 0 1 0 0 17 8.5 8.5 0 0 0 0-17z", "M6 6l12 12"],
   seen: ["M2.5 12S6 5.5 12 5.5 21.5 12 21.5 12 18 18.5 12 18.5 2.5 12 2.5 12z", "M12 9.2a2.8 2.8 0 1 0 0 5.6 2.8 2.8 0 0 0 0-5.6z"],
-  tonight: ["M19.5 14.6A8 8 0 0 1 9.4 4.5a8 8 0 1 0 10.1 10.1z"],
+  tonight: ["M6 6l12 12", "M18 6L6 18"],
   blocked: ["M10.2 13.8a3.6 3.6 0 0 0 5 0l2.6-2.6a3.6 3.6 0 0 0-5-5L11.7 7.3", "M13.8 10.2a3.6 3.6 0 0 0-5 0l-2.6 2.6a3.6 3.6 0 0 0 5 5l1.1-1.1", "M4 4l16 16"]
 };
 
@@ -198,7 +198,7 @@ export function createQueueView(el, deps) {
       { id: "like", label: "More like this" },
       { id: "pass", label: "Not for me" },
       { id: "seen", label: "Already seen" },
-      { id: "tonight", label: "Not tonight" }
+      { id: "tonight", label: "Dismiss" }
     ];
     if (isFreeRecord(rec)) actions.push({ id: "blocked", label: "Can't open it" });
     for (const action of actions) {

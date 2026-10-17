@@ -488,7 +488,7 @@ Pick-card feedback may also upsert a durable like/avoid fact from a title’s pr
 (or title theme when genre is unavailable) without model evidence; that path still uses
 known kinds/polarities and the same 80-character value cap. “Already seen” appends a
 normalized title key to local watch-history `seen` so future picks and tools exclude it.
-“Not tonight” only removes the title from the current queue.
+“Dismiss” only removes the title from the current queue.
 Manually authored You.md remains separate. The generated “Learned from chats” context
 is inspectable, editable, disableable, and clearable by the user.
 
@@ -988,7 +988,7 @@ fold opens and the first new card scrolls into view. A persistent **Ask for more
 button at the end of the rail sends the plain chat message "More, please"; the agent decides
 what to do with it. Recommendation cards retain poster, title, metadata, synopsis, provider links, a `+`
 save button, and taste actions as an icon-only row (`More like this`, `Not for me`,
-`Already seen`, `Not tonight`, plus `Can't open it` for free titles). Each action is a real
+`Already seen`, `Dismiss`, plus `Can't open it` for free titles). Each action is a real
 button with `data-feedback`, an `aria-label` carrying the full words, and a CSS tooltip from
 `data-label`; the title is a real details trigger. Save, provider,
 and feedback actions are independent interactive descendants and never open details.
