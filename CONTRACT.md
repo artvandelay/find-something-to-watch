@@ -841,10 +841,11 @@ guidance is catalog-only by default; when `webSearch` is enabled for OpenRouter 
 also permits web search during planning for external reception on factual follow-ups,
 and for an external published list the viewer named. Those list titles must then be
 checked with `run_catalog_js`; queue ids still come only from ids observed there.
-strict internal JSON containing optional ranked queue items, optional rail hooks
-(`queueMode`: `"replace"` or `"append"`, default replace; `showAll`: boolean; the UI obeys both and
-infers neither from the viewer's words) and optional learned-memory
-candidates. Final presentation emits direct safe Markdown, not JSON. `ok` is `true`
+The planner may return JSON with optional ranked queue items, optional rail hooks
+(`queueMode`: `"replace"` or `"append"`; `showAll`: boolean; the UI obeys both and
+infers neither from the viewer's words), and optional learned-memory
+candidates. Extra fields are ignored. If that JSON is missing or unusable, the turn still
+continues to the reply. Final presentation emits direct safe Markdown, not JSON. `ok` is `true`
 only for a successfully parsed final response. Authentication, configuration,
 catalog-runtime, network, abort, budget, and parse failures return `ok: false`;
 callers must not persist those failures as assistant replies. On `ok: false`, the UI

@@ -463,23 +463,35 @@ function turnIdFor(value) {
 }
 
 function parseDecision(text) {
-  let value;
+  // The planner's JSON is a hint for the rail. A real model adds fields, wraps the
+  // object in prose, or skips the object. None of that should kill the reply.
+  const raw = stripFence(text);
+  let value = null;
   try {
-    value = JSON.parse(stripFence(text));
+    value = JSON.parse(raw);
   } catch {
-    throw Object.assign(new Error("The model did not return valid decision JSON."), { code: "parse" });
+    const start = raw.indexOf("{");
+    const end = raw.lastIndexOf("}");
+    if (start >= 0 && end > start) {
+      try {
+        value = JSON.parse(raw.slice(start, end + 1));
+      } catch {
+        value = null;
+      }
+    }
   }
-  if (!value || typeof value !== "object" || Array.isArray(value)) {
-    throw Object.assign(new Error("The model did not return a decision object."), { code: "parse" });
-  }
-  const allowed = new Set(["queue", "queueMode", "showAll", "memoryCandidates", "watched"]);
-  if (Object.keys(value).some((key) => !allowed.has(key)) ||
-    ("queue" in value && !Array.isArray(value.queue)) ||
-    ("memoryCandidates" in value && !Array.isArray(value.memoryCandidates)) ||
-    ("watched" in value && !Array.isArray(value.watched))) {
-    throw Object.assign(new Error("The model returned an invalid decision shape."), { code: "parse" });
-  }
-  return value;
+  if (Array.isArray(value)) return { queue: value };
+  if (!value || typeof value !== "object") return {};
+  const decision = {};
+  const queue = Array.isArray(value.queue)
+    ? value.queue
+    : Array.isArray(value.queue?.items) ? value.queue.items : null;
+  if (queue) decision.queue = queue;
+  if (value.queueMode === "replace" || value.queueMode === "append") decision.queueMode = value.queueMode;
+  if (typeof value.showAll === "boolean") decision.showAll = value.showAll;
+  if (Array.isArray(value.memoryCandidates)) decision.memoryCandidates = value.memoryCandidates;
+  if (Array.isArray(value.watched)) decision.watched = value.watched;
+  return decision;
 }
 
 function retryable(code) {

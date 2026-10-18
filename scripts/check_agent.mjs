@@ -727,6 +727,7 @@ function ok(payload) {
     [{ queue: [], queueMode: "append", showAll: true }, "append", true],
     [{ queue: [], queueMode: "replace", showAll: false }, "replace", false],
     [{ queue: [], queueMode: "sideways", showAll: "yes" }, null, null],
+    [{ queue: [], reply: "Here you go.", reasoning: "visual energy" }, null, null],
     [{ queue: [] }, null, null]
   ]) {
     const requests = [];
