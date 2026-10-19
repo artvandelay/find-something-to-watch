@@ -16,7 +16,7 @@ export const LEGACY_CONTEXT_KEYS = Object.freeze({
 export const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "",
-  model: "openai/gpt-5.6-terra-pro",
+  model: "~deepseek/deepseek-flash-latest",
   webSearch: false
 };
 

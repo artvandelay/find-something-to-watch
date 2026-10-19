@@ -764,7 +764,7 @@ async function settingsModelPickerSupportsOpenRouterDropdown() {
     check("OpenRouter settings expose the model picker",
       app.$("#llm-model-picker") !== null && app.$("#llm-model-openrouter-field").hidden === false);
     check("the default model is preselected",
-      /GPT-5\.6 Terra Pro/.test(app.text("#llm-model-trigger-name") || ""));
+      /DeepSeek V4\.1 Flash/.test(app.text("#llm-model-trigger-name") || ""));
 
     await app.click("#llm-model-trigger");
     await app.settle();
@@ -773,15 +773,15 @@ async function settingsModelPickerSupportsOpenRouterDropdown() {
         && !!app.$("#llm-model-search")
         && app.$$(".model-picker-option").length > 0);
 
-    const sonnet = [...app.$$(".model-picker-option")]
-      .find((node) => node.dataset.modelId === "anthropic/claude-sonnet-5.5");
-    check("recommended models are listed as picker options", !!sonnet);
-    sonnet.click();
+    const haiku = [...app.$$(".model-picker-option")]
+      .find((node) => node.dataset.modelId === "~anthropic/claude-haiku-latest");
+    check("recommended models are listed as picker options", !!haiku);
+    haiku.click();
     await app.settle();
     await app.click("#settings-save");
     let stored = JSON.parse(app.window.localStorage.getItem("ottbyok.llm") || "{}");
     check("saving a picker model persists the slug",
-      stored.model === "anthropic/claude-sonnet-5.5", JSON.stringify(stored));
+      stored.model === "~anthropic/claude-haiku-latest", JSON.stringify(stored));
 
     await app.click("#settings-btn");
     await app.settle();

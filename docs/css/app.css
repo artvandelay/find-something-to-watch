@@ -2673,8 +2673,9 @@ dialog h3 {
   display: flex;
   align-items: center;
   gap: 0.75rem;
+  width: min(100%, var(--chat-measure));
   max-width: var(--chat-measure);
-  margin: 1.25rem 0 0.75rem;
+  margin: 1.25rem auto 0.75rem;
   color: var(--muted);
   font-size: 0.8125rem;
 }
@@ -2687,7 +2688,9 @@ dialog h3 {
 }
 
 .chat-welcome {
+  width: min(100%, var(--chat-measure));
   max-width: var(--chat-measure);
+  margin-inline: auto;
   margin-block: 0.75rem 0.5rem;
 }
 

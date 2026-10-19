@@ -177,10 +177,13 @@ const KEYS = {
 const DEFAULT_LLM = {
   baseUrl: "https://openrouter.ai/api/v1",
   apiKey: "",
-  model: "openai/gpt-5.6-terra-pro",
+  model: "~deepseek/deepseek-flash-latest",
   webSearch: false
 };
 ```
+
+The picker shows that default as DeepSeek V4.1 Flash. The slug is a moving alias whose
+current target is the newest DeepSeek tool model, `deepseek/deepseek-v4.1-flash-1017`.
 
 `ottbyok.sidebar` holds only the sidebar collapse preference so the icon rail survives
 a reload; it carries no user data and is cleared by "Clear local data" along with the
