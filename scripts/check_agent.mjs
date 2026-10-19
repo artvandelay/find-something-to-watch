@@ -792,4 +792,104 @@ function ok(payload) {
   );
 }
 
+// Test 9 - a model that always calls tools (when offered) is forced to decide
+// on the last planner step once a tool result has succeeded, not budget.
+{
+  const requests = [];
+  let toolCallIndex = 0;
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    requests.push(body);
+    if (body.tool_choice === "none") {
+      return ok({ choices: [{ message: { role: "assistant", content: "{\"queue\":[{\"id\":\"netflix:1\",\"reason\":\"A focused fit\"}]}" } }] });
+    }
+    if (!("tools" in body)) {
+      return ok({ choices: [{ message: { role: "assistant", content: "Try Space Heist tonight." } }] });
+    }
+    toolCallIndex += 1;
+    return ok({
+      choices: [{
+        message: {
+          role: "assistant",
+          tool_calls: [{
+            id: "forced-c" + toolCallIndex,
+            type: "function",
+            function: { name: "run_catalog_js", arguments: "{}" }
+          }]
+        }
+      }]
+    });
+  };
+  const events = [];
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "something fun",
+    conversation: [],
+    onEvent: (e) => events.push(e),
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  assert.equal(result.reply, "Try Space Heist tonight.");
+  assert.deepStrictEqual(result.queue, [{ id: "netflix:1", reason: "A focused fit" }]);
+  assert.equal(events.some((e) => e.type === "error"), false);
+  // 3 tool steps + 1 forced decision step (within the 4-step budget) + rerank.
+  assert.equal(requests.length, 5);
+  assert.equal(requests[3].tool_choice, "none");
+  assert.equal("tools" in requests[3], false);
+  assert.match(requests[3].messages.at(-1).content, /Stop searching now/);
+  assert.ok(requests.slice(0, 3).every((body) => body.tool_choice === "auto"));
+}
+
+// Test 9a - with zero successful tool results the budget error still stands
+// and no forced-decision request is made.
+{
+  const failingTools = {
+    ...tools,
+    handlers: { run_catalog_js: async () => ({ error: "Code execution failed.", code: "EXECUTION_ERROR", count: 0 }) }
+  };
+  const requests = [];
+  let toolCallIndex = 0;
+  const fetchImpl = async (_url, init) => {
+    const body = JSON.parse(init.body);
+    requests.push(body);
+    if (body.tool_choice === "none") {
+      return ok({ choices: [{ message: { role: "assistant", content: "{\"queue\":[]}" } }] });
+    }
+    if (!("tools" in body)) {
+      return ok({ choices: [{ message: { role: "assistant", content: "Should not reach rerank." } }] });
+    }
+    toolCallIndex += 1;
+    return ok({
+      choices: [{
+        message: {
+          role: "assistant",
+          tool_calls: [{
+            id: "fail-c" + toolCallIndex,
+            type: "function",
+            function: { name: "run_catalog_js", arguments: "{}" }
+          }]
+        }
+      }]
+    });
+  };
+  const events = [];
+  const result = await runAgent({
+    config,
+    prompts,
+    tools: failingTools,
+    context: { youmd: "", history: null, mood: "" },
+    query: "something fun",
+    conversation: [],
+    onEvent: (e) => events.push(e),
+    fetchImpl
+  });
+  assert.equal(result.ok, false);
+  assert.equal(events.find((e) => e.type === "error")?.code, "budget");
+  assert.equal(requests.length, 4);
+  assert.ok(requests.every((body) => body.tool_choice === "auto"));
+}
+
 console.log("check_agent OK");

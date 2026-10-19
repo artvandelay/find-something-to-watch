@@ -124,6 +124,15 @@ export function findModelInGroups(groups, id) {
     || null;
 }
 
+export function nextRecommendedOpenRouterModel(currentId) {
+  const list = RECOMMENDED_OPENROUTER_MODELS;
+  if (!Array.isArray(list) || list.length === 0) return null;
+  const id = String(currentId || "").trim();
+  const index = list.findIndex((item) => item.id === id);
+  if (index >= 0) return list[(index + 1) % list.length];
+  return list[0];
+}
+
 function modelSupportsTools(model) {
   return (model?.supportedParameters || []).some((parameter) => String(parameter).toLowerCase() === "tools");
 }

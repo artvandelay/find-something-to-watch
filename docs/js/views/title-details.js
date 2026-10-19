@@ -167,10 +167,13 @@ export function createTitleDetailsView(el, { resolveDetails }) {
 
   function restoreFocus() {
     const trigger = restoreFocusTo;
+    const titleId = restoreTitleId;
     restoreFocusTo = null;
-    const fallback = [...document.querySelectorAll("[data-title-id]")]
-      .find((node) => node.dataset.titleId === restoreTitleId);
     restoreTitleId = "";
+    const fallback = titleId
+      ? [...document.querySelectorAll("button[data-title-id]")]
+        .find((node) => node.dataset.titleId === titleId)
+      : null;
     const target = trigger?.isConnected ? trigger : fallback;
     if (target && typeof target.focus === "function") target.focus();
   }

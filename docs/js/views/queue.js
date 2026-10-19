@@ -126,6 +126,7 @@ export function createQueueView(el, deps) {
   function buildCard(rec, rank) {
     const card = document.createElement("article");
     card.className = "card card-rank-" + rank;
+    card.dataset.titleId = rec.id;
     card.setAttribute("role", "listitem");
     card.appendChild(buildPoster(rec));
 
@@ -195,21 +196,24 @@ export function createQueueView(el, deps) {
     feedback.setAttribute("role", "group");
     feedback.setAttribute("aria-label", "Taste feedback for " + (rec.t || rec.id || "title"));
     const actions = [
-      { id: "like", label: "More like this" },
-      { id: "pass", label: "Not for me" },
-      { id: "seen", label: "Already seen" },
-      { id: "tonight", label: "Dismiss" }
+      { id: "like", label: "More like this", short: "More" },
+      { id: "pass", label: "Not for me", short: "Pass" },
+      { id: "seen", label: "Already seen", short: "Seen" },
+      { id: "tonight", label: "Dismiss", short: "Dismiss" }
     ];
-    if (isFreeRecord(rec)) actions.push({ id: "blocked", label: "Can't open it" });
+    if (isFreeRecord(rec)) actions.push({ id: "blocked", label: "Can't open it", short: "Broken" });
     for (const action of actions) {
       const button = document.createElement("button");
       button.type = "button";
       button.className = "card-feedback-btn";
       button.dataset.feedback = action.id;
-      // Icon only. The full words stay in the accessible name; data-label feeds the CSS tooltip.
       button.setAttribute("aria-label", action.label);
       button.dataset.label = action.label;
       button.appendChild(buildFeedbackIcon(action.id));
+      const text = document.createElement("span");
+      text.className = "feedback-text";
+      text.textContent = action.short;
+      button.appendChild(text);
       button.addEventListener("click", (event) => {
         event.stopPropagation();
         deps.onFeedback?.(rec.id, action.id, rec);

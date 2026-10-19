@@ -95,6 +95,15 @@ export function createChatView(el, deps) {
       enrichBtn.addEventListener("click", () => deps.onEnrich?.());
       memory.appendChild(enrichBtn);
     }
+    const enrichStatusEl = document.createElement("span");
+    enrichStatusEl.className = "chat-welcome-enrich-status";
+    const enrichStatusText = String(welcome.enrichStatus || "").trim();
+    if (enrichStatusText) {
+      enrichStatusEl.textContent = enrichStatusText;
+    } else {
+      enrichStatusEl.hidden = true;
+    }
+    memory.appendChild(enrichStatusEl);
     section.appendChild(memory);
     const chips = document.createElement("div");
     chips.className = "chat-chips";
@@ -182,12 +191,6 @@ export function createChatView(el, deps) {
     elapsed.hidden = true;
     head.appendChild(elapsed);
 
-    const stop = document.createElement("button");
-    stop.type = "button";
-    stop.className = "chat-turn-stop";
-    stop.textContent = "Stop";
-    stop.addEventListener("click", () => deps.onStop());
-    head.appendChild(stop);
     wrap.appendChild(head);
 
     const steps = document.createElement("ol");
@@ -213,22 +216,54 @@ export function createChatView(el, deps) {
     response.hidden = true;
     wrap.appendChild(response);
 
+    const errorRow = document.createElement("div");
+    errorRow.className = "chat-turn-error-row";
+    errorRow.hidden = true;
+
     const error = document.createElement("p");
     error.className = "chat-turn-error";
     error.setAttribute("role", "alert");
     error.hidden = true;
-    wrap.appendChild(error);
+    errorRow.appendChild(error);
+
+    const switchBtn = document.createElement("button");
+    switchBtn.type = "button";
+    switchBtn.className = "chat-turn-switch";
+    switchBtn.hidden = true;
+    errorRow.appendChild(switchBtn);
+
+    const hint = document.createElement("p");
+    hint.className = "chat-turn-hint";
+    hint.hidden = true;
+    errorRow.appendChild(hint);
+
+    const detailEl = document.createElement("details");
+    detailEl.className = "chat-turn-detail";
+    detailEl.hidden = true;
+    const detailSummary = document.createElement("summary");
+    detailSummary.textContent = "Details";
+    detailEl.appendChild(detailSummary);
+    const detailBody = document.createElement("p");
+    detailBody.className = "chat-turn-detail-body";
+    detailEl.appendChild(detailBody);
+    errorRow.appendChild(detailEl);
+
+    wrap.appendChild(errorRow);
 
     return {
       wrap,
       status,
       elapsed,
-      stop,
       steps,
       stepNodes,
       slowNote,
       response,
+      errorRow,
       error,
+      switchBtn,
+      hint,
+      detailEl,
+      detailBody,
       partial: "",
       toolCounts: [],
       stickToBottom: true,
@@ -311,7 +346,6 @@ export function createChatView(el, deps) {
     activeTurn.steps.hidden = true;
     activeTurn.slowNote.hidden = true;
     activeTurn.status.classList.remove("visually-hidden");
-    activeTurn.stop.hidden = true;
     activeTurn.elapsed.hidden = true;
     if (complete) activeTurn.wrap.classList.add("is-complete");
     if (error) activeTurn.wrap.classList.add("is-error");
@@ -334,7 +368,7 @@ export function createChatView(el, deps) {
     activeTurn = null;
   }
 
-  function failTurn({ message, partialReply = "", timing, status = "Could not complete" } = {}) {
+  function failTurn({ message, partialReply = "", timing, status = "Could not complete", switchOption = null, recovery = null } = {}) {
     if (!activeTurn) return;
     cancelStreamFrame();
     const partial = String(partialReply || activeTurn.partial || "");
@@ -343,11 +377,44 @@ export function createChatView(el, deps) {
       activeTurn.response.textContent = partial;
     }
     finishActivityShell({ error: true });
-    activeTurn.status.textContent = status;
-    activeTurn.error.textContent = String(message || "The turn did not complete. Check your connection or API key in Settings, then try again.");
+    const hasRecovery = recovery && typeof recovery.title === "string" && recovery.title.trim();
+    if (hasRecovery) {
+      activeTurn.error.textContent = recovery.title;
+      activeTurn.hint.textContent = recovery.hint || "";
+      activeTurn.hint.hidden = !recovery.hint;
+      if (recovery.detail) {
+        activeTurn.detailBody.textContent = recovery.detail;
+        activeTurn.detailEl.hidden = false;
+        activeTurn.detailEl.removeAttribute("open");
+      } else {
+        activeTurn.detailEl.hidden = true;
+        activeTurn.detailBody.textContent = "";
+      }
+      activeTurn.status.textContent = "Could not complete"
+        + (Number.isFinite(timing?.totalMs) ? " · " + (timing.totalMs / 1000).toFixed(1) + "s" : "");
+    } else {
+      activeTurn.error.textContent = String(message || "The turn did not complete. Check your connection or API key in Settings, then try again.");
+      activeTurn.hint.hidden = true;
+      activeTurn.detailEl.hidden = true;
+      activeTurn.detailBody.textContent = "";
+      activeTurn.status.textContent = status;
+      if (Number.isFinite(timing?.totalMs)) {
+        activeTurn.status.textContent = status + " · " + (timing.totalMs / 1000).toFixed(1) + "s";
+      }
+    }
     activeTurn.error.hidden = false;
-    if (Number.isFinite(timing?.totalMs)) {
-      activeTurn.status.textContent = status + " · " + (timing.totalMs / 1000).toFixed(1) + "s";
+    activeTurn.errorRow.hidden = false;
+    if (switchOption && typeof switchOption.name === "string" && switchOption.name.trim() && typeof switchOption.onSwitch === "function") {
+      const btn = activeTurn.switchBtn;
+      btn.textContent = "Switch to " + switchOption.name.trim();
+      btn.hidden = false;
+      btn.disabled = false;
+      btn.addEventListener("click", () => {
+        btn.disabled = true;
+        switchOption.onSwitch();
+      }, { once: true });
+    } else {
+      activeTurn.switchBtn.hidden = true;
     }
     if (activeTurn.stickToBottom || isNearBottom()) scrollToEnd();
     activeTurn = null;
@@ -412,6 +479,26 @@ export function createChatView(el, deps) {
     setQuery(value);
   }
 
+  function setEnrichBusy(busy) {
+    const link = el.chatTranscript.querySelector(".chat-welcome-enrich-link");
+    if (!link) return;
+    link.disabled = Boolean(busy);
+    link.textContent = busy ? "Enriching…" : "Enrich taste profile";
+  }
+
+  function setEnrichStatus(text) {
+    const status = el.chatTranscript.querySelector(".chat-welcome-enrich-status");
+    if (!status) return;
+    const value = String(text || "").trim();
+    if (value) {
+      status.textContent = value;
+      status.hidden = false;
+    } else {
+      status.textContent = "";
+      status.hidden = true;
+    }
+  }
+
   function acceptFile(file) {
     if (!file || typeof deps.onFile !== "function") return;
     deps.onFile(file);
@@ -470,6 +557,8 @@ export function createChatView(el, deps) {
     getQuery,
     clearQuery,
     setQuery,
-    restoreQueryIfEmpty
+    restoreQueryIfEmpty,
+    setEnrichBusy,
+    setEnrichStatus
   };
 }

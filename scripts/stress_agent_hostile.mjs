@@ -270,7 +270,12 @@ const cases = [
     const guard = new Promise((resolve, reject) => {
       setTimeout(() => reject(new Error("wall-clock guard tripped: possible infinite loop")), 15000);
     });
-    const { events, result } = await Promise.race([drive({ fetchImpl }), guard]);
+    // "q" classifies as "normal" (maxSteps 4); use a complex query so this
+    // case exercises the maxSteps-8 budget asserted below.
+    const { events, result } = await Promise.race([
+      drive({ fetchImpl, query: "compare Malayalam drama versus Hindi crime across my services" }),
+      guard
+    ]);
     const err = errorOf(events);
     assert.ok(err, "expected a budget error event");
     assert.equal(err.code, "budget");

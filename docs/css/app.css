@@ -1275,13 +1275,6 @@ svg.nav-icon {
   font-size: 0.78rem;
 }
 
-.chat-turn-stop {
-  min-height: 30px;
-  padding: 4px 9px;
-  color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 55%, var(--border));
-}
-
 .chat-turn-steps {
   list-style: none;
   margin: 8px 0 0;
@@ -1349,9 +1342,55 @@ svg.nav-icon {
   margin-bottom: 0;
 }
 
-.chat-turn-error {
+.chat-turn-error-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
   margin-top: 9px;
+}
+
+.chat-turn-error-row[hidden] {
+  display: none;
+}
+
+.chat-turn-error {
+  margin: 0;
   color: var(--danger);
+}
+
+.chat-turn-switch {
+  min-height: 28px;
+  padding: 4px 10px;
+  font-size: 0.78rem;
+  border-color: var(--border-strong);
+  color: var(--fg);
+  background: var(--card);
+}
+
+.chat-turn-hint {
+  margin: 0;
+  color: var(--muted);
+  flex-basis: 100%;
+}
+
+.chat-turn-detail {
+  flex-basis: 100%;
+  color: var(--faint);
+  font-size: 0.78rem;
+}
+
+.chat-turn-detail summary {
+  cursor: pointer;
+}
+
+.chat-turn-detail-body {
+  margin: 6px 0 0;
+}
+
+.chat-turn-switch:hover:not(:disabled) {
+  border-color: var(--secondary);
+  color: var(--secondary);
 }
 
 .chat-turn-activity.is-slow {
@@ -1384,7 +1423,7 @@ svg.nav-icon {
 }
 
 #query-form.is-turn-active .composer-hint {
-  color: var(--muted);
+  visibility: hidden;
 }
 
 .chat-key-error {
@@ -2729,6 +2768,16 @@ dialog h3 {
   cursor: pointer;
 }
 
+.chat-welcome-enrich-status {
+  color: var(--muted);
+  margin-left: 8px;
+}
+
+.chat-welcome-enrich-link:disabled {
+  color: var(--muted);
+  cursor: default;
+}
+
 #memory-dialog {
   max-width: 640px;
 }
@@ -3406,26 +3455,34 @@ dialog h2 {
 
 .card-feedback-btn {
   position: relative;
-  display: inline-grid;
-  place-items: center;
-  width: 32px;
-  min-width: 32px;
-  height: 32px;
-  min-height: 32px;
-  padding: 0;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  width: auto;
+  min-width: 0;
+  height: 28px;
+  min-height: 28px;
+  padding: 0 7px;
   border: 0;
-  border-radius: 10px;
+  border-radius: 8px;
   background: transparent;
   color: var(--faint);
-  font-size: 0;
-  line-height: 0;
+  font-size: 0.72rem;
+  font-weight: 500;
+  line-height: 1;
 }
 
 .card-feedback-btn .feedback-icon {
   display: block;
-  width: 18px;
-  height: 18px;
+  flex: 0 0 auto;
+  width: 15px;
+  height: 15px;
   pointer-events: none;
+}
+
+.card-feedback-btn .feedback-text {
+  pointer-events: none;
+  white-space: nowrap;
 }
 
 .card-feedback-btn:hover,
@@ -3440,40 +3497,6 @@ dialog h2 {
   outline-offset: 1px;
 }
 
-/* Tooltip: sits above the button, inside the card, so the card's overflow never clips it. */
-.card-feedback-btn::after {
-  content: attr(data-label);
-  position: absolute;
-  left: 0;
-  bottom: calc(100% + 6px);
-  z-index: 5;
-  padding: 3px 9px;
-  border-radius: 8px;
-  background: var(--tip-bg);
-  color: var(--tip-fg);
-  font: 600 0.72rem/1.3 var(--font-body);
-  white-space: nowrap;
-  pointer-events: none;
-  opacity: 0;
-  visibility: hidden;
-  transform: translateY(2px);
-  transition: opacity 0.12s ease, transform 0.12s ease, visibility 0s linear 0.12s;
-}
-
-.card-feedback-btn:hover::after {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  transition-delay: 0.25s;
-}
-
-.card-feedback-btn:focus-visible::after {
-  opacity: 1;
-  visibility: visible;
-  transform: none;
-  transition-delay: 0s;
-}
-
 /* Ticket stub: cream surface, so ink-colored hover and focus. */
 #queue-region .card-rank-1 .card-feedback-btn:hover,
 #queue-region .card-rank-1 .card-feedback-btn:focus-visible {
@@ -3486,29 +3509,20 @@ dialog h2 {
   outline-color: var(--ticket-ink);
 }
 
-/* Touch: full 44px hit area, and no sticky hover tooltips (the feedback note confirms the tap). */
 @media (pointer: coarse) {
   .card-feedback {
-    gap: 0;
-    margin-left: -12px;
+    gap: 2px;
+    margin-left: -6px;
   }
 
   .card-feedback-btn {
-    width: 44px;
-    min-width: 44px;
-    height: 44px;
-    min-height: 44px;
+    min-height: 36px;
+    padding: 0 8px;
   }
 
   .card-feedback-btn .feedback-icon {
-    width: 20px;
-    height: 20px;
-  }
-}
-
-@media (hover: none) {
-  .card-feedback-btn::after {
-    display: none;
+    width: 16px;
+    height: 16px;
   }
 }
 

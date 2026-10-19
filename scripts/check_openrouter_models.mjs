@@ -8,6 +8,7 @@ import {
   formatPricePerMillion,
   formatReasoningBadge,
   isOpenRouterBaseUrl,
+  nextRecommendedOpenRouterModel,
   normalizeOpenRouterModel
 } from "../docs/js/openrouter-models.js";
 
@@ -76,4 +77,16 @@ const slugLookup = lookupCalls.find((href) => new URL(href).searchParams.get("q"
 assert.ok(slugLookup);
 assert.equal(new URL(slugLookup).searchParams.has("supported_parameters"), false);
 
+assert.equal(
+  nextRecommendedOpenRouterModel("~deepseek/deepseek-flash-latest").id,
+  "openai/gpt-6.1-sol-pro"
+);
+assert.equal(
+  nextRecommendedOpenRouterModel("stepfun/step-5-preview").id,
+  "~deepseek/deepseek-flash-latest"
+);
+assert.equal(
+  nextRecommendedOpenRouterModel("custom/unknown-model").id,
+  "~deepseek/deepseek-flash-latest"
+);
 console.log("check_openrouter_models OK");

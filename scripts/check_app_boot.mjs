@@ -1104,11 +1104,11 @@ async function failedTurnRollsBackPendingUserMessage() {
       JSON.stringify((await browserMemory.getConversation()).messages));
     check("failed turns remain visible inline for retry context",
       /a thriller/.test(app.text("#chat-transcript") || "")
-        && /turn did not complete/i.test(app.text("#chat-transcript") || ""));
+        && /This search did not finish/i.test(app.text("#chat-transcript") || ""));
     check("failed turns restore the query for a retry",
       app.$("#query-input").value === "a thriller", app.$("#query-input").value);
     check("failed turns without an error event clear active progress UI",
-      app.$(".chat-turn-stop")?.hidden === true
+      app.$(".chat-turn-stop") === null && app.$("#stop-btn")?.hidden === true
         && !/Seeing what you can watch|Choosing a few to watch|Looking for a good fit/i.test(app.text(".chat-turn-status") || ""),
       app.text(".chat-turn-status"));
   } finally {
@@ -1135,7 +1135,8 @@ async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
     check("Stop keeps cancellation inline and hides the active controls",
       /Stopped\./.test(stopped.text(".chat-turn-error") || "")
         && stopped.$("#stop-btn").hidden
-        && !/late stale text/.test(stopped.text("#chat-transcript") || ""));
+        && !/late stale text/.test(stopped.text("#chat-transcript") || "")
+        && (!stopped.$(".chat-turn-detail") || stopped.$(".chat-turn-detail").hidden === true));
     const stoppedMemory = createBrowserMemory();
     await stoppedMemory.initialize();
     check("Stop rolls back the pending user message",
@@ -1145,12 +1146,27 @@ async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
       stopped.$("#query-input").value === "something funny",
       stopped.$("#query-input").value);
     check("Stop does not create a global error banner", stopped.$("#error-banner").hidden);
+    check("Stop does not offer a model switch",
+      !stopped.$(".chat-turn-switch") || stopped.$(".chat-turn-switch").hidden === true);
   } finally {
     stopped.restore();
   }
 
+  let agentCalls = 0;
   const failed = await bootApp({
     agentFixture: async (opts) => {
+      agentCalls += 1;
+      if (opts.config?.model === "openai/gpt-6.1-sol-pro" || agentCalls >= 2) {
+        return {
+          ok: true,
+          reply: "Try Sharp Comedy for a tight thriller mood.",
+          queue: null,
+          memoryCandidates: [],
+          usage: { promptTokens: 1, completionTokens: 1, totalTokens: 2, requestCount: 1 },
+          billing: { basis: "provider_reported", amountUsd: 0.0042, complete: true, requestCount: 1, pricedRequestCount: 1 },
+          timing: { totalMs: 900, firstTokenMs: 180 }
+        };
+      }
       opts.onEvent({ type: "status", turnId: opts.turnId, phase: "WRITING", text: "Writing", step: 3 });
       opts.onEvent({
         type: "error", turnId: opts.turnId, code: "network", message: "Fixture network failure.",
@@ -1163,15 +1179,32 @@ async function stoppedAndFailedTurnsStayInlineAndIgnoreLateEvents() {
     await completeOnboarding(failed);
     failed.$("#query-input").value = "a thriller";
     await failed.click("#send-btn");
+    await failed.settle();
     check("failed streamed turns keep partial text and error inline",
       /Partial fixture reply/.test(failed.text(".chat-turn-response") || "")
-        && /Fixture network failure/.test(failed.text(".chat-turn-error") || ""));
+        && /The request did not reach the model/.test(failed.text(".chat-turn-error") || "")
+        && /Check your connection/.test(failed.text(".chat-turn-hint") || "")
+        && /Fixture network failure/.test(failed.text(".chat-turn-detail-body") || "")
+        && failed.$(".chat-turn-detail")?.hasAttribute("open") !== true);
     const failedMemory = createBrowserMemory();
     await failedMemory.initialize();
     check("failed streamed turns roll back the pending user message",
       (await failedMemory.getConversation()).messages.length === 0,
       JSON.stringify((await failedMemory.getConversation()).messages));
     check("failed streamed turns do not create a global error banner", failed.$("#error-banner").hidden);
+    check("network failure offers a model switch",
+      failed.$(".chat-turn-switch")?.hidden === false
+        && /Switch to GPT-6\.1 Sol Pro/.test(failed.text(".chat-turn-switch") || ""),
+      failed.text(".chat-turn-switch"));
+    await failed.click(".chat-turn-switch");
+    await failed.settle();
+    const storedLlm = JSON.parse(failed.window.localStorage.getItem("ottbyok.llm") || "{}");
+    check("switch saves the next recommended model",
+      storedLlm.model === "openai/gpt-6.1-sol-pro", JSON.stringify(storedLlm));
+    check("switch resubmits the failed query and completes",
+      /a thriller/.test(failed.text("#chat-transcript") || "")
+        && /Try Sharp Comedy for a tight thriller mood/.test(failed.text("#chat-transcript") || ""),
+      failed.text("#chat-transcript"));
   } finally {
     failed.restore();
   }
@@ -1210,8 +1243,8 @@ async function slowStreamShowsAttachedStuckState() {
     await new Promise((resolve) => app.window.setTimeout(resolve, 650));
     check("slow streamed turns show the attached stuck state without losing Stop",
       /taking longer than usual/i.test(app.text(".chat-turn-status") || "")
-        && !app.$(".chat-turn-stop").hidden,
-      (app.text(".chat-turn-status") || "") + " / stop hidden=" + app.$(".chat-turn-stop").hidden);
+        && !app.$("#stop-btn").hidden && app.$(".chat-turn-stop") === null,
+      (app.text(".chat-turn-status") || "") + " / stop hidden=" + app.$("#stop-btn").hidden);
     release();
     await app.settle();
     check("unpriced successful turns omit cost instead of repeating unavailable",
@@ -1380,6 +1413,10 @@ async function preferenceTriplesAndEnrichLifecycle() {
       Boolean(updatedHistory?.enrichedSignature && updatedHistory?.titleTags && Object.keys(updatedHistory.titleTags).length > 0));
     check("enrich button hides after enrichment completes",
       app.$("#context-enrich-btn").hidden === true);
+    const enrichUiNote = (app.text(".chat-welcome-enrich-status") || app.text("#context-enrich-status") || "").trim();
+    check("enrichment shows enriched feedback in UI",
+      /Enriched/.test(enrichUiNote) && enrichUiNote !== "",
+      enrichUiNote);
   } finally {
     app.restore();
   }

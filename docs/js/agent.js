@@ -673,14 +673,28 @@ export async function runAgent(opts) {
       status("Seeing what you can watch", "Seeing what you can watch", 1);
 
       let decisionText = null;
+      let successfulToolResults = 0;
       for (let step = 0; step < maxSteps; step++) {
         ensureActive();
+        // Reserve the last planner step for a decision when any earlier tool
+        // call succeeded. Models otherwise consume every step with new
+        // searches; forcing here (not after the loop) keeps the request
+        // count within the existing step budget.
+        const forceDecision = step === maxSteps - 1 && successfulToolResults > 0;
+        if (forceDecision) {
+          messages.push({
+            role: "user",
+            content: "Stop searching now. Do not call any tool. Return strict decision JSON only, using only ids from successful run_catalog_js results above. If none of those results fit, return {\"queue\":[]}."
+          });
+        }
         const requestTiming = latency.start("model_request");
         let data;
         try {
           data = await streamChatCompletion(
             config,
-            { messages, tools: requestTools, tool_choice: "auto" },
+            forceDecision
+              ? { messages, tool_choice: "none" }
+              : { messages, tools: requestTools, tool_choice: "auto" },
             { fetchImpl, signal: controller.signal }
           );
         } finally {
@@ -688,6 +702,17 @@ export async function runAgent(opts) {
         }
         addRequestUsage(data.usage);
         const msg = data.message;
+
+        if (forceDecision) {
+          // A provider that ignores tool_choice:"none" and still returns
+          // tool calls has produced no decision; fall through to the
+          // existing budget error without executing or reranking.
+          if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) break;
+          messages.push(msg);
+          decisionText = msg.content || "";
+          break;
+        }
+
         messages.push(msg);
 
         if (Array.isArray(msg.tool_calls) && msg.tool_calls.length > 0) {
@@ -732,6 +757,7 @@ export async function runAgent(opts) {
             } finally {
               latency.end(toolTiming);
             }
+            if (!result?.error) successfulToolResults += 1;
             emitEvent({
               type: "tool_result",
               id: toolCallId,

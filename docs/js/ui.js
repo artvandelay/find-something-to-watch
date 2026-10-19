@@ -18,6 +18,7 @@ import {
   isUsefulReason
 } from "./recommendations.js";
 import { mergeLearnedPreferences, renderLearnedContext, upsertLearnedPreference } from "./preferences.js";
+import { nextRecommendedOpenRouterModel } from "./openrouter-models.js";
 import { needsEnrichment, runEnricher } from "./enricher.js";
 import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER, DEFAULT_REGION, FREE_PROVIDER_SLUGS, mergeFreeRecords, dailyFreePick } from "./providers.js";
 import { WELCOME_GAP_MS, buildTemporalBlock, buildRecapBlock, buildDividers, buildWelcome, buildMemoryLine } from "./tonight.js";
@@ -746,6 +747,7 @@ function recallTurns(archivedItems, messages) {
 }
 
 let enriching = false;
+let enrichStatusNote = "";
 
 function canEnrichNow() {
   return Boolean(profile?.memoryEnabled !== false && needsEnrichment({ history: historyCache, learned, queue: recommendationQueue }));
@@ -763,6 +765,9 @@ function syncEnrichControls(status = "") {
 async function onEnrich() {
   if (enriching) return;
   enriching = true;
+  enrichStatusNote = "";
+  chat.setEnrichBusy(true);
+  chat.setEnrichStatus("Enriching taste profile…");
   syncEnrichControls("Enriching taste profile…");
   try {
     const result = await runEnricher({
@@ -787,16 +792,19 @@ async function onEnrich() {
       learned = result.learned;
       await memory.setLearned(result.learned);
     }
-    const note = "Enriched " + (result.taggedCount || 0) + " titles";
+    const note = "Enriched " + (result.taggedCount || 0) + " titles.";
+    enrichStatusNote = note;
     queueView?.setFeedbackNote(note);
     syncEnrichControls(note);
     renderConversation();
   } catch (err) {
     console.error("ui: error enriching profile", err);
-    syncEnrichControls("Enrichment failed");
+    enrichStatusNote = "Could not enrich. Check your connection or API key in Settings, then try again.";
+    syncEnrichControls(enrichStatusNote);
+    renderConversation();
   } finally {
     enriching = false;
-    syncEnrichControls();
+    chat.setEnrichBusy(false);
   }
 }
 
@@ -837,13 +845,14 @@ function renderConversation() {
   }) : null;
   if (welcome) {
     welcome.canEnrich = canEnrichNow();
+    welcome.enrichStatus = enrichStatusNote;
   }
   chat.renderConversation(messages, {
     welcome,
     dividers: buildDividers(messages, now),
     picks
   });
-  syncEnrichControls();
+  syncEnrichControls(enrichStatusNote);
   void refreshConversationList();
 }
 
@@ -959,6 +968,13 @@ function describeLearnedChange(before, after) {
 }
 
 async function removeTitleFromQueue(titleId) {
+  for (const node of document.querySelectorAll("#chat-transcript .chat-picks .card")) {
+    if (node.dataset.titleId === titleId) {
+      const parent = node.parentElement;
+      node.remove();
+      if (parent && parent.children.length === 0) parent.remove();
+    }
+  }
   const nextItems = (recommendationQueue.items || []).filter((item) => item.id !== titleId);
   if (nextItems.length === recommendationQueue.items.length) {
     renderQueue();
@@ -1152,7 +1168,67 @@ async function labelNewConversation(query, { conversationId, signal, turnGenerat
   dialogs.appendTrace("Conversation titled: " + sanitizeTraceText(title));
 }
 
-function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgress, onFirstVisibleToken }) {
+function failureRecovery(code, message, timing) {
+  const raw = String(message || "").trim();
+  const seconds = Number.isFinite(timing?.totalMs) ? (timing.totalMs / 1000).toFixed(1) + "s" : "";
+  const detail = [raw, seconds].filter(Boolean).join(" · ");
+  const table = {
+    budget: {
+      title: "This model kept searching and never picked something.",
+      hint: "Try another model. Your question is still in the box."
+    },
+    rate: {
+      title: "The model service asked us to wait.",
+      hint: "Wait a moment, then press Send."
+    },
+    network: {
+      title: "The request did not reach the model.",
+      hint: "Check your connection, then press Send."
+    },
+    auth: {
+      title: "The API key was rejected.",
+      hint: "Open Settings and check the key."
+    },
+    credit: {
+      title: "This account is out of credit.",
+      hint: "Add credit, or switch to another model."
+    },
+    context: {
+      title: "That question was too long for this model.",
+      hint: "Shorten it, or start a new chat, then press Send."
+    },
+    parse: {
+      title: "The model reply could not be used.",
+      hint: "Try another model. Your question is still in the box."
+    }
+  };
+  const row = table[code] || {
+    title: "This search did not finish.",
+    hint: "Press Send to try again, or switch model."
+  };
+  return { title: row.title, hint: row.hint, detail };
+}
+
+function buildSwitchOption(query, code) {
+  if (code === "aborted" || code === "auth") return null;
+  const trimmed = String(query || "").trim();
+  if (!trimmed) return null;
+  const currentLlm = store.getLlm();
+  const nextModel = nextRecommendedOpenRouterModel(currentLlm?.model);
+  if (!nextModel || !nextModel.id || nextModel.id === currentLlm?.model) return null;
+  return {
+    name: nextModel.name,
+    modelId: nextModel.id,
+    onSwitch: () => {
+      const latest = store.getLlm();
+      store.setLlm({ ...latest, model: nextModel.id });
+      if (chat.getQuery() === trimmed) chat.clearQuery();
+      void onSubmit({ query: trimmed });
+    }
+  };
+}
+
+function makeEventHandler({ turnId, turnGeneration, startedAt, query, onMeaningfulProgress, onFirstVisibleToken, onErrorEvent }) {
   return function onEvent(event) {
     if (!event || typeof event !== "object" || event.turnId !== turnId ||
       turnGeneration !== stateGeneration || activeTurnId !== turnId) return;
@@ -1197,7 +1273,12 @@ function makeEventHandler({ turnId, turnGeneration, startedAt, onMeaningfulProgr
       return;
     }
     if (event.type === "error") {
-      chat.failTurn(event);
+      onErrorEvent?.();
+      chat.failTurn({
+        ...event,
+        switchOption: buildSwitchOption(query, event.code),
+        recovery: failureRecovery(event.code, event.message, event.timing)
+      });
     }
   };
 }
@@ -1420,6 +1501,7 @@ async function onSubmit(options) {
   let history = null;
   let seenKeys = [];
   let catalogManifest = { count: records.length, providers: [...scopeProviders()] };
+  let turnFailed = false;
 
   try {
     // The label is intentionally resolved before catalog/model work. It gives the
@@ -1533,12 +1615,14 @@ async function onSubmit(options) {
         turnId,
         turnGeneration,
         startedAt,
+        query,
         onMeaningfulProgress: markProgress,
         onFirstVisibleToken: () => {
           if (firstVisibleTokenRecorded) return;
           firstVisibleTokenRecorded = true;
           turnTiming.point("first_visible_token");
-        }
+        },
+        onErrorEvent: () => { turnFailed = true; }
       }),
       signal: thisController.signal,
       turnId
@@ -1549,7 +1633,14 @@ async function onSubmit(options) {
     const metricsTiming = result.timing && Number.isFinite(result.timing.totalMs) ? result.timing : timing;
     if (!result.ok) {
       appendTelemetryTrace({ timing: metricsTiming, usage: result.usage, billing: result.billing });
-      chat.failTurn({ message: "The turn did not complete. Check your connection or API key in Settings, then try again.", timing: metricsTiming });
+      if (!turnFailed) {
+        chat.failTurn({
+          message: "The turn did not complete. Check your connection or API key in Settings, then try again.",
+          timing: metricsTiming,
+          switchOption: buildSwitchOption(query, ""),
+          recovery: failureRecovery("", "The turn did not complete. Check your connection or API key in Settings, then try again.", metricsTiming)
+        });
+      }
       await rollbackPendingUserTurn(conversation.id, pendingUser);
       if (!override) chat.restoreQueryIfEmpty(query);
       return;
@@ -1655,10 +1746,14 @@ async function onSubmit(options) {
       await rollbackPendingUserTurn(conversation.id, pendingUser);
       const timing = finalizeTiming();
       appendTelemetryTrace({ timing });
-      chat.failTurn({
-        message: err && err.message ? err.message : "The search failed.",
-        timing
-      });
+      if (!turnFailed) {
+        chat.failTurn({
+          message: err && err.message ? err.message : "The search failed.",
+          timing,
+          switchOption: buildSwitchOption(query, err?.code || ""),
+          recovery: failureRecovery(err?.code || "", err?.message || "The search failed.", timing)
+        });
+      }
       if (!override) chat.restoreQueryIfEmpty(query);
     }
   } finally {
