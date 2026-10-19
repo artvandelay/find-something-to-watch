@@ -28,7 +28,5 @@ catalog/__pycache__/
 # os
 .DS_Store
 
-# Understand-Anything scratch (keep knowledge-graph.json / meta / fingerprints)
-.ua/.trash-*/
-.ua/tmp/
-.ua/.DS_Store
+# Understand-Anything index
+.ua/

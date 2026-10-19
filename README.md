@@ -255,7 +255,6 @@ bash scripts/scan_secrets.sh
 - `research/` — sourcing analysis notes
 - `CONTRACT.md` — frozen data shapes every module conforms to
 - `CHANGELOG.md` — v0.1.0 release notes
-- `RELEASE_CHECKLIST.md` — remaining checks before tagging and publishing
 
 `docs/js/ui.js` coordinates the DOM-facing views. The history importer keeps complete files local and
 uses the shared LLM client only for its bounded schema-inference request. The trusted Worker applies
