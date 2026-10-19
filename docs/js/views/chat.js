@@ -87,6 +87,14 @@ export function createChatView(el, deps) {
     seeAll.textContent = welcome.memoryLine ? "See all" : "What I remember";
     seeAll.addEventListener("click", () => deps.onOpenMemory?.());
     memory.appendChild(seeAll);
+    if (welcome.canEnrich) {
+      const enrichBtn = document.createElement("button");
+      enrichBtn.type = "button";
+      enrichBtn.className = "chat-welcome-memory-link chat-welcome-enrich-link";
+      enrichBtn.textContent = "Enrich taste profile";
+      enrichBtn.addEventListener("click", () => deps.onEnrich?.());
+      memory.appendChild(enrichBtn);
+    }
     section.appendChild(memory);
     const chips = document.createElement("div");
     chips.className = "chat-chips";

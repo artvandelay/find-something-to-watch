@@ -9,6 +9,7 @@ import {
   inspectWatchHistoryFiles,
   parseNetflixCsv,
   parseWatchHistoryExport,
+  resolveHistoryWithCatalog,
   summarize,
   validateHistoryPlan
 } from "../docs/js/history.js";
@@ -207,5 +208,34 @@ const generatedNetflix = await parseWatchHistoryExport(
 assert.deepEqual(generatedNetflix.seen, netflix.seen);
 assert.deepEqual(generatedNetflix.series, netflix.series);
 assert.deepEqual(generatedNetflix.movies.map((movie) => movie.title), netflix.movies.map((movie) => movie.title));
+
+const sampleCatalog = [
+  { id: "tmdb:m100", t: "Bulbbul", k: "movie", y: 2020, rt: 94, l: "hi", g: ["Horror", "Drama"], v: 100 },
+  { id: "tmdb:s200", t: "Seinfeld", k: "series", y: 1989, rt: 22, l: "en", g: ["Comedy"], v: 500 },
+  { id: "other:s200", t: "Seinfeld", k: "series", y: 1989, rt: 22, l: "en", g: ["Comedy"], v: 10 },
+  { id: "tmdb:m300", t: "Seinfeld", k: "movie", y: 2000, rt: 90, l: "en", g: ["Comedy"], v: 50 }
+];
+
+const resolvedHistory = resolveHistoryWithCatalog(netflix, sampleCatalog);
+assert.equal(resolvedHistory.resolvedIds.includes("tmdb:m100"), true);
+assert.equal(resolvedHistory.resolvedIds.includes("tmdb:s200"), true);
+assert.deepEqual(resolvedHistory.resolvedIds, ["tmdb:m100", "tmdb:s200"]);
+
+const bulbbul = resolvedHistory.movies.find((m) => m.title === "Bulbbul");
+assert.equal(bulbbul.id, "tmdb:m100");
+assert.equal(bulbbul.y, 2020);
+assert.equal(bulbbul.rt, 94);
+assert.equal(bulbbul.l, "hi");
+assert.deepEqual(bulbbul.g, ["Horror", "Drama"]);
+
+const seinfeld = resolvedHistory.series.find((s) => s.name === "Seinfeld");
+assert.equal(seinfeld.id, "tmdb:s200");
+assert.equal(seinfeld.y, 1989);
+assert.equal(seinfeld.rt, 22);
+
+const dhurandhar = resolvedHistory.movies.find((m) => m.title === "Dhurandhar");
+assert.equal(dhurandhar.id, undefined);
+
+assert.deepEqual(resolveHistoryWithCatalog(netflix, []), netflix);
 
 console.log("check_history OK");

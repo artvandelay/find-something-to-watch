@@ -889,6 +889,64 @@ export function parseNetflixCsv(text) {
   return parsed;
 }
 
+export function resolveHistoryWithCatalog(history, records, { limits = HISTORY_IMPORT_LIMITS } = {}) {
+  if (!history || typeof history !== "object") return history;
+  const list = Array.isArray(records) ? records : [];
+  if (list.length === 0) return history;
+
+  const byKeyAndKind = new Map();
+  const byKey = new Map();
+  const better = (candidate, current) => {
+    if (!current) return true;
+    const cv = Number(candidate?.v) || 0;
+    const xv = Number(current?.v) || 0;
+    if (cv !== xv) return cv > xv;
+    const cTmdb = String(candidate?.id || "").startsWith("tmdb:") ? 0 : 1;
+    const xTmdb = String(current?.id || "").startsWith("tmdb:") ? 0 : 1;
+    if (cTmdb !== xTmdb) return cTmdb < xTmdb;
+    return String(candidate?.id || "").localeCompare(String(current?.id || "")) < 0;
+  };
+
+  for (const rec of list) {
+    if (!rec || typeof rec.id !== "string" || typeof rec.t !== "string") continue;
+    const key = normalizeTitle(rec.t);
+    if (!key) continue;
+    const kind = rec.k === "series" || rec.k === "tv" ? "series" : rec.k === "movie" ? "movie" : "other";
+    const kk = key + "\0" + kind;
+    if (better(rec, byKeyAndKind.get(kk))) byKeyAndKind.set(kk, rec);
+    if (better(rec, byKey.get(key))) byKey.set(key, rec);
+  }
+
+  const resolvedIds = new Set();
+  const attach = (entry, titleField, preferredKind) => {
+    if (!entry || typeof entry !== "object") return entry;
+    const rawTitle = entry[titleField];
+    const key = normalizeTitle(rawTitle);
+    if (!key) return { ...entry };
+    const match = (preferredKind && byKeyAndKind.get(key + "\0" + preferredKind)) || byKey.get(key) || null;
+    if (!match) return { ...entry };
+    resolvedIds.add(match.id);
+    const next = { ...entry, id: match.id };
+    if (Number.isInteger(match.y)) next.y = match.y;
+    if (Number.isInteger(match.rt) && match.rt > 0) next.rt = match.rt;
+    if (typeof match.l === "string" && match.l) next.l = match.l;
+    if (Array.isArray(match.g) && match.g.length > 0) next.g = match.g.slice(0, 6);
+    return next;
+  };
+
+  const candidate = {
+    ...history,
+    series: (Array.isArray(history.series) ? history.series : []).map((item) => attach(item, "name", "series")),
+    movies: (Array.isArray(history.movies) ? history.movies : []).map((item) => attach(item, "title", "movie")),
+    other: (Array.isArray(history.other) ? history.other : []).map((item) => attach(item, "title", null)),
+    resolvedIds: Array.from(resolvedIds).sort()
+  };
+  if (TEXT_ENCODER.encode(JSON.stringify(candidate)).byteLength > limits.normalizedHistoryBytes) {
+    return history;
+  }
+  return candidate;
+}
+
 export function summarize(parsed) {
   const other = Array.isArray(parsed?.other) && parsed.other.length ? `, ${parsed.other.length} other` : "";
   return `${parsed.series.length} series, ${parsed.movies.length} movies${other}, ${parsed.seen.length} titles seen`;

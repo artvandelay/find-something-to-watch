@@ -173,6 +173,22 @@ function budgetForTurnClass(turnClass, override = null) {
   };
 }
 
+function formatHistoryItemMeta(entry, titleTags) {
+  if (!entry || typeof entry !== "object") return "";
+  const parts = [];
+  if (typeof entry.id === "string" && entry.id) parts.push(entry.id);
+  if (Number.isInteger(entry.y)) parts.push(String(entry.y));
+  if (Number.isInteger(entry.rt) && entry.rt > 0) parts.push(entry.rt + "m");
+  if (typeof entry.l === "string" && entry.l) parts.push(entry.l);
+  if (Array.isArray(entry.g) && entry.g.length > 0) parts.push(entry.g.slice(0, 3).join("/"));
+  const tags = entry.id && titleTags && typeof titleTags === "object" ? titleTags[entry.id] : null;
+  if (tags && typeof tags === "object") {
+    const tagList = [tags.pace, tags.tone, tags.fit].filter((v) => typeof v === "string" && v);
+    if (tagList.length > 0) parts.push(tagList.join(", "));
+  }
+  return parts.length > 0 ? " [" + parts.join(" · ") + "]" : "";
+}
+
 // Sent as its own system message. This directly reaches the configured LLM
 // endpoint — see CONTRACT.md and the app's privacy copy for what "local-only"
 // does and does not cover here.
@@ -204,11 +220,13 @@ function buildContextBlock(context) {
         : "";
       addLine("- Source: " + name + " (" + format + records + ")");
     }
+    const titleTags = ctx.history.titleTags && typeof ctx.history.titleTags === "object" ? ctx.history.titleTags : null;
     for (const s of series) {
-      addLine("- Series: " + (s?.name || "") + " (" + (s?.episodes || 0) + " episodes)");
+      addLine("- Series: " + (s?.name || "") + " (" + (s?.episodes || 0) + " episodes)" + formatHistoryItemMeta(s, titleTags));
     }
     for (const m of movies) {
-      addLine("- Movie: " + (typeof m === "string" ? m : m?.title || ""));
+      const movieTitle = typeof m === "string" ? m : m?.title || "";
+      addLine("- Movie: " + movieTitle + (typeof m === "object" ? formatHistoryItemMeta(m, titleTags) : ""));
     }
     for (const item of other) {
       addLine("- Other: " + (typeof item === "string" ? item : item?.title || ""));

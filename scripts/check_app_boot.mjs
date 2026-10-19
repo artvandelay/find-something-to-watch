@@ -707,13 +707,18 @@ async function conversationsAndLearnedMemoryPersist() {
     check("Profile & context exposes learned-memory controls",
       first.$("#memory-enabled").checked && first.$$("#learned-facts .learned-fact").length === 1
         && first.$("#learned-clear") !== null);
-    const learnedValue = first.$("#learned-facts input");
-    learnedValue.value = "comedies";
-    learnedValue.dispatchEvent(new first.window.Event("input", { bubbles: true }));
+    check("learned fact is displayed in profile & context",
+      first.text("#learned-facts").includes("comedy"));
+    await first.click("#learned-facts .learned-fact-remove");
     await first.click("#context-save");
-    check("learned facts are editable through the context coordinator",
-      (await browserMemory.getLearned()).items[0].value === "comedies");
+    check("clicking remove deletes the learned fact",
+      (await browserMemory.getLearned()).items.length === 0);
 
+    await browserMemory.setLearned({
+      schema: 1,
+      revision: 2,
+      items: [{ id: "learned-action", kind: "genre", polarity: "like", value: "action" }]
+    });
     await first.click("#context-btn");
     first.$("#memory-enabled").checked = false;
     await first.click("#learned-clear");
@@ -1318,6 +1323,68 @@ async function conversationsCanBeRenamedAndDeleted() {
   }
 }
 
+async function preferenceTriplesAndEnrichLifecycle() {
+  const app = await bootApp();
+  try {
+    // 1. Fresh boot has no enrich buttons visible
+    check("context enrich button is initially hidden", app.$("#context-enrich-btn").hidden === true);
+    check("memory enrich button is initially hidden", app.$("#memory-enrich-btn").hidden === true);
+    check("chat welcome enrich link is initially absent", !app.$(".chat-welcome-enrich-link"));
+
+    await completeOnboarding(app);
+
+    const browserMemory = createBrowserMemory();
+    await browserMemory.initialize();
+
+    // 2. Test triple feedback on cards: like and pass
+    const topTitle = app.text("#queue-track .card .card-title");
+    await app.click("#queue-track .card .card-feedback-btn[data-feedback=like]");
+    await app.settle();
+    let learned = await browserMemory.getLearned();
+    const likedFact = learned.items.find((item) => item.polarity === "like");
+    check("like feedback persists subjectId and subjectTitle",
+      Boolean(likedFact && likedFact.subjectTitle === topTitle && likedFact.subjectId),
+      JSON.stringify(likedFact));
+
+    await app.click("#queue-track .card .card-feedback-btn[data-feedback=pass]");
+    await app.settle();
+    learned = await browserMemory.getLearned();
+    const passedFact = learned.items.find((item) => item.polarity === "avoid");
+    check("pass feedback anchors to title theme rather than banning genre",
+      Boolean(passedFact && passedFact.kind === "theme" && passedFact.subjectTitle && passedFact.value === passedFact.subjectTitle),
+      JSON.stringify(passedFact));
+
+    // 3. Set watch history in memory
+    await browserMemory.setHistory({
+      schema: 2,
+      importedAt: new Date().toISOString(),
+      sources: [{ name: "ViewingActivity.csv", kind: "netflix" }],
+      series: [{ name: "Netflix Series", episodes: 5 }],
+      movies: [{ title: "Sharp Comedy" }],
+      other: [],
+      seen: ["netflix series", "sharp comedy"]
+    });
+
+    // Open context dialog to trigger sync
+    await app.click("#context-btn");
+    await app.settle();
+    check("context enrich button becomes visible when history exists",
+      app.$("#context-enrich-btn").hidden === false);
+
+    // Click enrich button
+    await app.click("#context-enrich-btn");
+    await app.settle();
+
+    const updatedHistory = await browserMemory.getHistory();
+    check("enrichment sets enrichedSignature and titleTags",
+      Boolean(updatedHistory?.enrichedSignature && updatedHistory?.titleTags && Object.keys(updatedHistory.titleTags).length > 0));
+    check("enrich button hides after enrichment completes",
+      app.$("#context-enrich-btn").hidden === true);
+  } finally {
+    app.restore();
+  }
+}
+
 const suites = [
   firstVisitShowsWorkspace,
   phaseFiveStructuralContract,
@@ -1335,6 +1402,7 @@ const suites = [
   conversationsCanBeRenamedAndDeleted,
   subscriptionsEditOpensSettingsAndRescopesQueue,
   watchedTitlesStayOutOfSeededPicks,
+  preferenceTriplesAndEnrichLifecycle,
   workerUnavailableKeepsShellAndKeyGate,
   settingsModelPickerSupportsOpenRouterDropdown,
   settingsWebSearchIsScopedToOpenRouter,

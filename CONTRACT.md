@@ -466,9 +466,12 @@ dangling model history without racing a newer submission.
   items: [{
     id: "learned-id",
     kind: "genre" | "language" | "theme" | "pace" |
-          "creator" | "format" | "content",
+          "creator" | "format" | "content" | "habit",
     polarity: "like" | "avoid",
     value: "documentaries",
+    subjectId: "tmdb:m1013577",      // optional catalog id anchor (<= 80 chars)
+    subjectTitle: "Example Documentary", // optional title anchor (<= 80 chars)
+    reason: "Concise investigative pace", // optional fit/rejection reason (<= 120 chars)
     createdAt: "2026-08-05T00:00:00.000Z",
     lastConfirmedAt: "2026-08-05T00:00:00.000Z"
   }]
@@ -490,7 +493,8 @@ known kinds/polarities and the same 80-character value cap. “Already seen” a
 normalized title key to local watch-history `seen` so future picks and tools exclude it.
 “Dismiss” only removes the title from the current queue.
 Manually authored You.md remains separate. The generated “Learned from chats” context
-is inspectable, editable, disableable, and clearable by the user.
+is managed by the model, displayed in a compact view, and inspectable, removable individually,
+clearable, and disableable by the user.
 
 ### User context
 
@@ -758,6 +762,8 @@ Applying a valid plan locally returns normalized history:
   seen:   ["seinfeld", "dhurandhar"]
 }
 ```
+
+When resolved against the local catalog (`resolveHistoryWithCatalog`) or enriched on demand (`docs/js/enricher.js`), matched `series`, `movies`, and `other` entries carry optional `{ id, y, rt, l, g }` fields from the catalog record, and the top-level history object may carry `resolvedIds` (`string[]`), `titleTags` (`{ [catalogId]: { pace?, tone?, fit? } }` from closed enums), `enrichedAt` (ISO timestamp or `null`), and `enrichedSignature` (string or `null`).
 
 Dates must be real calendar dates normalized to `YYYY-MM-DD`; invalid dates are
 discarded rather than rolled over. At most 50,000 local rows/records are processed,

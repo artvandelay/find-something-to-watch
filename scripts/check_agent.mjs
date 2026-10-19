@@ -752,4 +752,44 @@ function ok(payload) {
   }
 }
 
+{
+  const requests = [];
+  const fetchImpl = async (_url, init) => {
+    requests.push(JSON.parse(init.body));
+    const content = requests.length === 1 ? JSON.stringify({ reply: "Enjoy!" }) : "Done.";
+    return ok({ choices: [{ message: { role: "assistant", content } }] });
+  };
+  const result = await runAgent({
+    config,
+    prompts,
+    tools,
+    context: {
+      youmd: "",
+      history: {
+        sources: [],
+        series: [],
+        movies: [
+          { title: "Bulbbul", id: "tmdb:m1", y: 2020, rt: 92, l: "hi", g: ["Horror"] }
+        ],
+        other: [],
+        seen: ["bulbbul"],
+        titleTags: {
+          "tmdb:m1": { pace: "slow", tone: "bleak", fit: "late-night" }
+        }
+      },
+      mood: ""
+    },
+    query: "recommend something",
+    conversation: [],
+    fetchImpl
+  });
+  assert.equal(result.ok, true);
+  const contextMessage = requests[0].messages.find((m) => m.role === "system" && typeof m.content === "string" && m.content.includes("## Recently watched"));
+  assert.ok(contextMessage, "Context message with Recently watched should be present");
+  assert.ok(
+    contextMessage.content.includes("- Movie: Bulbbul [tmdb:m1 · 2020 · 92m · hi · Horror · slow, bleak, late-night]"),
+    "Should include formatted movie metadata with titleTags"
+  );
+}
+
 console.log("check_agent OK");

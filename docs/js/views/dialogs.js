@@ -1,5 +1,4 @@
 import { toMarkdown, toJson, toCsv, toYouMd } from "../exporters.js";
-import { LEARNED_KINDS } from "../preferences.js";
 import {
   RECOMMENDED_OPENROUTER_MODELS,
   buildModelSelectOptions,
@@ -31,51 +30,53 @@ export function renderLearnedFacts(container, draft, onChange = null) {
     const row = document.createElement("div");
     row.className = "learned-fact";
     row.setAttribute("role", "listitem");
-    const polarity = document.createElement("select");
-    polarity.setAttribute("aria-label", "Preference");
-    for (const [value, label] of [["like", "Like"], ["avoid", "Avoid"]]) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = label;
-      option.selected = item.polarity === value;
-      polarity.appendChild(option);
+
+    const body = document.createElement("div");
+    body.className = "learned-fact-body";
+
+    const main = document.createElement("div");
+    main.className = "learned-fact-main";
+
+    const polarity = document.createElement("span");
+    const isAvoid = String(item.polarity || "like").toLowerCase() === "avoid";
+    polarity.className = "learned-fact-badge " + (isAvoid ? "is-avoid" : "is-like");
+    polarity.textContent = isAvoid ? "Avoid" : "Like";
+
+    const kind = document.createElement("span");
+    kind.className = "learned-fact-kind";
+    kind.textContent = item.kind || "genre";
+
+    const value = document.createElement("strong");
+    value.className = "learned-fact-value";
+    value.textContent = item.value || "";
+
+    main.append(polarity, kind, value);
+    body.appendChild(main);
+
+    if (item.subjectTitle || item.reason) {
+      const anchor = document.createElement("div");
+      anchor.className = "learned-fact-anchor";
+      const parts = [];
+      if (item.subjectTitle) parts.push(item.subjectTitle);
+      if (item.reason) parts.push(item.reason);
+      anchor.textContent = parts.join(" — ");
+      body.appendChild(anchor);
     }
-    const kind = document.createElement("select");
-    kind.setAttribute("aria-label", "Preference type");
-    for (const value of LEARNED_KINDS) {
-      const option = document.createElement("option");
-      option.value = value;
-      option.textContent = value;
-      option.selected = item.kind === value;
-      kind.appendChild(option);
-    }
-    const value = document.createElement("input");
-    value.type = "text";
-    value.maxLength = 80;
-    value.value = item.value;
-    value.setAttribute("aria-label", "Preference value");
+
     const remove = document.createElement("button");
     remove.type = "button";
-    remove.className = "danger-action";
+    remove.className = "learned-fact-remove";
     remove.textContent = "Remove";
+    remove.setAttribute("aria-label", "Remove " + (item.value || "preference"));
     remove.addEventListener("click", () => {
       draft.items.splice(index, 1);
       if (Number.isInteger(draft.revision)) draft.revision += 1;
+      else draft.revision = 1;
       renderLearnedFacts(container, draft, onChange);
       notify();
     });
-    for (const control of [polarity, kind, value]) {
-      control.addEventListener("input", () => {
-        draft.items[index] = {
-          ...draft.items[index],
-          polarity: polarity.value,
-          kind: kind.value,
-          value: value.value
-        };
-        notify();
-      });
-    }
-    row.append(polarity, kind, value, remove);
+
+    row.append(body, remove);
     container.appendChild(row);
   }
 }
@@ -308,10 +309,13 @@ export function createDialogs(el, deps) {
         feedback(el.contextFeedback);
         parsedHistoryDraft = undefined;
         el.contextDialog.showModal();
+        deps.onSyncEnrich?.();
       } catch (err) {
         deps.onError(err && err.message ? err.message : "Could not open profile and context.");
       }
     });
+
+    el.contextEnrichBtn?.addEventListener("click", () => deps.onEnrich?.());
 
     el.historyRemove.addEventListener("click", () => {
       parsedHistoryDraft = null;
@@ -435,11 +439,24 @@ export function createDialogs(el, deps) {
     });
   }
 
+  function syncEnrichState({ visible = false, busy = false, status = "" } = {}) {
+    if (el.contextEnrichBtn) {
+      el.contextEnrichBtn.hidden = !visible;
+      el.contextEnrichBtn.disabled = Boolean(busy);
+      el.contextEnrichBtn.textContent = busy ? "Enriching…" : "Enrich taste profile";
+    }
+    if (el.contextEnrichStatus) {
+      const text = typeof status === "string" ? status.trim() : "";
+      el.contextEnrichStatus.textContent = text;
+      el.contextEnrichStatus.hidden = text === "";
+    }
+  }
+
   wireSettings();
   wireLocalData();
   wireContext();
   wireExports();
   wireDeveloper();
 
-  return { appendTrace, clearTrace, openDeveloper, openSettings, setBusy };
+  return { appendTrace, clearTrace, openDeveloper, openSettings, setBusy, syncEnrichState };
 }

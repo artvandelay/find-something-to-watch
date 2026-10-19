@@ -190,6 +190,52 @@ function handleChatCompletion(response, body) {
   const wantsFailure = requestText.includes("fixture failure");
   const wantsSlow = requestText.includes("fixture slow");
 
+  if (body?.stream === false) {
+    if (requestText.includes("titletags") || requestText.includes("enrichment")) {
+      sendJson(response, 200, chatCompletion({
+        role: "assistant",
+        content: JSON.stringify({
+          titleTags: {
+            "tmdb:fixture-1": { pace: "fast", tone: "playful", fit: "late-night" },
+            "tmdb:fixture-2": { pace: "slow", tone: "tense", fit: "solo" }
+          },
+          preferences: [
+            {
+              kind: "genre",
+              polarity: "like",
+              value: "Comedy",
+              subjectId: "tmdb:fixture-1",
+              subjectTitle: "Fixture Comedy",
+              reason: "Fast and playful comedy"
+            }
+          ]
+        })
+      }));
+      return;
+    }
+    const historyPlan = {
+      schema: 1,
+      files: [{
+        name: "ViewingActivity.csv",
+        format: "csv",
+        headerRow: 0,
+        dataStartRow: 1,
+        titleColumn: 0,
+        dateColumn: 1,
+        typeColumn: null,
+        seriesColumn: null,
+        episodeColumn: null,
+        dateFormat: "ymd",
+        typeMap: { movie: [], series: [] }
+      }]
+    };
+    sendJson(response, 200, chatCompletion({
+      role: "assistant",
+      content: JSON.stringify(historyPlan)
+    }));
+    return;
+  }
+
   if (toolsPresent && !hasToolResult(messages)) {
     if (forceTimeout) {
       stream(response, streamMessage(toolCall("while (true) {}").choices[0].message));

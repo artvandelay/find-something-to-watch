@@ -1,5 +1,5 @@
 import { normalizeTitle, seedQueue } from "./catalog.js";
-import { historyImportReply, parseWatchHistoryExport, summarize } from "./history.js";
+import { historyImportReply, parseWatchHistoryExport, resolveHistoryWithCatalog, summarize } from "./history.js";
 import { parseChatCommand, regionCommandReply, subscriptionCommandReply } from "./chat-commands.js";
 import { createHistoryPlanInferer } from "./history-model.js";
 import { createTools } from "./tools.js";
@@ -14,9 +14,11 @@ import {
   RECOMMENDATION_LIMITS,
   normalizeQueueMode,
   defaultRecommendationQueue,
-  sanitizeRecommendationQueue
+  sanitizeRecommendationQueue,
+  isUsefulReason
 } from "./recommendations.js";
 import { mergeLearnedPreferences, renderLearnedContext, upsertLearnedPreference } from "./preferences.js";
+import { needsEnrichment, runEnricher } from "./enricher.js";
 import { providerLabel, watchCta, intersectProviders, DEFAULT_PROVIDER_ORDER, DEFAULT_REGION, FREE_PROVIDER_SLUGS, mergeFreeRecords, dailyFreePick } from "./providers.js";
 import { WELCOME_GAP_MS, buildTemporalBlock, buildRecapBlock, buildDividers, buildWelcome, buildMemoryLine } from "./tonight.js";
 import {
@@ -72,9 +74,9 @@ const DOM_IDS = [
   "llm-model-custom", "llm-model-note", "llm-model-openrouter-field",
   "llm-model-compat-field", "llm-model",
   "llm-web-search", "region-select", "export-backup-btn", "reset-keep-key-btn", "clear-data-btn",
-  "memory-dialog", "memory-facts", "memory-marks", "memory-imports", "memory-import-remove", "memory-close",
+  "memory-dialog", "memory-facts", "memory-marks", "memory-imports", "memory-import-remove", "memory-enrich-btn", "memory-close",
   "settings-feedback", "settings-save", "settings-close",
-  "context-dialog", "youmd-input", "history-summary", "history-remove",
+  "context-dialog", "youmd-input", "history-summary", "history-remove", "context-enrich-btn", "context-enrich-status",
   "memory-enabled", "learned-facts", "learned-clear", "context-feedback", "context-save", "context-close",
   "disclosure-dialog", "catalog-detail", "trace",
   "export-md", "export-json", "export-csv", "export-youmd", "disclosure-feedback",
@@ -743,6 +745,61 @@ function recallTurns(archivedItems, messages) {
   return turns.slice(-40);
 }
 
+let enriching = false;
+
+function canEnrichNow() {
+  return Boolean(profile?.memoryEnabled !== false && needsEnrichment({ history: historyCache, learned, queue: recommendationQueue }));
+}
+
+function syncEnrichControls(status = "") {
+  const visible = canEnrichNow();
+  dialogs?.syncEnrichState({ visible, busy: enriching, status });
+  if (el?.memoryEnrichBtn) {
+    el.memoryEnrichBtn.hidden = !visible;
+    el.memoryEnrichBtn.disabled = enriching;
+  }
+}
+
+async function onEnrich() {
+  if (enriching) return;
+  enriching = true;
+  syncEnrichControls("Enriching taste profile…");
+  try {
+    const result = await runEnricher({
+      config: store.getLlm(),
+      history: historyCache,
+      learned,
+      queue: recommendationQueue,
+      records
+    });
+    if (result.history) {
+      historyCache = result.history;
+      await memory.setHistory(result.history);
+      if (result.history.titleTags) {
+        try {
+          await runtime.setTitleTags(result.history.titleTags);
+        } catch (err) {
+          console.warn("ui: could not forward titleTags to runtime", err);
+        }
+      }
+    }
+    if (result.learned) {
+      learned = result.learned;
+      await memory.setLearned(result.learned);
+    }
+    const note = "Enriched " + (result.taggedCount || 0) + " titles";
+    queueView?.setFeedbackNote(note);
+    syncEnrichControls(note);
+    renderConversation();
+  } catch (err) {
+    console.error("ui: error enriching profile", err);
+    syncEnrichControls("Enrichment failed");
+  } finally {
+    enriching = false;
+    syncEnrichControls();
+  }
+}
+
 function renderConversation() {
   const now = new Date(Date.now());
   const messages = conversation?.messages || [];
@@ -778,11 +835,15 @@ function renderConversation() {
       blockedCount: Array.isArray(historyCache?.blocked) ? historyCache.blocked.length : 0
     })
   }) : null;
+  if (welcome) {
+    welcome.canEnrich = canEnrichNow();
+  }
   chat.renderConversation(messages, {
     welcome,
     dividers: buildDividers(messages, now),
     picks
   });
+  syncEnrichControls();
   void refreshConversationList();
 }
 
@@ -865,12 +926,21 @@ function appendTelemetryTrace({ timing, usage, billing } = {}) {
 }
 
 function preferenceFromTitle(rec, polarity) {
-  const genre = Array.isArray(rec?.g) ? rec.g.find((value) => typeof value === "string" && value.trim()) : "";
-  if (genre) {
-    return { kind: "genre", polarity, value: String(genre).trim().slice(0, 80) };
-  }
   const title = typeof rec?.t === "string" ? rec.t.trim().slice(0, 80) : "";
-  if (title) return { kind: "theme", polarity, value: title };
+  const subjectId = typeof rec?.id === "string" ? rec.id.trim().slice(0, 80) : "";
+  const genres = Array.isArray(rec?.g) ? rec.g.filter((v) => typeof v === "string" && v.trim()).map((v) => v.trim()) : [];
+  const reason = isUsefulReason(rec?.reason)
+    ? String(rec.reason).trim().slice(0, 120)
+    : genres.slice(0, 2).join(", ").slice(0, 120);
+  if (polarity === "avoid" && title) {
+    return { kind: "theme", polarity: "avoid", value: title, subjectId, subjectTitle: title, reason };
+  }
+  if (genres[0]) {
+    return { kind: "genre", polarity, value: genres[0].slice(0, 80), subjectId, subjectTitle: title, reason };
+  }
+  if (title) {
+    return { kind: "theme", polarity, value: title, subjectId, subjectTitle: title, reason };
+  }
   return null;
 }
 
@@ -1220,7 +1290,16 @@ async function onHistoryFile(file) {
     if (!Array.isArray(parsed?.seen) || parsed.seen.length === 0) {
       throw new Error(`"${filename}" has no readable titles.`);
     }
-    await memory.setHistory(parsed);
+    const resolved = resolveHistoryWithCatalog(parsed, records);
+    await memory.setHistory(resolved);
+    historyCache = resolved;
+    if (resolved.titleTags) {
+      try {
+        await runtime.setTitleTags(resolved.titleTags);
+      } catch (err) {
+        console.warn("ui: could not forward titleTags to runtime", err);
+      }
+    }
     await refreshSeenKeys();
     try {
       await pruneUnavailableAndWatched({
@@ -1232,6 +1311,7 @@ async function onHistoryFile(file) {
     } catch (err) {
       console.warn("ui: could not refresh the queue after import.", err && err.message ? err.message : err);
     }
+    syncEnrichControls();
     return historyImportReply(filename, parsed);
   });
 }
@@ -1836,6 +1916,7 @@ function wireMemoryDialog() {
     renderConversation();
   }
   el.memoryClose.addEventListener("click", () => el.memoryDialog.close());
+  el.memoryEnrichBtn?.addEventListener("click", () => void onEnrich());
   el.memoryImportRemove.addEventListener("click", () => {
     void (async () => {
       const existing = await memory.getHistory();
@@ -1908,6 +1989,7 @@ async function openMemoryDialog() {
   el.memoryImports.textContent = importedHistoryLine(history);
   const imported = importedHistoryLine(history) !== "No imported history.";
   el.memoryImportRemove.hidden = !imported;
+  syncEnrichControls();
   if (!el.memoryDialog.hasAttribute("open")) el.memoryDialog.showModal();
 }
 
@@ -2003,8 +2085,14 @@ async function init() {
     getYouMd: () => memory.getYouMd(),
     getLearned: () => memory.getLearned(),
     saveContextMemory: onSaveContextMemory,
-    getHistory: () => memory.getHistory(),
-    setHistory: (v) => memory.setHistory(v),
+    getHistory: async () => {
+      historyCache = await memory.getHistory();
+      return historyCache;
+    },
+    setHistory: async (v) => {
+      historyCache = v;
+      return memory.setHistory(v);
+    },
     summarizeHistory: summarize,
     onSubscriptionsChange,
     catalogMeta: () => catalogMeta,
@@ -2013,7 +2101,9 @@ async function init() {
     onExportBackup,
     onClearData,
     onResetKeepKey,
-    onError: showError
+    onError: showError,
+    onEnrich: () => void onEnrich(),
+    onSyncEnrich: () => syncEnrichControls()
   });
 
   sidebar = createSidebarView(el, {
@@ -2047,6 +2137,7 @@ async function init() {
     onOpenMemory: () => {
       void openMemoryDialog().catch((err) => showError(err && err.message ? err.message : "Could not open what I remember."));
     },
+    onEnrich: () => void onEnrich(),
     renderInlinePicks: (recs) => queueView?.renderInline(recs) ?? null
   });
 

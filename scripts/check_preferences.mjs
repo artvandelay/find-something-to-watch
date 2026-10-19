@@ -122,4 +122,48 @@ assert.equal(validateWatchedCandidates(
   "I watched several"
 ).length, 8);
 
+const tripleFact = upsertLearnedPreference(
+  defaultLearnedPreferences(),
+  {
+    kind: "theme",
+    polarity: "avoid",
+    value: "Slow Burn",
+    subjectId: "tmdb:m999",
+    subjectTitle: "Slow Burn",
+    reason: "Too bleak for weeknights"
+  },
+  { now }
+);
+assert.equal(tripleFact.items.length, 1);
+assert.equal(tripleFact.items[0].subjectId, "tmdb:m999");
+assert.equal(tripleFact.items[0].subjectTitle, "Slow Burn");
+assert.equal(tripleFact.items[0].reason, "Too bleak for weeknights");
+assert.equal(
+  renderLearnedContext(tripleFact),
+  "## Learned from chats\n- Avoid: Slow Burn (theme; from Slow Burn — Too bleak for weeknights)"
+);
+
+const rejectUrlFact = upsertLearnedPreference(
+  defaultLearnedPreferences(),
+  {
+    kind: "theme",
+    polarity: "avoid",
+    value: "Slow Burn",
+    subjectId: "https://example.com/movie/999",
+    subjectTitle: "Slow Burn"
+  },
+  { now }
+);
+assert.equal(rejectUrlFact.items[0].subjectId, undefined);
+
+const unanchored = upsertLearnedPreference(
+  defaultLearnedPreferences(),
+  { kind: "genre", polarity: "like", value: "horror" },
+  { now }
+);
+assert.equal(
+  renderLearnedContext(unanchored),
+  "## Learned from chats\n- Likes: horror (genre)"
+);
+
 console.log("check_preferences OK");

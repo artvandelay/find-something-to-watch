@@ -153,8 +153,7 @@ const dark = {
       "H3 watched title is not recommended"
     );
     await app.click("#context-btn");
-    const learnedValues = app.$$("#learned-facts input").map((node) => node.value);
-    assert.ok(learnedValues.includes("weeknights under 90 minutes"), "H3 habit is visible: " + learnedValues.join(" | "));
+    assert.ok(app.text("#learned-facts").includes("weeknights under 90 minutes"), "H3 habit is visible: " + app.text("#learned-facts"));
     app.$("#context-close").click();
     await app.settle();
     const memory = createBrowserMemory({ indexedDB: storage.indexedDB, now: () => new Date() });

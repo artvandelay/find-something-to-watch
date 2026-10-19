@@ -252,6 +252,7 @@
         <h3 id="memory-imports-title">Imported history</h3>
         <p id="memory-imports" class="note"></p>
         <button id="memory-import-remove" type="button">Remove imported history</button>
+        <button id="memory-enrich-btn" type="button" hidden>Enrich taste profile</button>
       </section>
       <div class="dialog-actions">
         <button id="memory-close" type="button">Close</button>
@@ -371,7 +372,11 @@
       </fieldset>
       <p class="note">Only explicit, durable preferences, viewing habits, and titles you say you watched are learned from your own words. Review, edit, disable, or clear them here. Your manual You.md stays separate.</p>
       <p id="history-summary" aria-live="polite"></p>
-      <button id="history-remove" type="button">Remove imported history</button>
+      <div class="button-row">
+        <button id="history-remove" type="button">Remove imported history</button>
+        <button id="context-enrich-btn" type="button" hidden>Enrich taste profile</button>
+      </div>
+      <p id="context-enrich-status" class="note" aria-live="polite" hidden></p>
       <p class="note">Add a watch-history file in the chat. This page shows the counts.</p>
       <p id="context-feedback" class="dialog-feedback" role="alert" hidden></p>
       <div class="dialog-actions">

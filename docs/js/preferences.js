@@ -2,6 +2,8 @@ export const LEARNED_PREFERENCES_SCHEMA_VERSION = 1;
 export const LEARNED_PREFERENCE_LIMITS = Object.freeze({
   items: 100,
   valueCharacters: 80,
+  subjectCharacters: 80,
+  reasonCharacters: 120,
   candidatesPerTurn: 8,
   contextCharacters: 4000
 });
@@ -18,6 +20,21 @@ function isObject(value) {
 
 function compact(value, max = Infinity) {
   return typeof value === "string" ? value.replace(/\s+/g, " ").trim().slice(0, max) : "";
+}
+
+function safeSubjectId(value) {
+  const id = compact(value, LEARNED_PREFERENCE_LIMITS.subjectCharacters);
+  return id && !/^https?:\/\//i.test(id) ? id : "";
+}
+
+function attachTripleFields(target, source) {
+  const subjectId = safeSubjectId(source?.subjectId);
+  const subjectTitle = compact(source?.subjectTitle, LEARNED_PREFERENCE_LIMITS.subjectCharacters);
+  const reason = compact(source?.reason, LEARNED_PREFERENCE_LIMITS.reasonCharacters);
+  if (subjectId) target.subjectId = subjectId;
+  if (subjectTitle) target.subjectTitle = subjectTitle;
+  if (reason) target.reason = reason;
+  return target;
 }
 
 function validIso(value) {
@@ -44,14 +61,15 @@ export function sanitizeLearnedPreferences(value, { now = new Date().toISOString
     const key = `${kind}\u0000${itemValue.toLocaleLowerCase()}`;
     if (!KIND_SET.has(kind) || (polarity !== "like" && polarity !== "avoid") || !itemValue || seen.has(key)) continue;
     seen.add(key);
-    items.push({
+    const entry = attachTripleFields({
       id: compact(raw?.id, 160) || defaultId(),
       kind,
       polarity,
       value: itemValue,
       createdAt: validIso(raw?.createdAt) ? raw.createdAt : now,
       lastConfirmedAt: validIso(raw?.lastConfirmedAt) ? raw.lastConfirmedAt : now
-    });
+    }, raw);
+    items.push(entry);
     if (items.length === LEARNED_PREFERENCE_LIMITS.items) break;
   }
   return {
@@ -76,7 +94,7 @@ export function validatePreferenceCandidate(candidate, query) {
   if (candidate.explicit !== true || candidate.durable !== true ||
     !KIND_SET.has(kind) || (polarity !== "like" && polarity !== "avoid") || !value || !evidence) return null;
   if (!query.toLocaleLowerCase().includes(evidence.toLocaleLowerCase())) return null;
-  return { kind, polarity, value };
+  return attachTripleFields({ kind, polarity, value }, candidate);
 }
 
 export function validatePreferenceCandidates(candidates, query) {
@@ -110,10 +128,17 @@ function applyLearnedCandidate(items, candidate, now) {
   const key = `${candidate.kind}\u0000${candidate.value.toLocaleLowerCase()}`;
   const index = items.findIndex((item) => `${item.kind}\u0000${item.value.toLocaleLowerCase()}` === key);
   if (index >= 0) {
-    const polarityChanged = items[index].polarity !== candidate.polarity;
-    if (polarityChanged) items[index].polarity = candidate.polarity;
-    items[index].lastConfirmedAt = now;
-    return polarityChanged;
+    const current = items[index];
+    let changed = current.polarity !== candidate.polarity;
+    if (changed) current.polarity = candidate.polarity;
+    for (const field of ["subjectId", "subjectTitle", "reason"]) {
+      if (candidate[field] && current[field] !== candidate[field]) {
+        current[field] = candidate[field];
+        changed = true;
+      }
+    }
+    current.lastConfirmedAt = now;
+    return changed;
   }
   if (items.length >= LEARNED_PREFERENCE_LIMITS.items) {
     let oldest = 0;
@@ -122,7 +147,7 @@ function applyLearnedCandidate(items, candidate, now) {
     }
     items.splice(oldest, 1);
   }
-  items.push({ id: defaultId(), ...candidate, createdAt: now, lastConfirmedAt: now });
+  items.push(attachTripleFields({ id: defaultId(), kind: candidate.kind, polarity: candidate.polarity, value: candidate.value, createdAt: now, lastConfirmedAt: now }, candidate));
   return true;
 }
 
@@ -157,7 +182,8 @@ export function upsertLearnedPreference(current, candidate, { now = new Date().t
     return base;
   }
   const items = base.items.map((item) => ({ ...item }));
-  const changed = applyLearnedCandidate(items, { kind, polarity, value }, now);
+  const entry = attachTripleFields({ kind, polarity, value }, candidate);
+  const changed = applyLearnedCandidate(items, entry, now);
   return {
     schema: LEARNED_PREFERENCES_SCHEMA_VERSION,
     updatedAt: changed ? now : base.updatedAt,
@@ -172,7 +198,12 @@ export function renderLearnedContext(learned) {
   const lines = ["## Learned from chats"];
   for (const item of safe.items) {
     const verb = item.polarity === "avoid" ? "Avoid" : "Likes";
-    const line = `- ${verb}: ${item.value} (${item.kind})`;
+    const anchorParts = [];
+    if (item.subjectTitle) anchorParts.push("from " + item.subjectTitle);
+    else if (item.subjectId) anchorParts.push("from " + item.subjectId);
+    if (item.reason) anchorParts.push(item.reason);
+    const meta = anchorParts.length ? `${item.kind}; ${anchorParts.join(" — ")}` : item.kind;
+    const line = `- ${verb}: ${item.value} (${meta})`;
     if (lines.join("\n").length + line.length + 1 > LEARNED_PREFERENCE_LIMITS.contextCharacters) break;
     lines.push(line);
   }

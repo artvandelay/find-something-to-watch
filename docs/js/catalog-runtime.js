@@ -260,6 +260,9 @@ export function createCatalogRuntime({
     setRegion(region, signal = null) {
       return withReady("setRegion", { region }, requestTimeoutMs, signal);
     },
+    setTitleTags(titleTags, signal = null) {
+      return withReady("setTitleTags", { titleTags }, requestTimeoutMs, signal);
+    },
     dispose() {
       if (disposed) return;
       disposed = true;

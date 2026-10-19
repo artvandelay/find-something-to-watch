@@ -16,6 +16,7 @@ let catalogMeta = null;
 let freeDocument = null;
 let synopsisById = null;
 let viewerRegion = DEFAULT_REGION;
+let titleTagsById = {};
 const executors = new Map();
 const cancelled = new Set();
 const MAX_CANCELLED_REQUESTS = 256;
@@ -103,6 +104,9 @@ function projection(record, scope) {
   const result = {};
   for (const key of PROJECTION_KEYS) result[key] = record[key];
   result.p = record.p.filter((provider) => scope.subscriptions.has(provider));
+  if (titleTagsById && titleTagsById[record.id]) {
+    result.tags = titleTagsById[record.id];
+  }
   return result;
 }
 
@@ -280,7 +284,8 @@ function describe(payload) {
       p: "Subscribed provider slugs, plus free-source slugs that start with free_.",
       l: "ISO-639-1 original language or null.",
       g: "Genre names.",
-      v: "TMDB vote count."
+      v: "TMDB vote count.",
+      tags: "Optional enriched tags: pace, tone, fit."
     },
     helperDocs: [
       "helpers.search(query, {limit, filters}) returns scoped analytical records.",
@@ -421,6 +426,12 @@ async function dispatch(op, payload, epoch, id) {
     setViewerRegion(payload.region);
     if (paidRecords) publishCatalog(epoch, false);
     return { region: viewerRegion };
+  }
+  if (op === "setTitleTags") {
+    titleTagsById = payload && typeof payload.titleTags === "object" && payload.titleTags !== null
+      ? { ...payload.titleTags }
+      : {};
+    return { count: Object.keys(titleTagsById).length };
   }
   if (op === "describe") return describe(payload);
   if (op === "keywordSearch") return keywordSearch(payload);
